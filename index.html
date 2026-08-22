@@ -710,6 +710,26 @@
   }
   .card-cnki-btn:hover{ background:#9B7B33; color:var(--paper-soft); border-color:#9B7B33; }
 
+  /* ============ 菜品做法按钮 ============ */
+  .card-recipe-btn{
+    margin:0; padding:5px 14px; border:1px solid var(--line);
+    border-radius:8px; background:rgba(181,101,29,.06);
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:500;
+    letter-spacing:.02em; color:#B5651D; cursor:pointer;
+    transition:all .2s; display:inline-flex; align-items:center; gap:5px;
+  }
+  .card-recipe-btn:hover{ background:#B5651D; color:var(--paper-soft); border-color:#B5651D; }
+
+  /* ============ 论文上传按钮 ============ */
+  .card-upload-btn{
+    margin:0; padding:5px 14px; border:1px solid var(--line);
+    border-radius:8px; background:rgba(47,93,98,.06);
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:500;
+    letter-spacing:.02em; color:var(--teal); cursor:pointer;
+    transition:all .2s; display:inline-flex; align-items:center; gap:5px;
+  }
+  .card-upload-btn:hover{ background:var(--teal); color:var(--paper-soft); border-color:var(--teal); }
+
   /* ============ 批量删除模式 ============ */
   .bulk-bar{
     position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(80px);
@@ -4539,6 +4559,13 @@ function renderGallery(){
     const isPaperCat = it.category === "paper";
     const cnkiBtnHtml = isPaperCat ?
       '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">⌕ 知网搜索</button>' : "";
+    const uploadBtnHtml = isPaperCat ?
+      '<button class="card-upload-btn" data-id="' + it.id + '" title="上传本地论文文件(TXT/MD)">↑ 上传全文</button>' : "";
+
+    // 菜品专属:查看做法按钮
+    const isDish = it.category === "dish";
+    const recipeBtnHtml = isDish ?
+      '<button class="card-recipe-btn" data-id="' + it.id + '" title="跳转下厨房查看做法">❉ 查看做法</button>' : "";
 
     // 小说/电影/文学专属:联网查询概要按钮
     const canMeta = (it.category === "novel" || it.category === "movie" || it.category === "literature");
@@ -4559,7 +4586,7 @@ function renderGallery(){
     html += ratingHtml;
     html += descHtml;
     html += note;
-    html += '<div class="card-btns">' + metaBtnHtml + paperBtnHtml + cnkiBtnHtml + '</div>';
+    html += '<div class="card-btns">' + metaBtnHtml + paperBtnHtml + uploadBtnHtml + cnkiBtnHtml + recipeBtnHtml + '</div>';
     html += '<div class="card-meta"><span>' + dateStr + '</span><span>置信 ' + conf + '</span></div>';
     html += '</article>';
   }
@@ -4596,6 +4623,46 @@ function renderGallery(){
         }
       };
     })(cnkiBtnsInCard[i]);
+  }
+  /* 菜品做法按钮: 跳转下厨房搜索做法 */
+  const recipeBtnsInCard = el.querySelectorAll(".card-recipe-btn");
+  for(let i=0; i<recipeBtnsInCard.length; i++){
+    (function(btn){
+      btn.onclick = function(){
+        const target = state.items.find(function(x){ return x.id === btn.dataset.id; });
+        if(target && target.name){
+          window.open("https://www.xiachufang.com/search/?keyword=" + encodeURIComponent(target.name), "_blank");
+          toast("正在跳转下厨房查看「" + target.name + "」做法");
+        }
+      };
+    })(recipeBtnsInCard[i]);
+  }
+  /* 论文上传按钮: 读取本地文件存为全文 */
+  const uploadBtnsInCard = el.querySelectorAll(".card-upload-btn");
+  for(let i=0; i<uploadBtnsInCard.length; i++){
+    (function(btn){
+      btn.onclick = function(){
+        const target = state.items.find(function(x){ return x.id === btn.dataset.id; });
+        if(!target) return;
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = ".txt,.md,.text";
+        input.onchange = function(){
+          const file = this.files[0];
+          if(!file) return;
+          if(file.size > 2*1024*1024){ toast("文件过大(超2MB),请精简后上传"); return; }
+          const reader = new FileReader();
+          reader.onload = function(){
+            target.fullText = this.result;
+            saveState();
+            render();
+            toast("「" + target.name + "」全文已上传,可点「查看全文」阅读标注");
+          };
+          reader.readAsText(file, "UTF-8");
+        };
+        input.click();
+      };
+    })(uploadBtnsInCard[i]);
   }
   const metaBtnsInCard = el.querySelectorAll(".card-meta-btn");
   for(let i=0; i<metaBtnsInCard.length; i++){
