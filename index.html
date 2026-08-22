@@ -919,12 +919,12 @@
     font-family:"Cormorant Garamond",serif;
   }
   .pp-ref-text{ display:inline; }
-  .pp-ref-links{ display:inline-flex; gap:3px; margin-left:6px; vertical-align:baseline; }
   .pp-ref-link{
     display:inline-block; font-size:9.5px; font-weight:600;
     padding:1px 5px; border-radius:4px; text-decoration:none;
     border:1px solid var(--line); color:var(--ink-mute);
     background:var(--paper); line-height:1.5; transition:all .12s;
+    margin-left:6px; cursor:pointer;
   }
   .pp-ref-link:hover{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
 
@@ -3475,6 +3475,103 @@ function reformatPdfText(rawText){
    · 跨页页眉/页脚过滤: 首尾行在≥半数页面重复出现则删除
    · 英文词间补空格;返回 Promise<{text, pages}>
    ============================================================ */
+/* ---- 7d. 通用栏布局检测: 行首x聚类 → 1~3栏自适应 + 跨栏元素分段 ----
+   覆盖知网各式排版: 单栏 / 双栏 / 三栏 / 首页跨栏标题+双栏正文 / 中部跨栏图表 */
+function detectColumnLayout(rows, pageW){
+  if(rows.length < 6) return { cols: 1, splitXs: [], fullRows: new Set() };
+  const margin = pageW * 0.06;
+  const availW = pageW - margin * 2;
+  /* 行几何(x0起/x1止/宽度,x1取文字结束位置) */
+  const geo = rows.map(function(r){
+    let x0 = Infinity, x1 = -Infinity;
+    for(let k=0; k<r.items.length; k++){
+      const end = r.items[k].x + (r.items[k].w || 0);
+      if(r.items[k].x < x0) x0 = r.items[k].x;
+      if(end > x1) x1 = end;
+    }
+    return { row: r, x0: x0, x1: x1, w: x1 - x0 };
+  });
+  /* 窄行(栏内行): 宽度 < 62% 可用宽 */
+  const narrow = geo.filter(function(g){ return g.w < availW * 0.62; });
+  /* 窄行占比不足一半 → 整体单栏 */
+  if(narrow.length < geo.length * 0.5) return { cols: 1, splitXs: [], fullRows: new Set() };
+  /* 窄行按行首x聚类: 间距 > 页宽7% 分簇(保留行引用) */
+  const narrowSorted = narrow.slice().sort(function(a, b){ return a.x0 - b.x0; });
+  const clusters = [];
+  let crows = [narrowSorted[0]];
+  for(let i=1; i<narrowSorted.length; i++){
+    if(narrowSorted[i].x0 - narrowSorted[i-1].x0 > pageW * 0.07){
+      clusters.push(crows); crows = [];
+    }
+    crows.push(narrowSorted[i]);
+  }
+  clusters.push(crows);
+  /* 有效簇: 行数 ≥ max(3, 窄行数8%) */
+  const valid = clusters.filter(function(c){ return c.length >= Math.max(3, Math.ceil(narrow.length * 0.08)); });
+  if(valid.length < 2) return { cols: 1, splitXs: [], fullRows: new Set() };
+  /* 分界线: 左簇行最大结束x1 与 右簇行最小起点x0 的中点(栏间隙正中) */
+  const splitXs = [];
+  for(let i=1; i<valid.length; i++){
+    let maxEnd = -Infinity, minStart = Infinity;
+    for(let k=0; k<valid[i-1].length; k++){ if(valid[i-1][k].x1 > maxEnd) maxEnd = valid[i-1][k].x1; }
+    for(let k=0; k<valid[i].length; k++){ if(valid[i][k].x0 < minStart) minStart = valid[i][k].x0; }
+    splitXs.push((maxEnd + minStart) / 2);
+  }
+  /* 跨栏行(全宽行): 宽 > 65%可用宽,或横跨第一分界线且宽 > 40% */
+  const firstSplit = splitXs[0];
+  const fullRows = new Set();
+  for(let i=0; i<geo.length; i++){
+    const g = geo[i];
+    if(g.w > availW * 0.65) { fullRows.add(g.row); continue; }
+    if(g.x0 < firstSplit - pageW * 0.03 && g.x1 > firstSplit + pageW * 0.05 && g.w > availW * 0.4){
+      fullRows.add(g.row);
+    }
+  }
+  return { cols: valid.length, splitXs: splitXs, fullRows: fullRows };
+}
+
+/* ---- 7d2. 按栏布局重排行序: 全宽行按y全序作段界;段内先左栏后右栏(栏内按y) ---- */
+function orderRowsByLayout(rows, pageW){
+  const layout = detectColumnLayout(rows, pageW);
+  if(layout.cols < 2 || !layout.splitXs.length){
+    return rows.slice().sort(function(a, b){ return b.y - a.y; });
+  }
+  const splitXs = layout.splitXs;
+  function colIndexOf(x0){
+    for(let i=0; i<splitXs.length; i++){ if(x0 < splitXs[i]) return i; }
+    return splitXs.length;
+  }
+  /* 所有行按 y 降序;跨栏行触发段落flush */
+  const sorted = rows.slice().sort(function(a, b){ return b.y - a.y; });
+  const out = [];
+  let buf = [];  /* 当前段内的栏行缓冲 */
+  function flush(){
+    if(!buf.length) return;
+    /* 按栏索引分组 */
+    const groups = {};
+    for(let i=0; i<buf.length; i++){
+      const ci = colIndexOf(buf[i].items[0].x);
+      (groups[ci] = groups[ci] || []).push(buf[i]);
+    }
+    const keys = Object.keys(groups).map(Number).sort(function(a, b){ return a - b; });
+    for(let i=0; i<keys.length; i++){
+      const g = groups[keys[i]].slice().sort(function(a, b){ return b.y - a.y; });
+      for(let j=0; j<g.length; j++) out.push(g[j]);
+    }
+    buf = [];
+  }
+  for(let i=0; i<sorted.length; i++){
+    if(layout.fullRows.has(sorted[i])){
+      flush();
+      out.push(sorted[i]);
+    }else{
+      buf.push(sorted[i]);
+    }
+  }
+  flush();
+  return out;
+}
+
 function extractPdfTextEnhanced(pdf, onPageDone){
   const numPages = pdf.numPages;
   /* 并行提取: 6路worker并发处理各页(原串行逐页,大PDF提速数倍);页序按页码索引保持 */
@@ -3559,84 +3656,36 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0 });
         }
 
-        /* --- 按行分组(y容差4,自上而下) --- */
+        /* --- 行分组: 先按y分带(y容差4),带内按x间隙拆分 ---
+           关键: 双栏排版中同一水平线的左/右栏行必须拆开,否则左右文字会粘连成一行 */
         const sorted = items.slice().sort(function(a, b){ return b.y - a.y; });
-        const rows = [];
-        let row = null;
+        const bands = [];
+        let band = null;
         for(let i=0; i<sorted.length; i++){
           const it = sorted[i];
-          if(row && Math.abs(row.y - it.y) <= 4){ row.items.push(it); }
-          else{ row = { y: it.y, items: [it] }; rows.push(row); }
+          if(band && Math.abs(band.y - it.y) <= 4){ band.items.push(it); }
+          else{ band = { y: it.y, items: [it] }; bands.push(band); }
+        }
+        const rows = [];
+        for(let i=0; i<bands.length; i++){
+          bands[i].items.sort(function(a, b){ return a.x - b.x; });
+          let seg = [bands[i].items[0]];
+          for(let j=1; j<bands[i].items.length; j++){
+            const prev = seg[seg.length - 1];
+            const prevEnd = prev.x + (prev.w || 0);
+            if(bands[i].items[j].x - prevEnd > pageW * 0.04){
+              rows.push({ y: bands[i].y, items: seg });
+              seg = [bands[i].items[j]];
+            }else{
+              seg.push(bands[i].items[j]);
+            }
+          }
+          if(seg.length) rows.push({ y: bands[i].y, items: seg });
         }
         rows.forEach(function(r){ r.items.sort(function(a, b){ return a.x - b.x; }); });
 
-        /* --- 多级双栏检测(知网/期刊常见双栏+跨栏标题) --- */
-        /* 策略: 统计x坐标分布,找最大间隙;同时用行首x坐标聚类验证双栏 */
-        let splitX = -1;
-        if(items.length >= 20){
-          const xs = items.map(function(i){ return i.x; }).sort(function(a, b){ return a - b; });
-          /* 间隙直方图法: 找x坐标最大间隙 */
-          let maxGap = 0, gapAt = -1;
-          for(let i=1; i<xs.length; i++){
-            const gap = xs[i] - xs[i-1];
-            if(gap > maxGap){ maxGap = gap; gapAt = (xs[i] + xs[i-1]) / 2; }
-          }
-          if(maxGap > pageW * 0.12 && gapAt > pageW * 0.25 && gapAt < pageW * 0.75){
-            splitX = gapAt;
-          }
-          /* 补充: 行首x坐标聚类(两组明显分离 → 双栏) */
-          if(splitX < 0 && rows.length >= 8){
-            const firstXs = rows.map(function(r){ return r.items[0].x; }).sort(function(a, b){ return a - b; });
-            /* 找行首x坐标的最大间隙 */
-            let maxFG = 0, fGapAt = -1;
-            for(let i=1; i<firstXs.length; i++){
-              const gap = firstXs[i] - firstXs[i-1];
-              if(gap > maxFG){ maxFG = gap; fGapAt = (firstXs[i] + firstXs[i-1]) / 2; }
-            }
-            if(maxFG > pageW * 0.15 && fGapAt > pageW * 0.25 && fGapAt < pageW * 0.75){
-              splitX = fGapAt;
-            }
-          }
-        }
-
-        /* --- 按y坐标分割行(跨栏标题在页面顶部,正文双栏) ---
-           知网格式: 标题/作者/摘要跨栏(单栏),正文双栏
-           策略: 找到第一个同时有左右栏行的y坐标 → 该y以下按双栏,以上按单栏 */
-        let dualStartY = pageH; /* 双栏开始y(默认全部单栏) */
-        if(splitX > 0){
-          const leftRows = rows.filter(function(r){ return r.items[0].x < splitX; });
-          const rightRows = rows.filter(function(r){ return r.items[0].x >= splitX; });
-          if(leftRows.length >= 3 && rightRows.length >= 3){
-            /* 找最早(最大y)的右栏行 → 双栏开始位置 */
-            const minRightY = Math.min.apply(null, rightRows.map(function(r){ return r.y; }));
-            const minLeftY = Math.min.apply(null, leftRows.map(function(r){ return r.y; }));
-            /* 如果右栏行最早出现在页面中部以下 → 上部单栏,下部双栏 */
-            if(minRightY < pageH * 0.85 && minRightY < minLeftY + pageH * 0.3){
-              dualStartY = Math.max(minRightY, minLeftY) - 10;
-            }else{
-              dualStartY = pageH; /* 全页双栏 */
-            }
-          }
-        }
-
-        /* --- 行序: 按y排序;双栏区域先左后右 --- */
-        let orderedRows;
-        if(splitX > 0 && dualStartY < pageH){
-          /* 上部(跨栏标题区): 按y自上而下 */
-          const topRows = rows.filter(function(r){ return r.y > dualStartY; });
-          /* 下部(双栏正文区): 左栏按y + 右栏按y */
-          const bottomRows = rows.filter(function(r){ return r.y <= dualStartY; });
-          const leftBottom = bottomRows.filter(function(r){ return r.items[0].x < splitX; });
-          const rightBottom = bottomRows.filter(function(r){ return r.items[0].x >= splitX; });
-          orderedRows = topRows.concat(leftBottom).concat(rightBottom);
-        }else if(splitX > 0){
-          /* 全页双栏 */
-          const left = rows.filter(function(r){ return r.items[0].x < splitX; });
-          const right = rows.filter(function(r){ return r.items[0].x >= splitX; });
-          orderedRows = left.concat(right);
-        }else{
-          orderedRows = rows;
-        }
+        /* --- 通用栏布局行序(1~3栏自适应+跨栏分段,覆盖知网各式排版) --- */
+        const orderedRows = orderRowsByLayout(rows, pageW);
 
         /* --- 组装行文本(行内按x排序,英文词间补空格) --- */
         const lines = [];
@@ -4716,22 +4765,21 @@ function renderStructuredPaper(item, prText){
     h += '</section>';
   }
 
-  /* --- 参考文献(每条带学术网站检索链接) --- */
+  /* --- 参考文献(点击⇢智能检索原文) --- */
   if(st.references && st.references.length){
     h += '<h3 class="pp-h1 pp-refs-h">参考文献</h3><ol class="pp-refs">';
     for(let i=0; i<st.references.length; i++){
       const r = st.references[i].replace(/^\[\d{1,3}\]\s*/, "").trim();
+      /* 干净检索词(剥离编号/作者前缀) */
+      let q = r;
+      const bm2 = q.match(/《([^》]{3,100})》/);
+      if(bm2) q = bm2[1];
+      q = q.replace(/^[\u4e00-\u9fa5]{2,4}(,[，]\s*[\u4e00-\u9fa5]{2,4})*\.\s*/, "");
+      q = q.replace(/^[A-Z][a-zA-Z.\-']+(,\s*[A-Z]\.?)+\s*(et al\.?)?\s*[\(（]\d{4}[\)）]\.\s*/i, "");
+      q = q.split(/[\[\.]/)[0].trim() || r;
       h += '<li class="pp-ref" data-idx="[' + (i + 1) + ']">';
       h += '<span class="pp-ref-text">' + escapeHtml(r) + '</span>';
-      /* 每条文献的学术检索链接(谷歌学术/S2/CrossRef/知网) */
-      const sl = buildRefSearchLinks(r);
-      if(sl){
-        h += '<span class="pp-ref-links">';
-        h += '<a class="pp-ref-link" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>';
-        h += '<a class="pp-ref-link" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>';
-        h += '<a class="pp-ref-link" href="' + escapeHtml("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(sl.text) + "&korder=TI") + '" target="_blank" rel="noopener" title="知网检索">知</a>';
-        h += '</span>';
-      }
+      h += '<a class="pp-ref-link" href="javascript:void(0)" data-q="' + escapeHtml(q.slice(0, 160)) + '" title="联网检索该文献原文">⇢</a>';
       h += '</li>';
     }
     h += '</ol>';
@@ -4739,6 +4787,15 @@ function renderStructuredPaper(item, prText){
 
   h += '</article>';
   prText.innerHTML = h;
+  /* ⇢ 智能检索跳转(联网找原文,找不到→谷歌学术) */
+  const jumps = prText.querySelectorAll(".pp-ref-link");
+  for(let i=0; i<jumps.length; i++){
+    jumps[i].onclick = function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      smartRefJump(this.dataset.q, this);
+    };
+  }
 }
 
 /* 将高亮应用到 DOM —— 先重建全文再应用,避免 DOM 残留导致嵌套/空白页 */
@@ -5607,28 +5664,7 @@ function buildAcademicLinks(title){
 }
 
 /* ---- 7b3. 从参考文献条目提取检索关键词(用于文献级检索链接) ---- */
-function buildRefSearchLinks(refText){
-  if(!refText) return null;
-  let t = refText.replace(/^\[\d{1,3}(?:[-,]\d{1,3})*\]\s*/, "").replace(/^\d{1,3}[.、)]\s+/, "").trim();
-  /* 尝试提取标题: 第一个句号或问号后的内容(作者.(年份).标题...) */
-  const dotIdx = t.indexOf(".");
-  let title = t;
-  if(dotIdx > 10 && dotIdx < 80) title = t.slice(dotIdx + 1).trim();
-  /* 中文文献:书名号《》内为标题 */
-  const m = t.match(/《([^》]{3,100})》/);
-  if(m) title = m[1];
-  /* 截断到合理长度 */
-  title = title.replace(/^[A-Z][a-z]+,\s+[A-Z]\.?\s*/i, "").replace(/^\d{4}\.\s*/, "").trim();
-  if(!title || title.length < 5) title = t.slice(0, 80);
-  const q = encodeURIComponent(title.slice(0, 120));
-  return {
-    text: title,
-    scholar: "https://scholar.google.com/scholar?q=" + q,
-    semantic: "https://www.semanticscholar.org/search?q=" + q,
-    crossref: "https://api.crossref.org/works?query.bibliographic=" + q + "&rows=3",
-    doi: "https://doi.org/"
-  };
-}
+/* buildRefSearchLinks 已移除: 文献链接统一走 smartRefJump 智能跳转 */
 
 async function fetchPaperSourceUrl(title){
   const q = (title || "").trim();
@@ -5656,6 +5692,24 @@ async function fetchPaperSourceUrl(title){
   }).catch(function(){ return null; }));
   const results = await Promise.all(jobs);
   return { url: results[0] || results[1] || null, cnki: cnkiSearch };
+}
+
+/* ---- 7b4. 智能文献跳转: 并行查CrossRef/S2,命中→打开原文页;未命中→谷歌学术检索 ---- */
+async function smartRefJump(title, btn){
+  const q = (title || "").trim().slice(0, 160);
+  if(!q) return;
+  const old = btn ? btn.textContent : "";
+  if(btn) btn.textContent = "⌛";
+  try{
+    const r = await fetchPaperSourceUrl(q);
+    const url = (r && r.url) || ("https://scholar.google.com/scholar?q=" + encodeURIComponent(q));
+    window.open(url, "_blank");
+    toast(r && r.url ? "已找到该文献收录页,正在打开" : "正在谷歌学术检索该文献");
+  }catch(e){
+    window.open("https://scholar.google.com/scholar?q=" + encodeURIComponent(q), "_blank");
+    toast("正在谷歌学术检索该文献");
+  }
+  if(btn) btn.textContent = old || "⇢";
 }
 
 /* ---- 7c0. 排版保真校验: AI输出的段落必须逐字来自原文,改写即回退本地 ---- */
@@ -6011,24 +6065,30 @@ async function fetchReferences(){
     h += '<div class="ref-list" style="margin-top:8px;">';
     for(let i=0; i<refs.length; i++){
       const rf = refs[i];
-      h += '<div class="ref-item" data-title="' + escapeHtml(rf.title) + '">';
+      /* 提取干净的检索标题(剥离作者/编号前缀) */
+      let st = rf.title || "";
+      const bm = st.match(/《([^》]{3,100})》/);
+      if(bm) st = bm[1];
+      st = st.replace(/^[\u4e00-\u9fa5]{2,4}(,[，]\s*[\u4e00-\u9fa5]{2,4})*\.\s*/, "");
+      st = st.replace(/^[A-Z][a-zA-Z.\-']+(,\s*[A-Z]\.?)+\s*(et al\.?)?\s*[\(（]\d{4}[\)）]\.\s*/i, "");
+      st = st.split(/[\[\.]/)[0].trim() || rf.title;
+      h += '<div class="ref-item" data-q="' + escapeHtml(st.slice(0, 160)) + '">';
       h += '<div class="ref-idx">[' + (i+1) + ']</div>';
       h += '<div class="ref-title">' + escapeHtml(rf.title) + '</div>';
       const meta = [];
       if(rf.authors) meta.push(escapeHtml(rf.authors));
       if(rf.year) meta.push(escapeHtml(String(rf.year)));
       if(rf.source) meta.push(escapeHtml(rf.source));
-      h += '<div class="ref-meta">' + (meta.join(" · ") || "—") + ' <em>⇢ 知网检索</em></div>';
+      h += '<div class="ref-meta">' + (meta.join(" · ") || "") + ' <em>⇢ 点击检索原文</em></div>';
       h += '</div>';
     }
     h += '</div></div>';
     resultEl.innerHTML = h;
+    /* 整条点击 → 智能跳转(联网找原文,找不到→谷歌学术) */
     const items = resultEl.querySelectorAll(".ref-item");
     for(let i=0; i<items.length; i++){
       items[i].onclick = function(){
-        const t = this.dataset.title;
-        window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(t) + "&korder=TI", "_blank");
-        toast("正在知网检索该文献");
+        smartRefJump(this.dataset.q, this.querySelector(".ref-meta em"));
       };
     }
   }
@@ -6059,7 +6119,7 @@ async function fetchReferences(){
       }
     }
     if(refs.length > 0){
-      renderRefs(refs.slice(0, 12), "本地提取(未接入AI) · 点击可跳转知网检索");
+      renderRefs(refs.slice(0, 12), "本地提取(未接入AI) · 点击网站名跳转检索");
     }else{
       resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">未检测到参考文献章节</div>';
     }
@@ -6084,7 +6144,7 @@ async function fetchReferences(){
       if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
       const refs = JSON.parse(txt);
       if(Array.isArray(refs) && refs.length > 0){
-        renderRefs(refs.filter(function(x){ return x && x.title; }).slice(0, 12), "AI 提取 · 点击文献跳转知网检索");
+        renderRefs(refs.filter(function(x){ return x && x.title; }).slice(0, 12), "AI 提取 · 点击网站名跳转检索");
         return;
       }
     }
