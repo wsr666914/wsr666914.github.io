@@ -613,15 +613,24 @@
   .pr-outline-item:hover{ color:var(--ink); background:rgba(255,255,255,.4); border-left-color:var(--line); }
   .pr-outline-item.active{ color:var(--teal); border-left-color:var(--teal); font-weight:500; background:rgba(47,93,98,.06); }
   .pr-text-wrap{
-    flex:1; overflow-y:auto; padding:32px 48px 80px;
+    flex:1; overflow-y:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
   }
   .pr-text{
-    max-width:780px; margin:0 auto;
+    max-width:740px; margin:0 auto;
     font-family:"Newsreader","Noto Serif SC",Georgia,serif;
-    font-size:17px; line-height:2; color:var(--ink-soft);
+    font-size:17px; line-height:2.05; color:var(--ink-soft);
     white-space:pre-wrap; word-break:break-word; text-align:justify;
+    text-justify:inter-ideograph;
   }
+  /* 论文段落分隔:双换行产生段落间距 */
+  .pr-text > p, .pr-text > div{
+    margin:0 0 14px; text-indent:0;
+  }
+  /* 首行缩进(中文论文风格) */
+  .pr-text{ text-indent:2em; }
+  .pr-text > p:first-child, .pr-text > .pr-section-title{ text-indent:0; }
+  .pr-text .pr-section-title{ text-indent:0; }
   .pr-section-anchor{ display:block; padding-top:20px; margin-top:-20px; }
   .pr-section-title{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
@@ -814,6 +823,46 @@
   .meta-outline li:hover{ border-left-color:var(--teal); color:var(--ink); }
   .meta-characters{
     font-size:14px; line-height:1.9; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word;
+  }
+  /* 结构化段落 */
+  .meta-para{
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:14px; line-height:1.95;
+    color:var(--ink-soft); margin:0 0 12px; text-align:justify; word-break:break-word;
+  }
+  .meta-para:last-child{ margin-bottom:0; }
+  /* 转折点编号列表 */
+  .meta-turning-list{
+    list-style:none; counter-reset:turn; padding:0; margin:0;
+  }
+  .meta-turning-list li{
+    counter-increment:turn; position:relative; padding:6px 0 6px 28px;
+    font-size:14px; line-height:1.7; color:var(--accent); border-left:2px solid var(--line);
+    margin-bottom:4px; padding-left:28px;
+  }
+  .meta-turning-list li::before{
+    content:counter(turn); position:absolute; left:0; top:7px;
+    width:18px; height:18px; border-radius:50%; border:1px solid var(--accent);
+    font-size:11px; font-weight:600; color:var(--accent);
+    display:flex; align-items:center; justify-content:center;
+    font-family:"JetBrains Mono",monospace;
+  }
+  /* 人物结构化列表 */
+  .meta-char-list{ display:flex; flex-direction:column; gap:10px; }
+  .meta-char-item{
+    display:flex; gap:10px; align-items:baseline;
+    padding:8px 12px; border-radius:8px; background:rgba(47,93,98,.04);
+  }
+  .meta-char-name{
+    flex-shrink:0; min-width:60px; font-weight:600; color:var(--teal);
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:15px;
+  }
+  .meta-char-desc{
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:14px;
+    line-height:1.7; color:var(--ink-soft); text-align:justify;
+  }
+  /* 人物关系区 */
+  .meta-relations{
+    border-left:3px solid var(--teal); padding-left:14px;
   }
   .meta-empty{
     text-align:center; padding:32px 20px; color:var(--ink-mute); font-style:italic;
@@ -2844,6 +2893,85 @@ function generateOutline(fullText){
 }
 
 /* ============================================================
+   PDF 文本排版重整 —— 合并断行/清理噪声/段落重排
+   PDF 提取的文本常有断行、页眉页脚、多余空白等问题
+   ============================================================ */
+function reformatPdfText(rawText){
+  if(!rawText) return "";
+  let text = rawText;
+
+  /* 1. 统一换行符 */
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  /* 2. 移除页眉页脚:纯数字行(页码)、短英文大写行(期刊名) */
+  text = text.split("\n").map(function(line){
+    const trimmed = line.trim();
+    if(!trimmed) return "";
+    /* 页码:纯数字或纯数字带连字符(如 12, 1-12) */
+    if(/^\d{1,4}(-\d{1,4})?$/.test(trimmed)) return "";
+    /* 期刊/会议名:全大写英文字母,且长度适中 */
+    if(/^[A-Z][A-Z\s.&]{3,50}$/.test(trimmed) && trimmed.length < 50) return "";
+    /* "第X页" 形式 */
+    if(/^第\d+页$/.test(trimmed)) return "";
+    /* DOI 行 */
+    if(/^doi:\s*10\./i.test(trimmed)) return "";
+    return line;
+  }).join("\n");
+
+  /* 3. 按双换行分段,段内合并断行 */
+  const paragraphs = text.split(/\n{2,}/);
+  let result = [];
+  for(let i=0; i<paragraphs.length; i++){
+    const para = paragraphs[i];
+    if(!para.trim()) continue;
+    const lines = para.split(/\n/);
+    let merged = "";
+    for(let j=0; j<lines.length; j++){
+      let line = lines[j].trim();
+      if(!line) continue;
+      if(!merged){
+        merged = line;
+      }else{
+        const lastChar = merged.slice(-1);
+        const firstChar = line.charAt(0);
+        /* 上一行末尾是句号/问号/感叹号 → 新段落 */
+        if(/[。！？.!?]/.test(lastChar)){
+          merged += "\n" + line;
+        }
+        /* 上一行末尾是冒号 → 下一行单独成段 */
+        else if(/[：:]$/.test(lastChar)){
+          merged += "\n" + line;
+        }
+        /* 当前行以标题词开头(如 摘要/Abstract/引言/1. / 第X章) → 新段 */
+        else if(/^(\d+[\.\)、]|第[一二三四五六七八九十]+[章节卷]|Abstract|摘要|引言|Introduction|Conclusion|结论|参考文献|References|Keyword|关键词)/i.test(line)){
+          merged += "\n" + line;
+        }
+        /* 英文连字符断行:行末是- 且下一行以小写开头 → 合并去连字符 */
+        else if(/-$/.test(merged) && /^[a-z]/.test(firstChar)){
+          merged = merged.slice(0, -1) + line;
+        }
+        /* 否则合并为一行(加空格) */
+        else{
+          /* 英文:词间加空格;中文:不加空格 */
+          if(/[a-zA-Z0-9,;)]$/.test(lastChar) && /^[a-zA-Z(]/.test(firstChar)){
+            merged += " " + line;
+          }else{
+            merged += line;
+          }
+        }
+      }
+    }
+    if(merged.trim()) result.push(merged.trim());
+  }
+
+  /* 4. 清理多余空白 */
+  text = result.join("\n\n");
+  text = text.replace(/[ \t]{2,}/g, " ");
+  text = text.replace(/\n{3,}/g, "\n\n");
+  return text.trim();
+}
+
+/* ============================================================
    论文自动分析解读 —— 模拟专业审稿:提炼研究主题/方法/结论
    ============================================================ */
 function analyzePaper(fullText){
@@ -4355,7 +4483,95 @@ async function fetchItemMeta(item){
 /* 概要模态框状态 */
 let metaState = { itemId:null, loading:false };
 
-/* 渲染概要内容到模态框 (情节/重要转折/主要人物/人物关系) */
+/* ============================================================
+   概要结构化整理 —— 将原始提取的文本思考整理为结构化展示
+   · 概要分段,去除冗余
+   · 情节按叙事逻辑分段
+   · 人物解析为名+描述对
+   · 转折点编号化
+   ============================================================ */
+function organizeMetaText(text, maxLen){
+  if(!text) return [];
+  var limit = maxLen || 2000;
+  var trimmed = text.trim();
+  if(trimmed.length > limit) trimmed = trimmed.substring(0, limit) + "……";
+  /* 按换行分段 */
+  var paras = trimmed.split(/\n+/).filter(function(p){ return p.trim(); });
+  var result = [];
+  for(var i=0; i<paras.length; i++){
+    var p = paras[i].trim();
+    if(!p) continue;
+    /* 超长段再按句拆分,每3-5句一组 */
+    if(p.length > 300){
+      var sentences = p.split(/([。！？])/);
+      var group = "";
+      var sc = 0;
+      for(var j=0; j<sentences.length; j++){
+        group += sentences[j];
+        if(/[。！？]/.test(sentences[j])) sc++;
+        if(sc >= 3 && group.length > 80){
+          result.push(group.trim());
+          group = "";
+          sc = 0;
+        }
+      }
+      if(group.trim()) result.push(group.trim());
+    }else{
+      result.push(p);
+    }
+  }
+  return result;
+}
+
+/* 解析人物文本为结构化列表 [{name, desc}] */
+function parseCharacters(text){
+  if(!text) return [];
+  var lines = text.split(/\n/);
+  var chars = [];
+  for(var i=0; i<lines.length; i++){
+    var line = lines[i].trim();
+    if(!line || line.length < 3) continue;
+    /* 匹配 "张三：描述" / "张三:描述" / "张三——描述" / "张三，描述" */
+    var m = line.match(/^([^\s:：，,——\-—]{2,10})\s*[:：，,]\s*(.+)$/);
+    if(m && m[2] && m[2].length > 5){
+      chars.push({ name: m[1].trim(), desc: m[2].trim() });
+    }else if(line.length > 10){
+      /* 无明显分隔符的长句,尝试从开头提取人名 */
+      var m2 = line.match(/^([^\s，,。]{2,6})\s*[是为](.+)$/);
+      if(m2 && m2[2] && m2[2].length > 5){
+        chars.push({ name: m2[1].trim(), desc: m2[2].trim() });
+      }else{
+        /* 无法拆分,整段作为描述 */
+        chars.push({ name: "", desc: line });
+      }
+    }
+  }
+  /* 去重:同名只保留最长描述 */
+  var seen = {};
+  var unique = [];
+  for(var k=0; k<chars.length; k++){
+    var key = chars[k].name || ("_" + k);
+    if(!seen[key] || chars[k].desc.length > seen[key].desc.length){
+      seen[key] = chars[k];
+    }
+  }
+  for(var key2 in seen) unique.push(seen[key2]);
+  return unique;
+}
+
+/* 将转折点文本格式化为编号列表 */
+function formatTurningPoints(text){
+  if(!text) return [];
+  var lines = text.split(/\n/).filter(function(l){ return l.trim(); });
+  var points = [];
+  for(var i=0; i<lines.length; i++){
+    var p = lines[i].replace(/^[·•\-\d\.\)、\s]+/, "").trim();
+    if(p && p.length > 5) points.push(p);
+  }
+  return points;
+}
+
+/* 渲染概要内容到模态框 —— 经思考整理后结构化展示 */
 function renderMetaBody(item){
   const body = document.getElementById("metaBody");
   const src = document.getElementById("metaSource");
@@ -4370,49 +4586,83 @@ function renderMetaBody(item){
   const m = item.meta;
   let html = "";
 
-  /* 内容概要 */
+  /* 内容概要 —— 分段展示 */
   html += '<div class="meta-section">';
   html += '<div class="meta-section-h"><span class="ms-ic">§</span> 内容概要 · SUMMARY</div>';
   if(m.summary){
-    html += '<div class="meta-summary">' + escapeHtml(m.summary) + '</div>';
+    var sumParas = organizeMetaText(m.summary, 800);
+    for(let i=0; i<sumParas.length; i++){
+      html += '<p class="meta-para">' + escapeHtml(sumParas[i]) + '</p>';
+    }
   } else {
     html += '<div class="meta-empty">未查询到概要信息</div>';
   }
   html += '</div>';
 
-  /* 情节 */
+  /* 情节 —— 按叙事逻辑分段 */
   html += '<div class="meta-section">';
   html += '<div class="meta-section-h"><span class="ms-ic">❦</span> 情节 · PLOT</div>';
   if(m.plot){
-    html += '<div class="meta-summary">' + escapeHtml(m.plot) + '</div>';
+    var plotParas = organizeMetaText(m.plot, 2000);
+    for(let i=0; i<plotParas.length; i++){
+      html += '<p class="meta-para">' + escapeHtml(plotParas[i]) + '</p>';
+    }
   } else {
     html += '<div class="meta-empty">未查询到情节信息</div>';
   }
   html += '</div>';
 
-  /* 重要转折 */
+  /* 重要转折 —— 编号列表 */
   if(m.turningPoints){
-    html += '<div class="meta-section">';
-    html += '<div class="meta-section-h"><span class="ms-ic">⚡</span> 重要转折 · TURNING POINTS</div>';
-    html += '<div class="meta-summary" style="color:var(--accent);">' + escapeHtml(m.turningPoints) + '</div>';
-    html += '</div>';
+    var tps = formatTurningPoints(m.turningPoints);
+    if(tps.length > 0){
+      html += '<div class="meta-section">';
+      html += '<div class="meta-section-h"><span class="ms-ic">⚡</span> 重要转折 · TURNING POINTS</div>';
+      html += '<ol class="meta-turning-list">';
+      for(let i=0; i<tps.length; i++){
+        html += '<li>' + escapeHtml(tps[i]) + '</li>';
+      }
+      html += '</ol>';
+      html += '</div>';
+    }
   }
 
-  /* 主要人物 */
+  /* 主要人物 —— 结构化列表 */
   html += '<div class="meta-section">';
   html += '<div class="meta-section-h"><span class="ms-ic">✦</span> 主要人物 · CHARACTERS</div>';
   if(m.mainCharacters){
-    html += '<div class="meta-characters">' + escapeHtml(m.mainCharacters) + '</div>';
+    var chars = parseCharacters(m.mainCharacters);
+    if(chars.length > 0 && chars[0].name){
+      html += '<div class="meta-char-list">';
+      for(let i=0; i<chars.length; i++){
+        if(chars[i].name){
+          html += '<div class="meta-char-item"><span class="meta-char-name">' + escapeHtml(chars[i].name) + '</span><span class="meta-char-desc">' + escapeHtml(chars[i].desc) + '</span></div>';
+        }else{
+          html += '<p class="meta-para">' + escapeHtml(chars[i].desc) + '</p>';
+        }
+      }
+      html += '</div>';
+    }else{
+      var charParas = organizeMetaText(m.mainCharacters, 1500);
+      for(let i=0; i<charParas.length; i++){
+        html += '<p class="meta-para">' + escapeHtml(charParas[i]) + '</p>';
+      }
+    }
   } else {
     html += '<div class="meta-empty">未查询到人物信息</div>';
   }
   html += '</div>';
 
-  /* 人物关系 */
+  /* 人物关系 —— 分段展示 */
   if(m.relationships){
     html += '<div class="meta-section">';
     html += '<div class="meta-section-h"><span class="ms-ic">⇄</span> 人物关系 · RELATIONSHIPS</div>';
-    html += '<div class="meta-characters" style="border-left:3px solid var(--teal);padding-left:14px;">' + escapeHtml(m.relationships) + '</div>';
+    var relParas = organizeMetaText(m.relationships, 1500);
+    html += '<div class="meta-relations">';
+    for(let i=0; i<relParas.length; i++){
+      html += '<p class="meta-para">' + escapeHtml(relParas[i]) + '</p>';
+    }
+    html += '</div>';
     html += '</div>';
   }
 
@@ -4827,11 +5077,12 @@ function renderGallery(){
                   });
                 }
                 return chain.then(function(){
-                  const fullText = pageTexts.join("\n\n");
-                  if(fullText.trim().length < 50){
+                  const rawText = pageTexts.join("\n\n");
+                  if(rawText.trim().length < 50){
                     toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
                     return;
                   }
+                  const fullText = reformatPdfText(rawText);
                   target.fullText = fullText;
                   target.analysis = analyzePaper(fullText);
                   target.outline = generateOutline(fullText);
