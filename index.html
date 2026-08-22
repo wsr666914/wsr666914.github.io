@@ -1202,7 +1202,7 @@
       <a href="#add">录入</a>
       <a href="#archive">志录</a>
       <a href="#" id="exportBtn">导出</a>
-      <a href="#" id="navAiCfg" title="配置 AI 接口(DeepSeek 直连)">⚙ AI</a>
+      <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -1388,7 +1388,7 @@
           <button class="pr-hl-fmt" id="prCheckRed" title="检查可删除内容:标红乱码/冗余,再次点击取消标红">🔍 检查</button>
         </div>
         <button class="pr-reformat-btn" id="prReformat" title="一键重新排版:合并断行/去空行/保留段落结构">◫ 一键排版</button>
-        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(端点/密钥/模型)">⚙ AI</button>
+        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
     </div>
@@ -1422,34 +1422,36 @@
 <!-- AI 接口配置模态框 -->
 <div class="modal-bg" id="aiCfgModal">
   <div class="modal">
-    <h3>AI 接口配置 <span class="sub">DeepSeek 直连</span></h3>
+    <h3>AI 接口配置 <span class="sub">免费模型直连</span></h3>
     <div class="ai-cfg-tip">
-      已预置 DeepSeek(深度求索)直连,仅需粘贴一次 API Key:<br>
-      ① 打开 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com/api_keys</a>(注册/登录)<br>
-      ② 点击「创建 API key」并复制 <span style="font-family:monospace;">sk-…</span> 密钥<br>
-      ③ 粘贴到下方输入框,保存即接入
+      推荐 <b>智谱 GLM-4-Flash</b> — 完全免费、不限量、国内直连:<br>
+      ① 打开 <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">open.bigmodel.cn</a>(手机号注册)<br>
+      ② 「API 密钥」→ 新建,复制整串密钥(形如 <span style="font-family:monospace;">id.secret</span>)<br>
+      ③ 粘贴到下方 API Key,保存即接入<br>
+      <span style="color:var(--ink-mute);">备选免费: 硅基流动 siliconflow.cn(注册送额度,含免费开源模型)</span>
     </div>
     <div class="form-group">
       <label>服务商预设</label>
       <select id="aiPreset">
-        <option value="deepseek">DeepSeek (deepseek-chat · 推荐)</option>
-        <option value="zhipu">智谱 GLM (glm-4-plus)</option>
-        <option value="kimi">Kimi (moonshot-v1-32k)</option>
-        <option value="qwen">通义千问 (qwen-plus)</option>
+        <option value="zhipu">智谱 GLM-4-Flash (完全免费 · 推荐)</option>
+        <option value="siliconflow">硅基流动 Qwen2.5-7B (免费模型)</option>
+        <option value="deepseek">DeepSeek (deepseek-chat · 付费但便宜)</option>
+        <option value="kimi">Kimi (moonshot-v1-32k · 付费)</option>
+        <option value="qwen">通义千问 (qwen-plus · 付费)</option>
         <option value="custom">自定义</option>
       </select>
     </div>
     <div class="form-group">
       <label>API 端点</label>
-      <input type="text" id="aiEndpoint" placeholder="https://api.deepseek.com">
+      <input type="text" id="aiEndpoint" placeholder="https://open.bigmodel.cn/api/paas/v4">
     </div>
     <div class="form-group">
       <label>API Key</label>
-      <input type="password" id="aiKey" placeholder="粘贴 DeepSeek API Key (sk-…)" autocomplete="off">
+      <input type="password" id="aiKey" placeholder="粘贴智谱 API 密钥 (id.secret)" autocomplete="off">
     </div>
     <div class="form-group">
       <label>模型名称</label>
-      <input type="text" id="aiModel" placeholder="deepseek-chat">
+      <input type="text" id="aiModel" placeholder="glm-4-flash">
     </div>
     <div class="modal-actions">
       <button class="modal-btn primary" id="aiCfgSave">保存配置</button>
@@ -4301,22 +4303,23 @@ function toggleRedundancyCheck(){
 }
 
 /* ============================================================
-   AI 接口 —— OpenAI 兼容协议 (DeepSeek/智谱GLM/Kimi/通义)
+   AI 接口 —— OpenAI 兼容协议 (智谱GLM免费/硅基流动免费/DeepSeek/Kimi/通义)
    ============================================================ */
 const AI_CFG_KEY = "shuyingshidan_ai_cfg";
 const AI_PRESETS = {
-  deepseek: { endpoint: "https://api.deepseek.com", model: "deepseek-chat" },
-  zhipu:    { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-plus" },
-  kimi:     { endpoint: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k" },
-  qwen:     { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" }
+  zhipu:       { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },          /* 完全免费 */
+  siliconflow: { endpoint: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen2.5-7B-Instruct" },    /* 免费模型 */
+  deepseek:    { endpoint: "https://api.deepseek.com", model: "deepseek-chat" },                     /* 付费 */
+  kimi:        { endpoint: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k" },                /* 付费 */
+  qwen:        { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" } /* 付费 */
 };
 function getAiConfig(){
   try{
     const cfg = JSON.parse(localStorage.getItem(AI_CFG_KEY) || "null");
     if(cfg) return cfg;
-    /* 默认 DeepSeek 直连:仅需补 key */
-    return { endpoint: AI_PRESETS.deepseek.endpoint, model: AI_PRESETS.deepseek.model, key: "" };
-  }catch(e){ return { endpoint: AI_PRESETS.deepseek.endpoint, model: AI_PRESETS.deepseek.model, key: "" }; }
+    /* 默认智谱 GLM-4-Flash: 完全免费,仅需补 key */
+    return { endpoint: AI_PRESETS.zhipu.endpoint, model: AI_PRESETS.zhipu.model, key: "" };
+  }catch(e){ return { endpoint: AI_PRESETS.zhipu.endpoint, model: AI_PRESETS.zhipu.model, key: "" }; }
 }
 function openAiCfgModal(){
   const modal = document.getElementById("aiCfgModal");
@@ -4326,12 +4329,12 @@ function openAiCfgModal(){
   const key = document.getElementById("aiKey");
   const model = document.getElementById("aiModel");
   const preset = document.getElementById("aiPreset");
-  if(ep) ep.value = cfg.endpoint || AI_PRESETS.deepseek.endpoint;
+  if(ep) ep.value = cfg.endpoint || AI_PRESETS.zhipu.endpoint;
   if(key) key.value = cfg.key || "";
-  if(model) model.value = cfg.model || AI_PRESETS.deepseek.model;
+  if(model) model.value = cfg.model || AI_PRESETS.zhipu.model;
   if(preset){
     /* 匹配预设 */
-    let matched = "deepseek";
+    let matched = "zhipu";
     for(const p in AI_PRESETS){
       if(cfg.endpoint === AI_PRESETS[p].endpoint && cfg.model === AI_PRESETS[p].model){ matched = p; break; }
     }
@@ -4356,7 +4359,7 @@ function openAiCfgModal(){
       const cfg2 = {
         endpoint: (ep ? ep.value : "").trim().replace(/\/+$/, ""),
         key: (key ? key.value : "").trim(),
-        model: (model ? model.value : "").trim() || "deepseek-chat"
+        model: (model ? model.value : "").trim() || "glm-4-flash"
       };
       if(cfg2.endpoint && cfg2.key){
         localStorage.setItem(AI_CFG_KEY, JSON.stringify(cfg2));
@@ -4380,10 +4383,10 @@ function updateNavAiState(){
   const cfg = getAiConfig();
   if(cfg && cfg.key){
     btn.textContent = "⚙ AI ✓";
-    btn.title = "AI 已接入: " + (cfg.model || "deepseek-chat");
+    btn.title = "AI 已接入: " + (cfg.model || "glm-4-flash");
   }else{
     btn.textContent = "⚙ AI";
-    btn.title = "配置 AI 接口(DeepSeek 直连)";
+    btn.title = "配置 AI 接口(智谱 GLM-4-Flash 免费直连)";
   }
 }
 async function callAI(messages, maxTokens){
@@ -4394,7 +4397,7 @@ async function callAI(messages, maxTokens){
       method: "POST",
       headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },
       body: JSON.stringify({
-        model: cfg.model || "deepseek-chat",
+        model: cfg.model || "glm-4-flash",
         messages: messages,
         temperature: 0.6,
         max_tokens: maxTokens || 2000
@@ -4424,8 +4427,8 @@ async function runAiRead(){
 
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    /* 未配置: 自动弹出 DeepSeek 配置窗(已预填端点/模型) */
-    toast("请先粘贴 DeepSeek API Key 完成接入");
+    /* 未配置: 自动弹出配置窗(已预填智谱免费模型) */
+    toast("请先粘贴免费 API Key 完成接入");
     openAiCfgModal();
   }
   if(cfg && cfg.key){
@@ -4449,7 +4452,7 @@ async function runAiRead(){
   const a = item.analysis || analyzePaper(item.fullText);
   let ah = "";
   if(!cfg || !cfg.key){
-    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">配置 DeepSeek</a> 后可获得更强的深度解读</div>';
+    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">接入免费 GLM-4-Flash</a> 后可获得更强的深度解读</div>';
   }
   if(a.field) ah += '<div class="pa-field"><span class="pa-label">研究领域</span><span class="pa-val">' + escapeHtml(a.field) + '</span></div>';
   if(a.methods){
@@ -4498,7 +4501,7 @@ async function sendChatMessage(){
 
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    appendChatMsg("err", "尚未接入 AI。配置窗已为你打开 — DeepSeek 端点已预填,仅需粘贴 API Key(platform.deepseek.com 免费注册获取)并保存,即可开始对话。");
+    appendChatMsg("err", "尚未接入 AI。配置窗已为你打开 — 智谱 GLM-4-Flash 免费模型已预填,仅需到 open.bigmodel.cn 免费注册,复制 API 密钥粘贴并保存,即可开始对话。");
     openAiCfgModal();
     return;
   }
@@ -6891,7 +6894,7 @@ function toast(msg, duration){
   // 退出按钮
   const logoutBtn = document.getElementById("logoutBtn");
   if(logoutBtn) logoutBtn.onclick = function(e){ e.preventDefault(); doLogout(); };
-  // 导航栏 AI 配置入口 (DeepSeek 直连)
+  // 导航栏 AI 配置入口 (免费模型直连)
   const navAiCfgBtn = document.getElementById("navAiCfg");
   if(navAiCfgBtn) navAiCfgBtn.onclick = function(e){ e.preventDefault(); openAiCfgModal(); };
   updateNavAiState();
