@@ -3385,9 +3385,10 @@ function stripMetaNumbers(text){
     s = s.replace(/（?\s*(?:文献标识码|标识码)\s*[:：]?\s*[A-Z]\s*）?/g, "");
     s = s.replace(/（?\s*文章编号\s*[:：]?\s*\d[\w.()（）\-]*\s*）?/g, "");
     if(!isRefEntry){
-      s = s.replace(/（?\s*DOI\s*[:：]?\s*(?:https?:\/\/(?:dx\.)?doi\.org\/)?10\.\d{4,9}\/?[\w\-./()；;，,]*\s*）?/gi, "");
-      s = s.replace(/（?\s*https?:\/\/(?:dx\.)?doi\.org\/\S+\s*）?/gi, "");
-      s = s.replace(/(^|[\s（(])10\.\d{4,9}\/[\w\-./()]+/g, "$1");
+      /* DOI值部分仅匹配[\w.\-/]并遇空格/中文停止,防止吞掉紧随的英文正文 */
+      s = s.replace(/（?\s*DOI\s*[:：]?\s*(?:https?:\/\/(?:dx\.)?doi\.org\/)?10\.\d{4,9}(?:\/[\w.\-]+)*\s*）?/gi, "");
+      s = s.replace(/（?\s*https?:\/\/(?:dx\.)?doi\.org\/[\w.\-]+(?:\/[\w.\-]+)*\s*）?/gi, "");
+      s = s.replace(/(^|[\s（(])10\.\d{4,9}(?:\/[\w.\-]+)+/g, "$1");
     }
     return s.replace(/\s{2,}/g, " ").replace(/\s+$/, "");
   }).filter(function(s){ return s !== ""; }).map(function(s){
@@ -3395,7 +3396,21 @@ function stripMetaNumbers(text){
   }).join("\n");
 }
 
-function reformatPdfText(rawText){
+/* ---- 0x. 全局标题行判定正则(供reformatPdfText/compactReformatText共用) ---- */
+const PP_HEAD_RE = /^(\[\d{1,3}(?:[-,]\d{1,3})*\]\s|\d+(\.\d+)*[\.\)、\s]|第[一二三四五六七八九十百\d]+[章节部篇]|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
+
+/* ---- 0y. 字数守卫: 清洗后实质字符(去空白)损失超阈值 → 回退保守清洗
+   用户最高优先级要求"正文字数不能少"——任何清洗误删超过5%即整体回退 */
+function textCoreLen(s){
+  return (s || "").replace(/\s+/g, "").length;
+}
+function guardTextLoss(orig, cleaned, fallback, ratio){
+  const a = textCoreLen(orig), b = textCoreLen(cleaned);
+  if(a > 200 && b < a * (ratio || 0.95)) return fallback;
+  return cleaned;
+}
+
+function reformatPdfText(rawText, boldSet){
   if(!rawText) return "";
   let text = rawText;
 
@@ -3434,29 +3449,40 @@ function reformatPdfText(rawText){
     return line;
   }).join("\n");
 
-  /* 2.5. 目录区检测删除: 连续3行以上目录格式行 → 整段目录区删除 */
+  /* 2.5. 目录区检测删除: 仅在"目录/Contents"标题之后且连续≥4行严格目录格式才删
+     · 严格格式: 编号开头+点线引导+行尾页码(目录项必有....,正文行不会有)
+     · 宽松格式(无点线): 仅限目录标题后紧邻区,防误删英文/数字密集的正文行 */
   const lines2 = text.split("\n");
-  const tocFlags = lines2.map(function(l){
-    const t = l.trim();
-    if(!t) return false;
-    return /^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
-           /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
-           /^(\d+(?:\.\d+)*)\s+\S.*?\s+\d{1,4}$/.test(t) && t.length < 60 && !/[。！？；]/.test(t);
-  });
-  let tocStart = -1, tocCount = 0;
-  for(let i=0; i<lines2.length; i++){
-    if(tocFlags[i]){
-      if(tocStart < 0) tocStart = i;
-      tocCount++;
-    }else{
-      if(tocCount >= 3 && tocStart >= 0){
-        for(let k=tocStart; k<i; k++) lines2[k] = "";
-      }
-      tocStart = -1; tocCount = 0;
-    }
+  const TOC_STRICT = /^(\d+(?:\.\d+)*)\s+\S.*?\.{2,}\s*\d{1,4}\s*$|^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/;
+  const TOC_HEAD = /^(目\s*录|Contents|Table\s+of\s+Contents)\s*[:：]?$/i;
+  /* 找目录标题位置(仅前40%行内) */
+  let tocHeadIdx = -1;
+  for(let i=0; i<Math.floor(lines2.length * 0.4); i++){
+    if(TOC_HEAD.test(lines2[i].trim())){ tocHeadIdx = i; break; }
   }
-  if(tocCount >= 3 && tocStart >= 0){
-    for(let k=tocStart; k<lines2.length; k++) lines2[k] = "";
+  let i2 = 0;
+  while(i2 < lines2.length){
+    const t = (lines2[i2] || "").trim();
+    if(!t){ i2++; continue; }
+    if(TOC_STRICT.test(t) || (tocHeadIdx >= 0 && i2 > tocHeadIdx && i2 <= tocHeadIdx + 60 &&
+       /^(\d+(?:\.\d+)*|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)])\s*\S[^\n]*?\s\d{1,4}$/.test(t) && t.length < 60 && !/[.。！？;；]$/.test(t))){
+      /* 连续目录区起点 */
+      let j2 = i2, cnt = 0;
+      while(j2 < lines2.length){
+        const tt = (lines2[j2] || "").trim();
+        if(!tt){ j2++; continue; }
+        const isToc = TOC_STRICT.test(tt) || (tocHeadIdx >= 0 && j2 > tocHeadIdx && j2 <= tocHeadIdx + 60 &&
+          /^(\d+(?:\.\d+)*|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)])\s*\S[^\n]*?\s\d{1,4}$/.test(tt) && tt.length < 60 && !/[.。！？;；]$/.test(tt));
+        if(isToc){ cnt++; j2++; }
+        else break;
+      }
+      if(cnt >= 4){
+        for(let k=i2; k<j2; k++) if((lines2[k] || "").trim()) lines2[k] = "";
+      }
+      i2 = j2;
+    }else{
+      i2++;
+    }
   }
   text = lines2.join("\n");
 
@@ -3484,8 +3510,12 @@ function reformatPdfText(rawText){
         else if(/[：:]$/.test(lastChar)){
           merged += "\n" + line;
         }
-        /* 当前行以标题词开头(如 摘要/Abstract/引言/1. / 第X章) → 新段 */
-        else if(/^(\d+[\.\)、]|第[一二三四五六七八九十]+[章节卷]|Abstract|摘要|引言|Introduction|Conclusion|结论|参考文献|References|Keyword|关键词)/i.test(line)){
+        /* 当前行以标题词开头(1. / 1.1 / 第X章/一、/（一）/摘要/Abstract等) → 新段 */
+        else if(PP_HEAD_RE.test(line)){
+          merged += "\n" + line;
+        }
+        /* 当前行是PDF粗体行(无编号小标题,如"实验数据分析") → 独立成段 */
+        else if(boldSet && boldSet.has(line)){
           merged += "\n" + line;
         }
         /* 英文连字符断行:行末是- 或 – 且下一行以小写开头 → 合并去连字符 */
@@ -3514,7 +3544,15 @@ function reformatPdfText(rawText){
   text = result.join("\n\n");
   text = text.replace(/[ \t]{2,}/g, " ");
   text = text.replace(/\n{3,}/g, "\n\n");
-  return text.trim();
+  /* 字数守卫: 清洗后实质字符损失>5% → 回退保守清洗(仅乱码修复+断行合并,不删任何行) */
+  const cleaned = text.trim();
+  if(textCoreLen(cleaned) < textCoreLen(rawText) * 0.95 && textCoreLen(rawText) > 200){
+    /* 保守回退: 只做乱码修复与统一换行 */
+    let safe = rawText.replace(/\uFFFD/g, "").replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+      .replace(/\u00A0/g, " ").replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+    return safe.trim();
+  }
+  return cleaned;
 }
 
 /* ============================================================
@@ -3770,12 +3808,21 @@ function extractPdfTextEnhanced(pdf, onPageDone){
       return Promise.all([textPromise, imgPromise]).then(function(results){
         const tc = results[0];
         const pageImages = results[1] || [];
-        /* --- 收集文本项(x/y坐标) --- */
+        /* --- 收集文本项(x/y坐标+字体加粗标记) ---
+           粗体字体(Bold/Black/黑体系)在知网排版中常用于小标题 */
+        const fontStyles = tc.styles || {};
+        const BOLD_FONT_RE = /bold|black|semib|medium|heavy|simhei|heiti|yahei|[-_ ]hei\b/i;
         const items = [];
         for(let i=0; i<tc.items.length; i++){
           const it = tc.items[i];
           if(!it.str || !it.str.trim()) continue;
-          items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0 });
+          let bold = false;
+          try{
+            const fs = fontStyles[it.fontName];
+            const fam = (fs && (fs.fontFamily || fs.family)) || "";
+            bold = BOLD_FONT_RE.test(fam) || BOLD_FONT_RE.test(it.fontName || "");
+          }catch(e){}
+          items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0, bold: bold });
         }
 
         /* --- 行分组: 先按y分带(y容差4),栏布局交给layoutRowsFromBands --- */
@@ -3791,19 +3838,29 @@ function extractPdfTextEnhanced(pdf, onPageDone){
         /* --- 通用栏布局行序(种子切分→栏检测→栏界重建,覆盖知网各式排版) --- */
         const orderedRows = layoutRowsFromBands(bands, pageW);
 
-        /* --- 组装行文本(行内按x排序,英文词间补空格) --- */
+        /* --- 组装行文本(行内按x排序,英文词间补空格;统计粗体占比识别小标题行) --- */
         const lines = [];
+        const pageBoldLines = [];
         for(let i=0; i<orderedRows.length; i++){
           const its = orderedRows[i].items;
           let line = "";
+          let boldChars = 0, totalChars = 0;
           for(let j=0; j<its.length; j++){
             if(j > 0 && /[A-Za-z0-9,.;:)]$/.test(line) && /^[A-Za-z(]/.test(its[j].str)){
               line += " ";
             }
             line += its[j].str;
+            totalChars += its[j].str.length;
+            if(its[j].bold) boldChars += its[j].str.length;
           }
           line = line.replace(/\s{2,}/g, " ").trim();
-          if(line) lines.push(line);
+          if(line){
+            lines.push(line);
+            /* 加粗小标题行: 粗体字符占比≥60% + 短行(≤60字) + 非句号结尾 */
+            if(totalChars > 0 && boldChars / totalChars >= 0.6 && line.length <= 60 && !/[.。！？]$/.test(line)){
+              pageBoldLines.push(line);
+            }
+          }
         }
 
         /* --- 图片收集(全文上限12张,防存储超限) --- */
@@ -3818,7 +3875,8 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           lines: lines,
           first: lines[0] || "",
           last: lines[lines.length - 1] || "",
-          images: imageMarkers
+          images: imageMarkers,
+          boldLines: pageBoldLines
         };
         pageDone();
       });
@@ -3849,15 +3907,22 @@ function extractPdfTextEnhanced(pdf, onPageDone){
       return s.length >= 4 && !/^\d{1,4}(-\d{1,4})?$/.test(s);
     }
     const pageTexts = [];
+    const boldAll = [];
+    let totalLineCount = 0;
     for(let i=0; i<pageData.length; i++){
       const pd = pageData[i];
       let lines = pd.lines.slice();
       if(lines.length > 2 && isRepeated(pd.first, headCount)) lines.shift();
       if(lines.length > 1 && isRepeated(pd.last, tailCount)) lines.pop();
       pageTexts.push(lines.join("\n"));
+      totalLineCount += lines.length;
+      if(pd.boldLines) boldAll.push.apply(boldAll, pd.boldLines);
     }
     const rawText = pageTexts.join("\n\n");
-    return { text: reformatPdfText(rawText), pages: numPages, images: allImages };
+    /* 粗体行防误伤: 占总行数>20%说明字体信息不可靠(全文黑体等) → 丢弃粗体信号 */
+    const boldLines = (boldAll.length > 0 && boldAll.length <= totalLineCount * 0.2) ? boldAll : [];
+    const boldSet = new Set(boldLines);
+    return { text: reformatPdfText(rawText, boldSet), pages: numPages, images: allImages, boldLines: boldLines };
   });
 }
 
@@ -3927,35 +3992,43 @@ function compactReformatText(rawText){
     lines.push(trimmed);
   }
 
-  /* 1.5. 目录区检测删除: 连续3行以上目录格式行 → 整段删除 */
-  const tocFlags2 = lines.map(function(l){
-    const t = (l || "").trim();
-    if(!t) return false;
-    return TOC_LINE_RE.test(t) ||
-           /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
-           /^(\d+(?:\.\d+)*)\s+\S.*?\s+\d{1,4}$/.test(t) && t.length < 60 && !/[。！？；]/.test(t);
-  });
-  let tocStart2 = -1, tocCount2 = 0;
-  for(let i=0; i<lines.length; i++){
-    if(tocFlags2[i]){
-      if(tocStart2 < 0) tocStart2 = i;
-      tocCount2++;
-    }else{
-      if(tocCount2 >= 3 && tocStart2 >= 0){
-        for(let k=tocStart2; k<i; k++) lines[k] = "";
-      }
-      tocStart2 = -1; tocCount2 = 0;
-    }
+  /* 1.5. 目录区检测删除: 仅"目录/Contents"标题后连续≥4行严格目录格式才删(防误删正文) */
+  const TOC_STRICT2 = /^(\d+(?:\.\d+)*)\s+\S.*?\.{2,}\s*\d{1,4}\s*$|^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/;
+  const TOC_HEAD2 = /^(目\s*录|Contents|Table\s+of\s+Contents)\s*[:：]?$/i;
+  let tocHeadIdx2 = -1;
+  for(let i=0; i<Math.floor(lines.length * 0.4); i++){
+    if(TOC_HEAD2.test((lines[i] || "").trim())){ tocHeadIdx2 = i; break; }
   }
-  if(tocCount2 >= 3 && tocStart2 >= 0){
-    for(let k=tocStart2; k<lines.length; k++) lines[k] = "";
+  function isTocLine2(t, idx){
+    if(!t) return false;
+    if(TOC_STRICT2.test(t)) return true;
+    return tocHeadIdx2 >= 0 && idx > tocHeadIdx2 && idx <= tocHeadIdx2 + 60 &&
+      /^(\d+(?:\.\d+)*|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)])\s*\S[^\n]*?\s\d{1,4}$/.test(t) &&
+      t.length < 60 && !/[.。！？;；]$/.test(t);
+  }
+  let i3 = 0;
+  while(i3 < lines.length){
+    if(isTocLine2((lines[i3] || "").trim(), i3)){
+      let j3 = i3, cnt3 = 0;
+      while(j3 < lines.length){
+        if(isTocLine2((lines[j3] || "").trim(), j3)){ cnt3++; j3++; }
+        else if(!(lines[j3] || "").trim()){ j3++; }
+        else break;
+      }
+      if(cnt3 >= 4){
+        for(let k=i3; k<j3; k++) if((lines[k] || "").trim()) lines[k] = "";
+      }
+      i3 = j3;
+    }else{
+      i3++;
+    }
   }
 
   /* 2. 断行合并:逐行判断是否接续上一行 */
   let paras = [];
   let cur = "";
   let curIsHead = false;
-  const HEAD_RE = /^(\[\d{1,3}(?:[-,]\d{1,3})*\]\s|\d+(\.\d+)*[\.\)、\s]|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|[（(][一二三四五六七八九十]+[）)]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
+  const HEAD_RE = PP_HEAD_RE;
 
   for(let i=0; i<lines.length; i++){
     const line = lines[i];
@@ -4016,7 +4089,13 @@ function compactReformatText(rawText){
     return p.replace(/[ \t]{2,}/g, " ").trim();
   }).filter(function(p){ return p; });
 
-  return paras.join("\n");
+  /* 字数守卫: 清洗后实质字符损失>5% → 回退保守清洗(仅乱码修复,不删任何行) */
+  const out2 = paras.join("\n");
+  if(textCoreLen(out2) < textCoreLen(rawText) * 0.95 && textCoreLen(rawText) > 200){
+    return rawText.replace(/\uFFFD/g, "").replace(/[\u200B\u200C\u200D\uFEFF]/g, "")
+      .replace(/\u00A0/g, " ").replace(/\r\n/g, "\n").replace(/\r/g, "\n").trim();
+  }
+  return out2;
 }
 
 /* ============================================================
@@ -5404,12 +5483,19 @@ async function callAI(messages, maxTokens, temperature){
    ============================================================ */
 
 /* ---- 1. 本地结构解析: 从纯文本归纳标准结构 ---- */
-function parsePaperStructure(rawText, faithful){
+function parsePaperStructure(rawText, faithful, boldLines){
   const st = { title:"", abstract:"", keywords:[], sections:[], references:[] };
   if(!rawText || !rawText.trim()) return st;
   /* faithful=true: PDF保真模式,只按行切分不做噪声行删除,文本与PDF原文一致
-     (例外:元信息号[文章编号/中图分类号/文献标识码/DOI]非论文实质内容,保真模式也删) */
-  const src = faithful ? stripMetaNumbers(rawText) : compactReformatText(rawText);
+     (例外:元信息号[文章编号/中图分类号/文献标识码/DOI]非论文实质内容,保真模式也删;
+      字数守卫:剥离损失>2%即回退原文,绝不牺牲正文) */
+  let src;
+  if(faithful){
+    const stripped = stripMetaNumbers(rawText);
+    src = textCoreLen(stripped) < textCoreLen(rawText) * 0.98 ? rawText : stripped;
+  }else{
+    src = compactReformatText(rawText);
+  }
   const paras = src.split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
   if(paras.length === 0) return st;
 
@@ -5431,6 +5517,7 @@ function parsePaperStructure(rawText, faithful){
 
   let mode = "body";
   let curSec = null;
+  const boldSet = new Set((boldLines || []).map(function(s){ return (s || "").trim(); }));
   function newSec(level, heading){
     curSec = { level: level, heading: heading, paras: [] };
     st.sections.push(curSec);
@@ -5445,6 +5532,10 @@ function parsePaperStructure(rawText, faithful){
     if(CHAP_RE.test(p) || CN_NUM_RE.test(p)) return 1;
     if(/^[（(][一二三四五六七八九十]+[）)]\s*\S/.test(p)) return 2; /* （一）→二级 */
     if(KNOWN_HEAD.test(p.replace(/\s+/g,""))) return 1;
+    /* PDF粗体小标题行(无编号,如"实验数据分析"): 字体加粗是知网小标题惯例 */
+    if(boldSet.size > 0 && boldSet.has(p.trim()) && p.length >= 4){
+      return 2;
+    }
     return 0;
   }
 
@@ -5902,8 +5993,9 @@ async function aiStructuredReformat(fullText, onProgress, onStage, opts){
   let noKey = false;
 
   if(o.faithful){
-    /* PDF保真模式: 本地结构识别(0改写),不删原文行,文本与PDF一致 */
-    st = parsePaperStructure(fullText, true);
+    /* PDF保真模式: 本地结构识别(0改写),不删原文行,文本与PDF一致
+       粗体行信息传入:PDF字体加粗的无编号小标题也能识别层级 */
+    st = parsePaperStructure(fullText, true, o.boldLines);
   }else if(!cfg || !cfg.key){
     st = parsePaperStructure(clean);
     noKey = true;
@@ -6057,8 +6149,15 @@ async function aiBackgroundRefine(item){
       }
     });
     ppProgressHide(300);
-    /* 仅当AI成功归纳出结构才升级;失败/降级/无结构 → 保持导入时的排版 */
+    /* 仅当AI成功归纳出结构才升级;失败/降级/无结构 → 保持导入时的排版
+       严格字数守卫: 精读后实质字符<原文97% → AI删了正文 → 拒绝升级(正文字数不能少) */
     if(result && result.usedAI && result.st && (result.st.sections || []).length > 0){
+      const beforeLen = textCoreLen(item.fullText);
+      const afterLen = textCoreLen(structuredToText(result.st));
+      if(beforeLen > 200 && afterLen < beforeLen * 0.97){
+        /* AI删减内容 → 保持保真排版不动 */
+        return;
+      }
       pushTextHistory(item);
       item.structured = result.st;
       item.fullText = structuredToText(result.st);
@@ -6069,7 +6168,7 @@ async function aiBackgroundRefine(item){
       if(prState && prState.itemId === item.id && typeof applyHighlightsToDom === "function"){
         applyHighlightsToDom(item);
       }
-      toast("AI 精读完成 · 「" + item.name + "」已归纳为标准学术结构(原文逐字保留,可撤销)");
+      toast("AI 精读完成 · 「" + item.name + "」已按原文层级整理结构(正文逐字保留,可撤销)");
     }
   }catch(e){
     ppProgressHide(0);
@@ -7849,6 +7948,7 @@ function renderGallery(){
                 ppProgressShow("按 PDF 原文保真排版(转为可编辑文本)…");
                 return aiStructuredReformat(res.text, null, null, {
                   faithful:true,
+                  boldLines: res.boldLines,
                   onSource:function(st, src){
                     /* 后台联网查到原文链接: 保存并刷新(阅读器打开中则同步刷新徽章) */
                     try{
@@ -8752,6 +8852,7 @@ function openPaperEntryModal(){
   if(paperFullTextInput) paperFullTextInput.value = "";
   paperEntryFromPdf = false;
   paperEntryImages = null;
+  paperEntryBoldLines = null;
   updatePaperEntryStats();
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
@@ -8789,6 +8890,7 @@ if(paperFullTextInput){
   paperFullTextInput.addEventListener("input", updatePaperEntryStats);
 }
 let paperEntryFromPdf = false; /* 全文是否来自PDF导入(决定保真/AI排版路径) */
+let paperEntryBoldLines = null; /* PDF粗体小标题行(字体加粗识别,保真排版层级依据) */
 let paperEntryImages = null;  /* PDF导入提取的图片 */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = async function(){
@@ -8809,6 +8911,7 @@ if(paperEntrySubmit){
       ppProgressShow("按 PDF 原文保真排版(转为可编辑文本)…");
       const result = await aiStructuredReformat(fullText, null, null, {
         faithful:true,
+        boldLines: paperEntryBoldLines,
         onSource:function(st, src){
           /* 入册后异步到达: 按引用找到条目,保存并刷新(阅读器打开中则同步刷新徽章) */
           try{
@@ -8893,6 +8996,7 @@ if(paperEntrySubmit){
       render();
     }
     paperEntryImages = null;
+    paperEntryBoldLines = null;
     closePaperEntryModal();
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
     /* PDF导入且已配置AI → 后台精读优化结构(不阻塞,失败保持保真排版) */
@@ -8940,6 +9044,7 @@ if(paperPdfBtn){
           }
           paperEntryFromPdf = true; /* 标记:全文来自PDF提取,整理入册时走保真排版(与PDF一致,AI不干预) */
           paperEntryImages = (res.images && res.images.length) ? res.images : null;
+          paperEntryBoldLines = (res.boldLines && res.boldLines.length) ? res.boldLines : null; /* 粗体小标题行 */
           /* 标题留空时自动取PDF文件名(去扩展名) */
           if(paperTitleInput && !paperTitleInput.value.trim()){
             paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
