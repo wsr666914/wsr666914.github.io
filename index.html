@@ -345,6 +345,26 @@
     animation:modalIn .25s cubic-bezier(.2,.7,.3,1);
   }
   @keyframes modalIn{ from{ opacity:0; transform:scale(.96) translateY(8px); } to{ opacity:1; transform:none; } }
+  .ai-cfg-tip{
+    margin:10px 0 16px; padding:12px 14px; border:1px dashed rgba(155,123,51,.45); border-radius:10px;
+    background:rgba(155,123,51,.07); font-size:12px; line-height:1.9; color:var(--ink-soft);
+  }
+  .ai-cfg-tip a{ color:var(--accent); text-decoration:underline; }
+  .ai-cfg-tip a:hover{ color:var(--accent-deep); }
+  .form-group{ margin-bottom:12px; }
+  .form-group label{
+    display:block; font-size:11px; color:var(--ink-mute); letter-spacing:.1em;
+    text-transform:uppercase; margin-bottom:5px; font-weight:600;
+    font-family:"Cormorant Garamond","Noto Serif SC",serif;
+  }
+  .form-group input, .form-group select{
+    width:100%; box-sizing:border-box; background:rgba(255,255,255,.6);
+    border:1px solid var(--line); border-radius:8px; padding:9px 12px;
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:14px; color:var(--ink);
+    outline:none; transition:border-color .2s, background .2s;
+  }
+  .form-group input:focus, .form-group select:focus{ border-color:var(--accent); background:#fff; }
+  #aiCfgModal .modal{ max-width:460px; }
   .modal h3{ font-size:22px; font-weight:600; margin-bottom:6px; }
   .modal p{ margin:0 0 16px; font-size:13px; color:var(--ink-mute); font-style:italic; }
   .modal-cats{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:16px; }
@@ -1182,6 +1202,7 @@
       <a href="#add">录入</a>
       <a href="#archive">志录</a>
       <a href="#" id="exportBtn">导出</a>
+      <a href="#" id="navAiCfg" title="配置 AI 接口(DeepSeek 直连)">⚙ AI</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -1401,7 +1422,13 @@
 <!-- AI 接口配置模态框 -->
 <div class="modal-bg" id="aiCfgModal">
   <div class="modal">
-    <h3>AI 接口配置 <span class="sub">OpenAI 兼容</span></h3>
+    <h3>AI 接口配置 <span class="sub">DeepSeek 直连</span></h3>
+    <div class="ai-cfg-tip">
+      已预置 DeepSeek(深度求索)直连,仅需粘贴一次 API Key:<br>
+      ① 打开 <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com/api_keys</a>(注册/登录)<br>
+      ② 点击「创建 API key」并复制 <span style="font-family:monospace;">sk-…</span> 密钥<br>
+      ③ 粘贴到下方输入框,保存即接入
+    </div>
     <div class="form-group">
       <label>服务商预设</label>
       <select id="aiPreset">
@@ -1418,7 +1445,7 @@
     </div>
     <div class="form-group">
       <label>API Key</label>
-      <input type="password" id="aiKey" placeholder="sk-…">
+      <input type="password" id="aiKey" placeholder="粘贴 DeepSeek API Key (sk-…)" autocomplete="off">
     </div>
     <div class="form-group">
       <label>模型名称</label>
@@ -4285,8 +4312,11 @@ const AI_PRESETS = {
 };
 function getAiConfig(){
   try{
-    return JSON.parse(localStorage.getItem(AI_CFG_KEY) || "null");
-  }catch(e){ return null; }
+    const cfg = JSON.parse(localStorage.getItem(AI_CFG_KEY) || "null");
+    if(cfg) return cfg;
+    /* 默认 DeepSeek 直连:仅需补 key */
+    return { endpoint: AI_PRESETS.deepseek.endpoint, model: AI_PRESETS.deepseek.model, key: "" };
+  }catch(e){ return { endpoint: AI_PRESETS.deepseek.endpoint, model: AI_PRESETS.deepseek.model, key: "" }; }
 }
 function openAiCfgModal(){
   const modal = document.getElementById("aiCfgModal");
@@ -4296,18 +4326,22 @@ function openAiCfgModal(){
   const key = document.getElementById("aiKey");
   const model = document.getElementById("aiModel");
   const preset = document.getElementById("aiPreset");
-  if(ep) ep.value = cfg.endpoint || "";
+  if(ep) ep.value = cfg.endpoint || AI_PRESETS.deepseek.endpoint;
   if(key) key.value = cfg.key || "";
-  if(model) model.value = cfg.model || "";
+  if(model) model.value = cfg.model || AI_PRESETS.deepseek.model;
   if(preset){
     /* 匹配预设 */
-    let matched = "custom";
+    let matched = "deepseek";
     for(const p in AI_PRESETS){
       if(cfg.endpoint === AI_PRESETS[p].endpoint && cfg.model === AI_PRESETS[p].model){ matched = p; break; }
     }
     preset.value = matched;
   }
   modal.classList.add("show");
+  /* 无 key 时自动聚焦 Key 输入框 */
+  if(key && !key.value){
+    setTimeout(function(){ key.focus(); }, 60);
+  }
   /* 预设切换 */
   preset.onchange = function(){
     const p = AI_PRESETS[this.value];
@@ -4328,6 +4362,7 @@ function openAiCfgModal(){
         localStorage.setItem(AI_CFG_KEY, JSON.stringify(cfg2));
         toast("AI 接口已配置 ✓");
         modal.classList.remove("show");
+        updateNavAiState();
       }else{
         toast("请填写完整的端点与 API Key");
       }
@@ -4336,6 +4371,19 @@ function openAiCfgModal(){
   const closeBtn = document.getElementById("aiCfgClose");
   if(closeBtn){
     closeBtn.onclick = function(){ modal.classList.remove("show"); };
+  }
+}
+/* 导航栏 ⚙ AI 按钮状态: 已配置显示 ✓ */
+function updateNavAiState(){
+  const btn = document.getElementById("navAiCfg");
+  if(!btn) return;
+  const cfg = getAiConfig();
+  if(cfg && cfg.key){
+    btn.textContent = "⚙ AI ✓";
+    btn.title = "AI 已接入: " + (cfg.model || "deepseek-chat");
+  }else{
+    btn.textContent = "⚙ AI";
+    btn.title = "配置 AI 接口(DeepSeek 直连)";
   }
 }
 async function callAI(messages, maxTokens){
@@ -4375,6 +4423,11 @@ async function runAiRead(){
   resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在深度解读论文,请稍候…</div>';
 
   const cfg = getAiConfig();
+  if(!cfg || !cfg.key){
+    /* 未配置: 自动弹出 DeepSeek 配置窗(已预填端点/模型) */
+    toast("请先粘贴 DeepSeek API Key 完成接入");
+    openAiCfgModal();
+  }
   if(cfg && cfg.key){
     const paperCtx = (item.fullText || "").substring(0, 12000);
     const messages = [
@@ -4396,22 +4449,11 @@ async function runAiRead(){
   const a = item.analysis || analyzePaper(item.fullText);
   let ah = "";
   if(!cfg || !cfg.key){
-    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · 配置 AI 后可获得更强的深度解读(工具栏 ⚙ AI)</div>';
+    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">配置 DeepSeek</a> 后可获得更强的深度解读</div>';
   }
   if(a.field) ah += '<div class="pa-field"><span class="pa-label">研究领域</span><span class="pa-val">' + escapeHtml(a.field) + '</span></div>';
-  ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">§</span> 摘要</div>';
-  ah += a.abstract ? '<div class="pa-text">' + escapeHtml(a.abstract) + '</div>' : '<div class="pa-mute">未检测到摘要</div>';
-  ah += '</div>';
-  if(a.keywords && a.keywords.length > 0){
-    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❦</span> 关键词</div><div class="pa-kws">';
-    for(let i=0; i<a.keywords.length; i++) ah += '<span class="pa-kw">' + escapeHtml(a.keywords[i]) + '</span>';
-    ah += '</div></div>';
-  }
   if(a.methods){
     ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⚒</span> 研究方法</div><div class="pa-text">' + escapeHtml(a.methods) + '</div></div>';
-  }
-  if(a.contributions){
-    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> 创新贡献</div><div class="pa-text">' + escapeHtml(a.contributions) + '</div></div>';
   }
   if(a.conclusion){
     ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❧</span> 主要结论</div><div class="pa-text">' + escapeHtml(a.conclusion) + '</div></div>';
@@ -4456,7 +4498,8 @@ async function sendChatMessage(){
 
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    appendChatMsg("err", "尚未配置 AI 接口。请点击工具栏「⚙ AI」配置 API Key(支持 DeepSeek / 智谱GLM / Kimi / 通义千问)后再来提问。");
+    appendChatMsg("err", "尚未接入 AI。配置窗已为你打开 — DeepSeek 端点已预填,仅需粘贴 API Key(platform.deepseek.com 免费注册获取)并保存,即可开始对话。");
+    openAiCfgModal();
     return;
   }
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
@@ -6848,6 +6891,10 @@ function toast(msg, duration){
   // 退出按钮
   const logoutBtn = document.getElementById("logoutBtn");
   if(logoutBtn) logoutBtn.onclick = function(e){ e.preventDefault(); doLogout(); };
+  // 导航栏 AI 配置入口 (DeepSeek 直连)
+  const navAiCfgBtn = document.getElementById("navAiCfg");
+  if(navAiCfgBtn) navAiCfgBtn.onclick = function(e){ e.preventDefault(); openAiCfgModal(); };
+  updateNavAiState();
 })();
 
 /* 检查会话:已登录则直接进入,未登录则显示登录界面 */
