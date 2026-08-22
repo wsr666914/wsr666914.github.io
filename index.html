@@ -307,6 +307,14 @@
   .card-reclassify:hover{ opacity:1; color:var(--accent); border-color:var(--accent); }
 
   .empty{ grid-column:1/-1; text-align:center; padding:80px 20px; color:var(--ink-mute); }
+  .gallery-more-btn{
+    grid-column:1/-1; justify-self:center; margin:6px 0 18px;
+    font-family:var(--serif); font-size:12px; letter-spacing:.06em;
+    padding:9px 26px; border-radius:8px; cursor:pointer;
+    border:1px solid var(--line); background:var(--paper); color:var(--ink-2);
+    transition:all .18s;
+  }
+  .gallery-more-btn:hover{ border-color:var(--teal); color:var(--teal); transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,22,16,.08); }
   .empty .big{ font-family:"Cormorant Garamond", "Noto Serif SC", serif; font-size:32px; font-style:italic; font-weight:500; color:var(--ink-soft); margin-bottom:8px; }
   .empty .small{ font-size:14px; font-style:italic; }
 
@@ -2569,7 +2577,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], pendingReview: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {} };
+const state = { items: [], pendingReview: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120 };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -7562,6 +7570,7 @@ function renderFilters(){
   for(let i=0; i<chips.length; i++){
     chips[i].onclick = function(){
       state.filter = this.dataset.filter;
+      state.galleryLimit = 120; /* 切换分类从头显示 */
       render();
     };
   }
@@ -7583,8 +7592,11 @@ function renderGallery(){
     return;
   }
 
+  /* 渐进渲染: 大列表只渲染前 galleryLimit 张卡片(批量模式需全量勾选,不设限),防止千条数据DOM过重卡顿 */
+  const capped = !state.bulkMode && items.length > state.galleryLimit;
+  const visibleCount = capped ? state.galleryLimit : items.length;
   let html = "";
-  for(let idx=0; idx<items.length; idx++){
+  for(let idx=0; idx<visibleCount; idx++){
     const it = items[idx];
     const c = CATEGORIES[it.category] || CATEGORIES[FALLBACK_CAT];
     const d = new Date(it.addedAt);
@@ -7654,7 +7666,21 @@ function renderGallery(){
     html += '<div class="card-meta"><span>' + dateStr + '</span><span>置信 ' + conf + '</span></div>';
     html += '</article>';
   }
+  /* 未渲染完的部分: 显示「更多」按钮,点击增量加载 */
+  if(capped){
+    html += '<button id="galleryMoreBtn" class="gallery-more-btn" title="继续显示后续条目">显示更多 · 还有 ' + (items.length - visibleCount) + ' 条 ▾</button>';
+  }
   el.innerHTML = html;
+  const moreBtn = el.querySelector("#galleryMoreBtn");
+  if(moreBtn){
+    moreBtn.onclick = function(){
+      state.galleryLimit += 120;
+      renderGallery();
+      /* 滚动到按钮原位置,保持浏览位置 */
+      const nb = el.querySelector("#galleryMoreBtn");
+      if(nb) nb.scrollIntoView({behavior:"smooth", block:"center"});
+    };
+  }
 
   const dels = el.querySelectorAll(".card-del");
   for(let i=0; i<dels.length; i++){
@@ -7966,9 +7992,13 @@ function submit(){
 
 const searchInput = document.getElementById("searchInput");
 if(searchInput){
+  /* 搜索防抖(160ms): 避免每次按键全量重绘卡片列表导致卡顿 */
+  let _searchTimer = null;
   searchInput.addEventListener("input", function(e){
     state.search = e.target.value;
-    renderGallery();
+    state.galleryLimit = 120; /* 新检索从头显示 */
+    if(_searchTimer) clearTimeout(_searchTimer);
+    _searchTimer = setTimeout(function(){ renderGallery(); }, 160);
   });
 }
 
