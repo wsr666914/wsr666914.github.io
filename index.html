@@ -1395,6 +1395,7 @@
       <a href="#add">录入</a>
       <a href="#archive">志录</a>
       <a href="#" id="exportBtn">导出</a>
+      <a href="#" id="importBtn" title="导入JSON备份文件恢复数据">导入</a>
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
@@ -2663,7 +2664,11 @@ function doLogin(){
   if(u.length < 1){ hint.textContent = "请输入名号"; return; }
   if(p.length < 1){ hint.textContent = "请输入暗语"; return; }
   const users = getUsers();
-  if(!users[u]){ hint.textContent = "无此名号,请先注册"; return; }
+  if(!users[u]){
+    const host = location.host;
+    hint.textContent = "无此名号,请先注册(注意:" + host + " 与其他地址的数据各自独立,本地localhost与线上网站的账号不互通)";
+    return;
+  }
   if(users[u].pass !== hashPass(p)){ hint.textContent = "暗语有误"; return; }
   hint.textContent = "";
   setSession(u);
@@ -2712,11 +2717,25 @@ function afterLogin(){
 
 function loadState(){
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
+    let raw = localStorage.getItem(STORAGE_KEY);
+    let arr = null;
     if(raw){
-      const arr = JSON.parse(raw);
-      if(Array.isArray(arr)) state.items = arr;
+      try{ arr = JSON.parse(raw); }catch(e){ arr = null; }
     }
+    /* 主数据损坏/为空 → 尝试从备份恢复 */
+    if(!Array.isArray(arr)){
+      const braw = localStorage.getItem(STORAGE_KEY + "_bak");
+      if(braw){
+        try{
+          const barr = JSON.parse(braw);
+          if(Array.isArray(barr) && barr.length > 0){
+            arr = barr;
+            toast("检测到数据异常,已自动从备份恢复 " + barr.length + " 条志录");
+          }
+        }catch(e){ /* 备份也坏,放弃 */ }
+      }
+    }
+    if(Array.isArray(arr)) state.items = arr;
     const praw = localStorage.getItem(STORAGE_KEY + "_pending");
     if(praw){
       const parr = JSON.parse(praw);
@@ -2726,10 +2745,43 @@ function loadState(){
 }
 function saveState(){
   try{
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+    const main = JSON.stringify(state.items);
+    /* 双写备份: 主key写入成功后,备份key同步一份(恢复用) */
+    localStorage.setItem(STORAGE_KEY, main);
+    try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){ /* 备份失败不影响主数据 */ }
     localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
   }
-  catch(e){ console.warn("save failed", e); }
+  catch(e){
+    /* 容量超限: 瘦身图片后重试 */
+    const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
+    if(isQuota && slimImagesForQuota()){
+      try{
+        const main = JSON.stringify(state.items);
+        localStorage.setItem(STORAGE_KEY, main);
+        try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){}
+        localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
+        toast("存储空间紧张,已自动压缩图片并保存成功");
+        return;
+      }catch(e2){ /* 仍失败则提示导出 */ }
+    }
+    console.warn("save failed", e);
+    toast("保存失败:浏览器存储空间不足,请尽快「导出数据」备份", 5000);
+  }
+}
+
+/* 容量超限时瘦身图片: 逐张压缩(保留最近3张,其余降质/丢弃) */
+function slimImagesForQuota(){
+  let changed = false;
+  for(let i=0; i<state.items.length; i++){
+    const it = state.items[i];
+    if(!it.images || !it.images.length) continue;
+    /* 保留前3张,其余删除 */
+    if(it.images.length > 3){
+      it.images = it.images.slice(0, 3);
+      changed = true;
+    }
+  }
+  return changed;
 }
 
 /* ===== 识别列表 (待人工确认的低置信条目) ===== */
@@ -3462,9 +3514,10 @@ function extractPdfTextEnhanced(pdf, onPageDone){
               }
               if(imgData){
                 try{
-                  /* 转为canvas → dataURL(缩小到≤800px宽节省空间) */
+                  /* 转为canvas → dataURL(缩小到≤600px宽,质量0.6,控制存储占用) */
+                  if(imgs.length >= 8) return; /* 每页最多8张,防超配额 */
                   const cv = document.createElement("canvas");
-                  const scale = Math.min(1, 800 / w);
+                  const scale = Math.min(1, 600 / w);
                   cv.width = Math.round(w * scale);
                   cv.height = Math.round(h * scale);
                   const ctx = cv.getContext("2d");
@@ -3485,7 +3538,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
                       }
                     }
                     ctx.putImageData(imgDataObj, 0, 0);
-                    imgs.push({ dataUrl: cv.toDataURL("image/jpeg", 0.72), w: cv.width, h: cv.height });
+                    imgs.push({ dataUrl: cv.toDataURL("image/jpeg", 0.6), w: cv.width, h: cv.height });
                   }
                 }catch(e){ /* 图片提取失败静默 */ }
               }
@@ -3600,9 +3653,9 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           if(line) lines.push(line);
         }
 
-        /* --- 图片收集 --- */
+        /* --- 图片收集(全文上限12张,防存储超限) --- */
         const imageMarkers = [];
-        for(let i=0; i<pageImages.length; i++){
+        for(let i=0; i<pageImages.length && allImages.length < 12; i++){
           const img = pageImages[i];
           allImages.push({ page: p, dataUrl: img.dataUrl, w: img.w, h: img.h });
           imageMarkers.push({ dataUrl: img.dataUrl, w: img.w, h: img.h });
@@ -7830,6 +7883,54 @@ if(exportBtn){
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     toast("已导出 " + state.items.length + " 条");
+  });
+}
+
+/* ---- 导入JSON备份: 恢复数据(与现有条目按id合并去重) ---- */
+const importBtn = document.getElementById("importBtn");
+if(importBtn){
+  importBtn.addEventListener("click", function(e){
+    e.preventDefault();
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".json,application/json";
+    input.onchange = function(){
+      const file = this.files[0];
+      if(!file) return;
+      if(file.size > 30*1024*1024){ toast("备份文件过大(超30MB)"); return; }
+      const reader = new FileReader();
+      reader.onload = function(){
+        try{
+          const arr = JSON.parse(this.result);
+          if(!Array.isArray(arr)){ toast("文件格式不对:应为导出的JSON数组"); return; }
+          const valid = arr.filter(function(x){ return x && x.name; });
+          if(valid.length === 0){ toast("文件中没有可导入的条目"); return; }
+          /* 按name去重合并: 导入的不覆盖现有同名条目 */
+          const existNames = {};
+          for(let i=0; i<state.items.length; i++) existNames[state.items[i].name] = true;
+          let added = 0;
+          for(let i=0; i<valid.length; i++){
+            if(!existNames[valid[i].name]){
+              if(!valid[i].id) valid[i].id = uid();
+              state.items.push(valid[i]);
+              existNames[valid[i].name] = true;
+              added++;
+            }
+          }
+          saveState();
+          render();
+          if(added > 0){
+            toast("已导入 " + added + " 条(重复 " + (valid.length - added) + " 条跳过)");
+          }else{
+            toast("备份中的条目均已存在,无需导入");
+          }
+        }catch(err){
+          toast("导入失败:文件不是有效的JSON备份");
+        }
+      };
+      reader.readAsText(file, "UTF-8");
+    };
+    input.click();
   });
 }
 
