@@ -636,6 +636,41 @@
   }
   mark.hl:hover{ filter:brightness(.92); }
 
+  /* ===== 格式按钮 + 备注样式 ===== */
+  .pr-hl-sep{ width:1px; height:20px; background:var(--line); margin:0 3px; flex-shrink:0; }
+  .pr-hl-fmt{
+    margin:0; padding:3px 10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--paper); cursor:pointer; font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    font-size:13px; font-weight:500; color:var(--ink-soft);
+    transition:all .15s; display:inline-flex; align-items:center; gap:4px;
+  }
+  .pr-hl-fmt:hover{ background:var(--paper-deep); color:var(--ink); border-color:var(--ink-mute); }
+  .pr-hl-fmt.active{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
+  .pr-text strong.pr-bold{ font-weight:700; color:var(--ink); }
+  .pr-text u.pr-underline{ text-decoration:underline; text-decoration-color:var(--ink-mute); text-decoration-thickness:1px; text-underline-offset:3px; }
+  .pr-text u.pr-note{
+    text-decoration:underline; text-decoration-style:wavy; text-decoration-color:#9B7B33;
+    text-decoration-thickness:1px; text-underline-offset:3px; cursor:pointer;
+    color:inherit; border-radius:2px; transition:background .15s;
+  }
+  .pr-text u.pr-note:hover{ background:rgba(155,123,51,.12); }
+  .pr-note-popup{
+    position:fixed; z-index:200; max-width:340px; padding:10px 14px;
+    background:var(--paper); border:1px solid var(--ink-mute); border-radius:10px;
+    box-shadow:0 8px 28px rgba(26,22,16,.2); font-size:14px; line-height:1.6;
+    color:var(--ink); font-family:"Newsreader","Noto Serif SC",serif;
+    display:none; white-space:normal;
+  }
+  .pr-note-popup.show{ display:block; }
+  .pr-note-popup::before{
+    content:"备注"; display:block; font-family:"JetBrains Mono",monospace;
+    font-size:9px; font-weight:600; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-mute); margin-bottom:4px;
+  }
+  .pr-note-popup .note-del{
+    margin-top:6px; font-size:12px; color:#B0432C; cursor:pointer; text-decoration:underline;
+  }
+
   /* ============ 论文分析侧栏 ============ */
   .pa-field{
     display:flex; flex-direction:column; gap:3px; padding:10px 12px;
@@ -915,6 +950,8 @@
   .nav-user::before{ content:"❦ "; color:var(--accent); }
   @keyframes loginIn{ from{ opacity:0; transform:translateY(14px) scale(.98); } to{ opacity:1; transform:translateY(0) scale(1); } }
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
 </head>
 <body>
 
@@ -1147,6 +1184,10 @@
           <button class="pr-hl-color" data-color="#B3D9E8" style="background:#B3D9E8" title="淡蓝"></button>
           <button class="pr-hl-color" data-color="#F5C6C6" style="background:#F5C6C6" title="淡红"></button>
           <button class="pr-hl-color" data-color="#E0C6E8" style="background:#E0C6E8" title="淡紫"></button>
+          <span class="pr-hl-sep"></span>
+          <button class="pr-hl-fmt" data-fmt="bold" title="加粗选中文字"><b>B</b></button>
+          <button class="pr-hl-fmt" data-fmt="underline" title="下划线选中文字"><u>U</u></button>
+          <button class="pr-hl-fmt" data-fmt="note" title="为选中句子添加备注(平时隐藏,点击可见)">💬 备注</button>
           <button class="pr-hl-undo" id="prHlUndo" title="撤销最近一次标注">↶</button>
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标注">×</button>
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
@@ -1158,6 +1199,7 @@
       <aside class="pr-outline" id="prOutline"></aside>
       <div class="pr-text-wrap" id="prTextWrap">
         <div class="pr-text" id="prText"></div>
+        <div class="pr-note-popup" id="prNotePopup"></div>
       </div>
     </div>
   </div>
@@ -3193,7 +3235,7 @@ function addPaper(title, fullText, analysis){
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, dirty:false };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false };
 
 /* 打开论文查看器 */
 function openPaperReader(itemId){
@@ -3202,6 +3244,7 @@ function openPaperReader(itemId){
 
   prState.itemId = itemId;
   prState.activeColor = null;
+  prState.activeFmt = null;
   prState.dirty = false;
   updateSaveBtnState();
 
@@ -3297,6 +3340,15 @@ function openPaperReader(itemId){
 
   /* 高亮颜色选择 */
   const hlColors = document.querySelectorAll(".pr-hl-color, .pr-hl-eraser");
+  const fmtBtns = document.querySelectorAll(".pr-hl-fmt");
+  function deactivateAllFmt(){
+    prState.activeFmt = null;
+    for(let j=0; j<fmtBtns.length; j++) fmtBtns[j].classList.remove("active");
+  }
+  function deactivateAllColor(){
+    prState.activeColor = null;
+    for(let j=0; j<hlColors.length; j++) hlColors[j].classList.remove("active");
+  }
   for(let i=0; i<hlColors.length; i++){
     hlColors[i].onclick = function(){
       const color = this.dataset.color;
@@ -3310,15 +3362,33 @@ function openPaperReader(itemId){
         } else {
           toast("当前无标注可清除");
         }
-        prState.activeColor = null;
-        for(let j=0; j<hlColors.length; j++) hlColors[j].classList.remove("active");
+        deactivateAllColor();
+        deactivateAllFmt();
         return;
       }
+      deactivateAllFmt();
       prState.activeColor = color;
-      /* 视觉选中态 */
       for(let j=0; j<hlColors.length; j++) hlColors[j].classList.remove("active");
       this.classList.add("active");
       toast("已选标注色 · 选中文字即可标注");
+    };
+  }
+
+  /* 格式按钮: 加粗/划线/备注 */
+  for(let i=0; i<fmtBtns.length; i++){
+    fmtBtns[i].onclick = function(){
+      const fmt = this.dataset.fmt;
+      /* 再次点击取消 */
+      if(prState.activeFmt === fmt){
+        deactivateAllFmt();
+        toast("已取消「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」模式");
+        return;
+      }
+      deactivateAllColor();
+      prState.activeFmt = fmt;
+      for(let j=0; j<fmtBtns.length; j++) fmtBtns[j].classList.remove("active");
+      this.classList.add("active");
+      toast("已选「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」· 选中文字即可应用");
     };
   }
 
@@ -3341,20 +3411,75 @@ function openPaperReader(itemId){
   /* 文本选中后自动标注 */
   const prTextWrap = document.getElementById("prTextWrap");
   if(prTextWrap){
-    prTextWrap.onmouseup = function(){
-      if(!prState.activeColor) return;
+    prTextWrap.onmouseup = function(e){
+      /* 点击备注元素时显示/隐藏弹窗 */
+      const noteEl = e.target.closest("u.pr-note");
+      const popup = document.getElementById("prNotePopup");
+      if(noteEl && popup){
+        const noteText = noteEl.dataset.note || "";
+        const hlIdx = noteEl.dataset.hlIdx;
+        popup.innerHTML = escapeHtml(noteText) +
+          '<div class="note-del" data-hl-idx="' + hlIdx + '">删除此备注</div>';
+        popup.style.left = Math.min(e.clientX, window.innerWidth - 360) + "px";
+        popup.style.top = (e.clientY + 14) + "px";
+        popup.classList.add("show");
+        const delBtn = popup.querySelector(".note-del");
+        if(delBtn){
+          delBtn.onclick = function(){
+            const idx = parseInt(this.dataset.hlIdx, 10);
+            const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+            if(cur && cur.highlights && cur.highlights[idx]){
+              cur.highlights.splice(idx, 1);
+              saveState();
+              applyHighlightsToDom(cur);
+              markDirty();
+              popup.classList.remove("show");
+              toast("已删除备注");
+            }
+          };
+        }
+        return;
+      }
+      /* 点击其他地方关闭弹窗 */
+      if(popup && !noteEl) popup.classList.remove("show");
+
+      if(!prState.activeColor && !prState.activeFmt) return;
       const sel = window.getSelection();
       if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
       const selectedText = sel.toString().trim();
       if(!selectedText || selectedText.length < 2) return;
-      /* 存储高亮 */
+      /* 存储标注 */
       const item2 = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!item2) return;
       if(!item2.highlights) item2.highlights = [];
+
+      if(prState.activeFmt === "note"){
+        /* 备注模式: 弹出输入框 */
+        const noteText = prompt("为选中文字添加备注:");
+        if(noteText && noteText.trim()){
+          item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
+          saveState();
+          markDirty();
+          sel.removeAllRanges();
+          applyHighlightsToDom(item2);
+          toast("备注已添加");
+        }
+        return;
+      }
+
+      var hlType = "highlight";
+      var hlColor = prState.activeColor;
+      if(prState.activeFmt === "bold"){ hlType = "bold"; }
+      else if(prState.activeFmt === "underline"){ hlType = "underline"; }
+
       /* 去重 */
-      const exists = item2.highlights.some(function(h){ return h.text === selectedText && h.color === prState.activeColor; });
+      var exists = item2.highlights.some(function(h){
+        return h.text === selectedText && h.type === hlType && h.color === hlColor;
+      });
       if(!exists){
-        item2.highlights.push({ text: selectedText, color: prState.activeColor });
+        var entry = { text: selectedText, type: hlType };
+        if(hlColor) entry.color = hlColor;
+        item2.highlights.push(entry);
         saveState();
         markDirty();
       }
@@ -3412,19 +3537,25 @@ function applyHighlightsToDom(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
 
-  /* 1. 重建全文 DOM (清除上一次的 mark 标签) */
+  /* 1. 重建全文 DOM */
   renderPaperText(item);
 
-  /* 2. 若无高亮,直接返回 */
+  /* 2. 若无标注,直接返回 */
   if(!item.highlights || item.highlights.length === 0) return;
 
-  /* 3. 逐条应用高亮 —— 仅在未被 mark 包裹的纯文本节点中查找 */
+  /* 3. 逐条应用标注 */
   for(let h=0; h<item.highlights.length; h++){
     const hl = item.highlights[h];
+    var hlType = hl.type || "highlight";
+    var skipTags = ["MARK","STRONG","U"];
+    if(hlType === "bold") skipTags = ["STRONG","MARK","U"];
+    else if(hlType === "underline") skipTags = ["U","MARK","STRONG"];
+    else if(hlType === "note") skipTags = ["U","MARK","STRONG"];
+
     const walker = document.createTreeWalker(prText, NodeFilter.SHOW_TEXT, {
       acceptNode: function(node){
-        /* 跳过已在 mark 内的节点 */
-        if(node.parentElement && node.parentElement.tagName === "MARK") return NodeFilter.FILTER_REJECT;
+        var parent = node.parentElement;
+        if(parent && skipTags.indexOf(parent.tagName) >= 0) return NodeFilter.FILTER_REJECT;
         return node.nodeValue.indexOf(hl.text) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
       }
     }, false);
@@ -3436,20 +3567,30 @@ function applyHighlightsToDom(item){
           const range = document.createRange();
           range.setStart(node, idx);
           range.setEnd(node, idx + hl.text.length);
-          const mark = document.createElement("mark");
-          mark.className = "hl";
-          mark.style.background = hl.color;
-          mark.title = "点击移除此标注";
-          mark.dataset.hlIdx = String(h);
-          range.surroundContents(mark);
+          var wrapper;
+          if(hlType === "highlight"){
+            wrapper = document.createElement("mark");
+            wrapper.className = "hl";
+            wrapper.style.background = hl.color || "#FFE08A";
+          }else if(hlType === "bold"){
+            wrapper = document.createElement("strong");
+            wrapper.className = "pr-bold";
+          }else if(hlType === "underline"){
+            wrapper = document.createElement("u");
+            wrapper.className = "pr-underline";
+          }else if(hlType === "note"){
+            wrapper = document.createElement("u");
+            wrapper.className = "pr-note";
+            wrapper.dataset.note = hl.note || "";
+            wrapper.title = "点击查看备注";
+          }
+          wrapper.dataset.hlIdx = String(h);
+          range.surroundContents(wrapper);
         }catch(e){ /* 跨节点,跳过 */ }
         break;
       }
     }
   }
-
-  /* 4. 标注不再点击移除(防误操作),改用撤销按钮 */
-  /* 不绑定 click 事件,标注只读 */
 }
 
 /* 清除当前论文全部标注 */
@@ -3460,7 +3601,7 @@ function clearAllHighlights(){
   saveState();
   applyHighlightsToDom(item);
   markDirty();
-  toast("已清除全部标注");
+  toast("已清除全部标注(高亮/加粗/划线/备注)");
 }
 
 /* 撤销最近一次标注 */
@@ -3493,6 +3634,9 @@ function closePaperReader(){
   document.body.style.overflow = "";
   prState.itemId = null;
   prState.activeColor = null;
+  prState.activeFmt = null;
+  const popup = document.getElementById("prNotePopup");
+  if(popup) popup.classList.remove("show");
 }
 
 /* ============================================================
@@ -4646,19 +4790,73 @@ function renderGallery(){
         if(!target) return;
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = ".txt,.md,.text";
+        input.accept = ".txt,.md,.text,.pdf";
         input.onchange = function(){
           const file = this.files[0];
           if(!file) return;
-          if(file.size > 2*1024*1024){ toast("文件过大(超2MB),请精简后上传"); return; }
-          const reader = new FileReader();
-          reader.onload = function(){
-            target.fullText = this.result;
-            saveState();
-            render();
-            toast("「" + target.name + "」全文已上传,可点「查看全文」阅读标注");
-          };
-          reader.readAsText(file, "UTF-8");
+          if(file.size > 10*1024*1024){ toast("文件过大(超10MB)"); return; }
+          const fname = file.name.toLowerCase();
+          if(fname.endsWith(".pdf")){
+            /* PDF 文本提取 */
+            if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
+            toast("正在解析PDF……", 2000);
+            const reader = new FileReader();
+            reader.onload = function(){
+              pdfjsLib.getDocument({data:new Uint8Array(this.result)}).promise.then(function(pdf){
+                const numPages = pdf.numPages;
+                const pageTexts = [];
+                let chain = Promise.resolve();
+                for(let p=1; p<=numPages; p++){
+                  chain = chain.then(function(){
+                    return pdf.getPage(p).then(function(page){
+                      return page.getTextContent().then(function(tc){
+                        let txt = "";
+                        let lastY = null;
+                        for(let i=0; i<tc.items.length; i++){
+                          const item = tc.items[i];
+                          if(lastY !== null && Math.abs(item.transform[5] - lastY) > 3){
+                            txt += "\n";
+                          }
+                          txt += item.str;
+                          if(item.hasEOL) txt += "\n";
+                          lastY = item.transform[5];
+                        }
+                        pageTexts.push(txt);
+                      });
+                    });
+                  });
+                }
+                return chain.then(function(){
+                  const fullText = pageTexts.join("\n\n");
+                  if(fullText.trim().length < 50){
+                    toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
+                    return;
+                  }
+                  target.fullText = fullText;
+                  target.analysis = analyzePaper(fullText);
+                  target.outline = generateOutline(fullText);
+                  saveState();
+                  render();
+                  toast("「" + target.name + "」PDF已解析,可点「查看全文」阅读标注");
+                });
+              }).catch(function(e){
+                toast("PDF解析失败:" + (e.message || "未知错误"));
+              });
+            };
+            reader.readAsArrayBuffer(file);
+          }else{
+            /* TXT/MD 直接读取 */
+            const reader = new FileReader();
+            reader.onload = function(){
+              target.fullText = this.result;
+              target.analysis = analyzePaper(this.result);
+              target.outline = generateOutline(this.result);
+              saveState();
+              render();
+              toast("「" + target.name + "」全文已上传,可点「查看全文」阅读标注");
+            };
+            reader.readAsText(file, "UTF-8");
+          }
         };
         input.click();
       };
@@ -4692,7 +4890,10 @@ function updateBulkCount(){
   const cnt = document.getElementById("bulkCount");
   const n = state.bulkSelected ? Object.keys(state.bulkSelected).length : 0;
   if(cnt) cnt.textContent = "已选 " + n + " 项";
-  if(bar) bar.classList.toggle("show", state.bulkMode === true);
+  if(bar){
+    bar.style.display = state.bulkMode ? "flex" : "none";
+    bar.classList.toggle("show", state.bulkMode === true);
+  }
 }
 function enterBulkMode(){
   state.bulkMode = true;
