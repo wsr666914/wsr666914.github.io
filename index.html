@@ -622,10 +622,26 @@
     flex:1; display:flex; overflow:hidden; min-height:0;
   }
   .pr-outline{
-    width:240px; flex-shrink:0; overflow-y:auto;
+    width:240px; min-width:200px; max-width:520px; flex-shrink:0; overflow-y:auto;
     padding:24px 20px 24px 28px; border-right:1px solid var(--line-soft);
     background:linear-gradient(180deg, var(--paper-deep), var(--paper));
+    position:relative;
   }
+  /* 左栏拖拽调整宽度手柄 */
+  .pr-outline-resizer{
+    position:absolute; top:0; right:-3px; width:6px; height:100%;
+    cursor:col-resize; z-index:5;
+  }
+  .pr-outline-resizer::after{
+    content:""; position:absolute; top:50%; right:2px; transform:translateY(-50%);
+    width:2px; height:36px; border-radius:2px; background:var(--line);
+    opacity:0; transition:opacity .2s, background .2s;
+  }
+  .pr-outline-resizer:hover::after, .pr-outline.resizing .pr-outline-resizer::after{
+    opacity:1; background:var(--teal);
+  }
+  .pr-outline.resizing{ user-select:none; cursor:col-resize; }
+  body.pr-resizing{ cursor:col-resize; user-select:none; }
   .pr-outline-section{
     font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:500; letter-spacing:.18em;
     text-transform:uppercase; color:var(--ink-mute); margin:18px 0 8px; padding-bottom:4px;
@@ -737,6 +753,47 @@
   /* ===== 删除模式按钮 + 检查标红 ===== */
   .pr-del-btn.on{ border-color:#B0432C; background:rgba(176,67,44,.1); color:#B0432C; }
   #prCheckRed.on{ border-color:#B0432C; background:rgba(176,67,44,.1); color:#B0432C; }
+  #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
+
+  /* ===== 译文行内展示 ===== */
+  .pr-translation{
+    display:block; margin:6px 0; padding:8px 12px;
+    border-left:3px solid var(--teal); border-radius:0 8px 8px 0;
+    background:rgba(47,93,98,.07); color:var(--teal);
+    font-size:14px; line-height:1.9; text-indent:0; text-align:left;
+    animation:transIn .3s ease;
+  }
+  .pr-translation .tr-label{
+    display:block; font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:600;
+    letter-spacing:.16em; text-transform:uppercase; color:var(--teal); opacity:.75; margin-bottom:3px;
+  }
+  @keyframes transIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+
+  /* ===== 参考文献列表 ===== */
+  .ref-list{ display:flex; flex-direction:column; gap:8px; }
+  .ref-item{
+    display:block; padding:9px 12px; border:1px solid var(--line); border-radius:10px;
+    background:var(--paper); cursor:pointer; transition:all .2s;
+  }
+  .ref-item:hover{ border-color:var(--teal); background:rgba(47,93,98,.05); transform:translateX(2px); }
+  .ref-idx{
+    font-family:"JetBrains Mono",monospace; font-size:10px; color:var(--accent); font-weight:600;
+  }
+  .ref-title{
+    font-size:12.5px; line-height:1.55; color:var(--ink); margin:3px 0 4px;
+  }
+  .ref-meta{ font-size:10.5px; color:var(--ink-mute); }
+  .ref-meta em{ color:var(--teal); font-style:normal; }
+
+  /* ===== 录入弹窗 PDF 导入按钮 ===== */
+  .paper-pdf-btn{
+    float:right; padding:3px 12px; border:1px solid var(--accent); border-radius:8px;
+    background:rgba(176,67,44,.06); color:var(--accent); cursor:pointer;
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:12.5px; font-weight:600;
+    letter-spacing:.04em; transition:all .2s;
+  }
+  .paper-pdf-btn:hover{ background:var(--accent); color:#fff; }
+  .paper-pdf-btn.busy{ opacity:.6; pointer-events:none; }
   .pr-text .red-flag{
     background:rgba(176,67,44,.14); color:#B0432C;
     text-decoration:underline wavy #B0432C; text-decoration-skip-ink:none;
@@ -1348,8 +1405,8 @@
       <input type="text" id="paperTitle" autocomplete="off" placeholder="留空则自动从正文首行提取" />
     </div>
     <div class="modal-field">
-      <label>论文全文</label>
-      <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
+      <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地PDF文件,自动提取全文">⇪ 导入PDF</button></label>
+      <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入PDF」……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
     </div>
     <div class="paper-entry-stats" id="paperEntryStats"></div>
     <div class="modal-actions">
@@ -1385,7 +1442,8 @@
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
-          <button class="pr-hl-fmt" id="prCheckRed" title="检查可删除内容:标红乱码/冗余,再次点击取消标红">🔍 检查</button>
+          <button class="pr-hl-fmt" id="prCheckRed" title="AI检查可删除内容:标红乱码/冗余,再次点击取消标红">🔍 检查</button>
+          <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
         <button class="pr-reformat-btn" id="prReformat" title="一键重新排版:合并断行/去空行/保留段落结构">◫ 一键排版</button>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
@@ -1394,14 +1452,16 @@
     </div>
     <div class="pr-body">
       <aside class="pr-outline" id="prOutline">
+        <div class="pr-outline-resizer" id="prOutlineResizer" title="拖动调整宽度"></div>
         <div class="pr-outline-section">智能工具 · AI LAB</div>
         <div class="pr-ai-btns">
-          <button class="pr-ai-btn" id="prAiRead" title="AI快速分析文章内容与核心">✦ AI 解读</button>
+          <button class="pr-ai-btn" id="prAiRead" title="选中一段文字后点击,AI基于上下文深度解读">✦ 解读选中</button>
           <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">💬 AI 提问</button>
-          <button class="pr-ai-btn" id="prRelated" title="检索知网内与该论文研究内容相似的论文五篇">⇄ 联想论文</button>
+          <button class="pr-ai-btn" id="prRelated" title="AI联想知网内与该论文研究内容相似的论文五篇">⇄ 联想论文</button>
+          <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">❑ 参考文献</button>
         </div>
         <div class="pr-ai-result" id="prAiResult">
-          <div class="pr-ai-hint">点击上方按钮开始<br>· AI 解读: 快速提炼内容与核心<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇</div>
+          <div class="pr-ai-hint">点击上方按钮开始<br>· 解读选中: 选中文字后AI上下文解读<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇<br>· 参考文献: 检索并跳转知网</div>
         </div>
         <div class="pr-chat" id="prChat">
           <div class="pr-chat-log" id="prChatLog"></div>
@@ -3648,7 +3708,19 @@ function addPaper(title, fullText, analysis){
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[] };
+
+/* 推入操作历史(撤销用): 记录全文变更前的快照 */
+function pushTextHistory(item){
+  if(!item) return;
+  prState.history.push({ type:"text", fullText:item.fullText });
+  if(prState.history.length > 50) prState.history.shift();
+}
+/* 推入标注操作历史 */
+function pushHlHistory(){
+  prState.history.push({ type:"hl" });
+  if(prState.history.length > 50) prState.history.shift();
+}
 
 /* 打开论文查看器 */
 function openPaperReader(itemId){
@@ -3659,6 +3731,7 @@ function openPaperReader(itemId){
   prState.activeColor = null;
   prState.activeFmt = null;
   prState.dirty = false;
+  prState.history = [];   /* 操作历史(撤销删除/排版/标注) */
   /* 快照: 打开时的原始数据副本,退出选「取消」时恢复 */
   prState.snapshot = JSON.parse(JSON.stringify({
     fullText: item.fullText,
@@ -3708,28 +3781,10 @@ function openPaperReader(itemId){
   const prClose = document.getElementById("prClose");
   if(prClose) prClose.onclick = closePaperReader;
 
-  /* 一键重新排版:合并断行/去空行/保留段落结构 (不重置快照,排版算更改) */
+  /* 一键重新排版: AI排版优先,本地兜底 (不重置快照,排版算更改) */
   const prReformat = document.getElementById("prReformat");
   if(prReformat){
-    prReformat.onclick = function(){
-      const cur = state.items.find(function(x){ return x.id === prState.itemId; });
-      if(!cur || !cur.fullText){ toast("当前无全文可排版"); return; }
-      const before = cur.fullText;
-      const after = compactReformatText(before);
-      if(after === before){
-        toast("排版已是最优,无需调整");
-        return;
-      }
-      cur.fullText = after;
-      /* 行号变化 → 重新生成大纲,重析论文 */
-      cur.outline = generateOutline(after);
-      cur.analysis = analyzePaper(after);
-      saveState();
-      markDirty();
-      /* 局部刷新全文+高亮(不重开阅读器,保留快照与dirty状态) */
-      applyHighlightsToDom(cur);
-      toast("已重新排版:断行合并 · 空行清除 · 段落结构保留");
-    };
+    prReformat.onclick = function(){ aiReformatPaper(prReformat); };
   }
 
   /* 高亮颜色选择 */
@@ -3787,11 +3842,11 @@ function openPaperReader(itemId){
     };
   }
 
-  /* 撤销最近一次标注 */
+  /* 撤销最近一次操作(删除/排版/标注) */
   const prHlUndo = document.getElementById("prHlUndo");
   if(prHlUndo){
     prHlUndo.onclick = function(){
-      undoLastHighlight();
+      undoLastAction();
     };
   }
 
@@ -3862,6 +3917,7 @@ function openPaperReader(itemId){
         const noteText = prompt("为选中文字添加备注:");
         if(noteText && noteText.trim()){
           item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
+          pushHlHistory();
           saveState();
           markDirty();
           sel.removeAllRanges();
@@ -3884,6 +3940,7 @@ function openPaperReader(itemId){
         var entry = { text: selectedText, type: hlType };
         if(hlColor) entry.color = hlColor;
         item2.highlights.push(entry);
+        pushHlHistory();
         saveState();
         markDirty();
       }
@@ -3940,8 +3997,45 @@ function openPaperReader(itemId){
   if(prAiAskBtn) prAiAskBtn.onclick = toggleChatPanel;
   const prRelatedBtn = document.getElementById("prRelated");
   if(prRelatedBtn) prRelatedBtn.onclick = fetchRelatedPapers;
+  const prRefsBtn = document.getElementById("prReferences");
+  if(prRefsBtn) prRefsBtn.onclick = fetchReferences;
+  const prTranslateBtn = document.getElementById("prTranslate");
+  if(prTranslateBtn) prTranslateBtn.onclick = function(){ toggleTranslate(); };
   const prAiCfgBtn = document.getElementById("prAiCfg");
   if(prAiCfgBtn) prAiCfgBtn.onclick = openAiCfgModal;
+
+  /* ===== 左栏拖拽调整宽度 ===== */
+  const resizer = document.getElementById("prOutlineResizer");
+  const outlineEl = document.getElementById("prOutline");
+  if(resizer && outlineEl){
+    /* 恢复上次宽度 */
+    try{
+      const savedW = parseInt(localStorage.getItem("pr_outline_width") || "0", 10);
+      if(savedW >= 200 && savedW <= 520) outlineEl.style.width = savedW + "px";
+    }catch(e){}
+    resizer.onmousedown = function(e){
+      e.preventDefault();
+      outlineEl.classList.add("resizing");
+      document.body.classList.add("pr-resizing");
+      const startX = e.clientX;
+      const startW = outlineEl.getBoundingClientRect().width;
+      function onMove(ev){
+        const w = Math.min(520, Math.max(200, startW + (ev.clientX - startX)));
+        outlineEl.style.width = w + "px";
+      }
+      function onUp(){
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+        outlineEl.classList.remove("resizing");
+        document.body.classList.remove("pr-resizing");
+        try{
+          localStorage.setItem("pr_outline_width", String(Math.round(outlineEl.getBoundingClientRect().width)));
+        }catch(e){}
+      }
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+    };
+  }
 
   /* AI 聊天发送 */
   const prChatSend = document.getElementById("prChatSend");
@@ -4074,18 +4168,43 @@ function clearAllHighlights(){
   toast("已清除全部标注(高亮/加粗/划线/备注)");
 }
 
-/* 撤销最近一次标注 */
-function undoLastHighlight(){
+/* 撤销最近一次操作: 删除/排版(回退全文) 或 标注(移除最后标注) */
+function undoLastAction(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item || !item.highlights || item.highlights.length === 0){
-    toast("无标注可撤销");
+  if(!item){ toast("无可撤销操作"); return; }
+  /* 历史栈空时,兜底撤销最后标注 */
+  if(prState.history.length === 0){
+    if(item.highlights && item.highlights.length > 0){
+      item.highlights.pop();
+      saveState();
+      applyHighlightsToDom(item);
+      markDirty();
+      toast("已撤销一处标注");
+    }else{
+      toast("无可撤销操作");
+    }
     return;
   }
-  const removed = item.highlights.pop();
-  saveState();
-  applyHighlightsToDom(item);
-  markDirty();
-  toast("已撤销一处标注");
+  const op = prState.history.pop();
+  if(op.type === "text"){
+    /* 回退全文(撤销删除/排版/清理) */
+    item.fullText = op.fullText;
+    item.outline = generateOutline(item.fullText);
+    item.analysis = analyzePaper(item.fullText);
+    item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+    saveState();
+    applyHighlightsToDom(item);
+    markDirty();
+    toast("已撤销文字改动,全文恢复");
+  }else if(op.type === "hl"){
+    if(item.highlights && item.highlights.length > 0){
+      item.highlights.pop();
+      saveState();
+      applyHighlightsToDom(item);
+      markDirty();
+      toast("已撤销一处标注");
+    }
+  }
 }
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
@@ -4145,7 +4264,8 @@ function deleteSelectedText(sel){
     return;
   }
   const n = txt.trim().length;
-  if(!confirm("确定删除选中的 " + n + " 字?\n删除后可退出时选「取消」恢复原文。")) return;
+  if(!confirm("确定删除选中的 " + n + " 字?\n删除后可点「↶ 撤销」恢复。")) return;
+  pushTextHistory(item);
   item.fullText = item.fullText.slice(0, idx) + item.fullText.slice(idx + target.length);
   item.fullText = item.fullText.replace(/\n{3,}/g, "\n\n");
   item.outline = generateOutline(item.fullText);
@@ -4207,7 +4327,7 @@ function detectRedundantSegments(text){
   return flags;
 }
 
-function toggleRedundancyCheck(){
+async function toggleRedundancyCheck(){
   const btn = document.getElementById("prCheckRed");
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.fullText){ toast("当前无全文"); return; }
@@ -4224,10 +4344,42 @@ function toggleRedundancyCheck(){
     return;
   }
 
-  /* 执行检查 */
-  const flags = detectRedundantSegments(item.fullText);
+  /* 执行检查: AI优先,本地兜底 */
+  let flags = [];
+  const cfg = getAiConfig();
+  if(cfg && cfg.key){
+    toast("AI 正在检查冗余内容…");
+    try{
+      const messages = [
+        { role: "system", content: "你是论文文本清洁专家。从真实阅读角度检查用户提供的论文文本,找出应当删除的冗余内容:乱码、页眉页脚残留、页码、字体名残留、与正文无关的网站水印/广告文字、重复段落。输出严格的JSON数组,每项:{\"text\":\"应删除的原文片段(必须与原文完全一致)\",\"reason\":\"原因简述\"}。只输出JSON数组。若无需删除输出[]。片段要完整独立可定位,单条不超过120字。" },
+        { role: "user", content: item.fullText.substring(0, 15000) }
+      ];
+      const r = await callAI(messages, 3000);
+      if(r.content){
+        let txt = r.content.trim();
+        const s = txt.indexOf("[");
+        const e = txt.lastIndexOf("]");
+        if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
+        const aiFlags = JSON.parse(txt);
+        if(Array.isArray(aiFlags)){
+          /* 校验片段真实存在于原文 */
+          flags = aiFlags.filter(function(x){
+            return x && x.text && item.fullText.indexOf(x.text) >= 0 && x.text.length >= 2;
+          }).map(function(x){ return { text: x.text, reason: x.reason || "AI判定冗余" }; });
+        }
+      }
+    }catch(e){ /* AI失败 → 本地 */ }
+  }
+  /* 本地规则补充检测 */
+  const localFlags = detectRedundantSegments(item.fullText);
+  const seenText = {};
+  for(let i=0; i<flags.length; i++) seenText[flags[i].text] = true;
+  for(let i=0; i<localFlags.length; i++){
+    if(!seenText[localFlags[i].text]) flags.push(localFlags[i]);
+  }
+
   if(flags.length === 0){
-    toast("检查完毕:未发现乱码/冗余内容");
+    toast(cfg && cfg.key ? "AI检查完毕:未发现冗余内容" : "检查完毕:未发现乱码/冗余内容");
     return;
   }
   redCheckState.active = true;
@@ -4269,7 +4421,7 @@ function toggleRedundancyCheck(){
   if(wrap){
     const bar = document.createElement("div");
     bar.className = "red-check-bar";
-    bar.innerHTML = '<span>⚠ 检出 ' + flags.length + ' 处疑似冗余(乱码/页码/重复行等),悬停查看原因</span><button id="redDelAll">删除全部标红</button>';
+    bar.innerHTML = '<span>⚠ ' + (cfg && cfg.key ? "AI" : "") + '检出 ' + flags.length + ' 处疑似冗余(乱码/页码/重复行等),悬停查看原因</span><button id="redDelAll">删除全部标红</button>';
     wrap.insertBefore(bar, wrap.firstChild);
     const delAll = bar.querySelector("#redDelAll");
     if(delAll){
@@ -4277,6 +4429,7 @@ function toggleRedundancyCheck(){
         if(!confirm("确定删除全部 " + flags.length + " 处标红内容?")) return;
         const cur = state.items.find(function(i){ return i.id === prState.itemId; });
         if(!cur) return;
+        pushTextHistory(cur);
         let ft = cur.fullText;
         for(let f=0; f<flags.length; f++){
           ft = ft.split(flags[f].text).join("");
@@ -4417,54 +4570,318 @@ async function callAI(messages, maxTokens){
   }
 }
 
-/* AI 解读: 联网AI深度解读,无配置时本地深度分析兜底 */
+/* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
 async function runAiRead(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.fullText){ toast("当前无全文"); return; }
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在深度解读论文,请稍候…</div>';
+
+  /* 获取当前选中的文字 */
+  const sel = window.getSelection();
+  let selectedText = "";
+  if(sel && !sel.isCollapsed && sel.rangeCount > 0){
+    selectedText = sel.toString().replace(/\u00A0/g, "\n").trim();
+  }
+  if(!selectedText){
+    resultEl.innerHTML = '<div class="pr-ai-hint">请先在正文中<b>选中一段文字</b>,<br>再点击「✦ 解读选中」。<br><br>AI 将结合上下文为你解读该段内容。</div>';
+    toast("请先选中一段文字再点「解读选中」");
+    return;
+  }
+  if(selectedText.length < 4){
+    toast("选中文字过短,请选择更完整的一段");
+    return;
+  }
+  const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
+  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
 
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
     /* 未配置: 自动弹出配置窗(已预填智谱免费模型) */
-    toast("请先粘贴免费 API Key 完成接入");
+    resultEl.innerHTML = '<div class="pa-mute">尚未接入 AI · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">接入免费 GLM-4-Flash</a> 后即可解读选中文字</div>';
     openAiCfgModal();
+    return;
   }
   if(cfg && cfg.key){
-    const paperCtx = (item.fullText || "").substring(0, 12000);
+    /* 定位选中文本的上下文(前500字+后500字) */
+    const full = item.fullText || "";
+    const sIdx = full.indexOf(selText.substring(0, 40));
+    let ctxBefore = "", ctxAfter = "";
+    if(sIdx >= 0){
+      ctxBefore = full.substring(Math.max(0, sIdx - 500), sIdx);
+      ctxAfter = full.substring(sIdx + selText.length, Math.min(full.length, sIdx + selText.length + 500));
+    }else{
+      /* 兜底: 取全文首尾作上下文 */
+      ctxBefore = full.substring(0, 400);
+      ctxAfter = full.substring(Math.max(0, full.length - 400));
+    }
     const messages = [
-      { role: "system", content: "你是资深论文审读专家。请基于用户提供的论文全文,输出结构化中文解读,包含以下小节:【研究领域】【核心问题】【研究方法】【主要发现】【创新点】【局限性】【一句话总结】。每节2-4句,专业准确,不编造论文中没有的内容。" },
-      { role: "user", content: "论文标题:" + item.name + "\n\n论文全文:\n" + paperCtx }
+      { role: "system", content: "你是资深论文审读专家。用户从一篇论文中选中了一段文字,请结合提供的上下文,对选中文字进行深度解读。输出结构化中文解读,包含:【这段讲什么】【关键概念】【在论文中的作用】【深入解读】。每节2-4句,专业准确,基于文本本身,不编造。" },
+      { role: "user", content: "论文标题:" + item.name + "\n\n【选中文字】\n" + selText + "\n\n【前文上下文】\n" + ctxBefore + "\n\n【后文上下文】\n" + ctxAfter }
     ];
     const r = await callAI(messages, 2200);
     if(r.content){
-      let ah = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> AI 深度解读</div>';
+      let ah = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> 解读选中</div>';
+      ah += '<div class="pa-text" style="border-left:2px solid var(--teal);padding-left:8px;margin-bottom:8px;color:var(--ink-mute);font-size:12px;">' + escapeHtml(selText.length > 80 ? selText.substring(0, 80) + "…" : selText) + '</div>';
       ah += '<div class="pa-text">' + escapeHtml(r.content) + '</div></div>';
-      ah += '<div class="pa-metrics" style="margin-top:10px;"><span>AI 模型: ' + escapeHtml(cfg.model) + '</span></div>';
+      ah += '<div class="pa-metrics" style="margin-top:10px;"><span>选中 ' + selText.length + ' 字</span><span>AI 模型: ' + escapeHtml(cfg.model) + '</span></div>';
       resultEl.innerHTML = ah;
       return;
     }
-    resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">AI 调用失败(' + escapeHtml(r.error || "") + '),已切换本地解读</div>';
+    resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">AI 调用失败(' + escapeHtml(r.error || "") + ')</div>';
+  }
+}
+
+/* ============================================================
+   AI 一键排版 —— AI重排全文(章节结构/段落分段),本地兜底
+   ============================================================ */
+async function aiReformatPaper(btn){
+  const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+  if(!cur || !cur.fullText){ toast("当前无全文可排版"); return; }
+  const cfg = getAiConfig();
+  const before = cur.fullText;
+
+  /* 未配置AI → 本地排版 */
+  if(!cfg || !cfg.key){
+    const after = compactReformatText(before);
+    if(after === before){ toast("排版已是最优,无需调整"); return; }
+    pushTextHistory(cur);
+    cur.fullText = after;
+    cur.outline = generateOutline(after);
+    cur.analysis = analyzePaper(after);
+    saveState();
+    markDirty();
+    applyHighlightsToDom(cur);
+    toast("本地排版完成 · 接入AI可获得章节级智能排版");
+    openAiCfgModal();
+    return;
   }
 
-  /* 本地深度分析兜底 */
-  const a = item.analysis || analyzePaper(item.fullText);
-  let ah = "";
+  /* AI 排版 */
+  if(btn){
+    btn.classList.add("busy");
+    const orig = btn.innerHTML;
+    btn.innerHTML = "◫ AI排版中…";
+  }
+  const bodyEl = document.getElementById("prText");
+  if(bodyEl) bodyEl.style.opacity = ".55";
+  try{
+    const messages = [
+      { role: "system", content: "你是专业的论文排版引擎。请对用户提供的论文文本重新排版,严格遵循以下规则:\n1. 合并被硬换行打断的句子(断行合并)\n2. 识别章节标题(如 摘要/Abstract/1. 引言/第X章/参考文献 等),标题独立成行\n3. 保持段落分段:不同段落之间用一个空行分隔,不得把全文挤成密密一片\n4. 删除页码、页眉页脚残留、乱码行\n5. 不改写、不删减、不增加任何实质内容,只调整排版\n6. 直接输出排版后的全文,不要任何解释或代码块标记" },
+      { role: "user", content: before.substring(0, 24000) }
+    ];
+    const r = await callAI(messages, 8000);
+    let after = null;
+    if(r.content){
+      after = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+      /* 安全检查: AI输出长度异常(过短)则拒绝 */
+      if(after.length < before.length * 0.5){
+        after = null;
+      }
+    }
+    if(!after){
+      /* AI失败 → 本地兜底 */
+      after = compactReformatText(before);
+      toast("AI排版不可用,已用本地排版");
+    }
+    if(after === before){
+      toast("排版已是最优,无需调整");
+      return;
+    }
+    pushTextHistory(cur);
+    cur.fullText = after;
+    cur.outline = generateOutline(after);
+    cur.analysis = analyzePaper(after);
+    saveState();
+    markDirty();
+    applyHighlightsToDom(cur);
+    toast(r.content ? "AI排版完成:章节结构识别 · 段落分段保留" : "本地排版完成");
+  }catch(e){
+    toast("排版失败: " + (e.message || "未知错误"));
+  }finally{
+    if(btn){ btn.classList.remove("busy"); btn.innerHTML = "◫ 一键排版"; }
+    if(bodyEl) bodyEl.style.opacity = "";
+  }
+}
+
+/* ============================================================
+   翻译选中文字 —— AI翻译,译文插入选区后;再次点击取消译文
+   ============================================================ */
+async function toggleTranslate(){
+  const btn = document.getElementById("prTranslate");
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item) return;
+
+  /* 已有译文 → 全部取消 */
+  const existing = document.querySelectorAll(".pr-translation");
+  if(existing.length > 0){
+    for(let i=0; i<existing.length; i++) existing[i].remove();
+    if(btn) btn.classList.remove("on");
+    toast("已取消译文显示");
+    return;
+  }
+
+  /* 获取选中文字 */
+  const sel = window.getSelection();
+  if(!sel || sel.isCollapsed || sel.rangeCount === 0){
+    toast("请先选中要翻译的文字,再点击「翻译」");
+    return;
+  }
+  const selText = sel.toString().replace(/\u00A0/g, "\n").trim();
+  if(!selText || selText.length < 2){ toast("选中的是空白"); return; }
+
+  const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">接入免费 GLM-4-Flash</a> 后可获得更强的深度解读</div>';
+    toast("请先接入AI再使用翻译");
+    openAiCfgModal();
+    return;
   }
-  if(a.field) ah += '<div class="pa-field"><span class="pa-label">研究领域</span><span class="pa-val">' + escapeHtml(a.field) + '</span></div>';
-  if(a.methods){
-    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⚒</span> 研究方法</div><div class="pa-text">' + escapeHtml(a.methods) + '</div></div>';
+
+  if(btn) btn.classList.add("on");
+  toast("AI 翻译中…");
+
+  const isZh = /[\u4e00-\u9fa5]/.test(selText);
+  const target = isZh ? "英文" : "中文";
+  const messages = [
+    { role: "system", content: "你是专业学术翻译。将用户提供的文字翻译成" + target + "。要求:准确传达原意,术语规范,语句通顺。只输出译文本身,不要任何解释、不要重复原文。" },
+    { role: "user", content: selText.substring(0, 4000) }
+  ];
+  const r = await callAI(messages, 2000);
+  if(!r.content){
+    if(btn) btn.classList.remove("on");
+    toast("翻译失败: " + (r.error || "未知错误"));
+    return;
   }
-  if(a.conclusion){
-    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❧</span> 主要结论</div><div class="pa-text">' + escapeHtml(a.conclusion) + '</div></div>';
+
+  /* 在选区末尾插入译文块 */
+  let inserted = false;
+  try{
+    const range = sel.getRangeAt(0);
+    let endNode = range.endContainer;
+    if(endNode.nodeType === 3) endNode = endNode.parentNode;
+    const trEl = document.createElement("span");
+    trEl.className = "pr-translation";
+    trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
+    if(endNode.after){ endNode.after(trEl); inserted = true; }
+  }catch(e){ /* 忽略,走兜底 */ }
+  if(!inserted){
+    const prText = document.getElementById("prText");
+    if(prText){
+      const trEl = document.createElement("span");
+      trEl.className = "pr-translation";
+      trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
+      prText.appendChild(trEl);
+    }
   }
-  if(a.metrics && a.metrics.chars){
-    ah += '<div class="pa-metrics"><span><b>' + a.metrics.chars + '</b> 字</span><span><b>' + (a.metrics.paragraphs||0) + '</b> 段</span><span><b>' + (a.metrics.sections||0) + '</b> 节</span></div>';
+  toast("翻译完成 · 再次点击「翻译」可取消译文");
+}
+
+/* ============================================================
+   参考文献 —— AI检索论文参考文献列表,点击跳转知网
+   ============================================================ */
+async function fetchReferences(){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item) return;
+  const resultEl = document.getElementById("prAiResult");
+  if(!resultEl) return;
+  resultEl.innerHTML = '<div class="pr-ai-loading">❑ AI 正在检索论文参考文献…</div>';
+
+  const full = item.fullText || "";
+  /* 优先截取参考文献章节(通常在文末) */
+  let refSection = "";
+  const refMatch = full.match(/(参\s*考\s*文\s*献|References?\s*\n)/i);
+  if(refMatch && refMatch.index !== undefined){
+    refSection = full.substring(refMatch.index);
   }
-  resultEl.innerHTML = ah;
+  const refCtx = refSection.length > 200 ? refSection : full.substring(Math.max(0, full.length - 8000));
+
+  function renderRefs(refs, note){
+    let h = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❑</span> 参考文献 · ' + refs.length + ' 条</div>';
+    if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
+    h += '<div class="ref-list" style="margin-top:8px;">';
+    for(let i=0; i<refs.length; i++){
+      const rf = refs[i];
+      h += '<div class="ref-item" data-title="' + escapeHtml(rf.title) + '">';
+      h += '<div class="ref-idx">[' + (i+1) + ']</div>';
+      h += '<div class="ref-title">' + escapeHtml(rf.title) + '</div>';
+      const meta = [];
+      if(rf.authors) meta.push(escapeHtml(rf.authors));
+      if(rf.year) meta.push(escapeHtml(String(rf.year)));
+      if(rf.source) meta.push(escapeHtml(rf.source));
+      h += '<div class="ref-meta">' + (meta.join(" · ") || "—") + ' <em>⇢ 知网检索</em></div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    resultEl.innerHTML = h;
+    const items = resultEl.querySelectorAll(".ref-item");
+    for(let i=0; i<items.length; i++){
+      items[i].onclick = function(){
+        const t = this.dataset.title;
+        window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(t) + "&korder=TI", "_blank");
+        toast("正在知网检索该文献");
+      };
+    }
+  }
+
+  /* 本地兜底: 全局正则提取 [1]xxx 文献条目(不受换行/标题合并影响) */
+  function localExtract(){
+    const refs = [];
+    /* 优先取参考文献章节之后的内容 */
+    let src = full;
+    const refIdx = full.search(/参\s*考\s*文\s*献|References?\s*[:：]?/i);
+    if(refIdx >= 0) src = full.substring(refIdx);
+    const re = /\[(\d{1,3})\]\s*([^\[\]\n]{10,200})/g;
+    let m;
+    while((m = re.exec(src)) !== null && refs.length < 20){
+      if(!refs.some(function(r){ return r.title === m[2].substring(0, 80); })){
+        refs.push({ title: m[2].substring(0, 120), authors:"", year:"", source:"" });
+      }
+    }
+    /* 无方括号格式时: 逐行匹配 n. 开头且非中文开头的条目 */
+    if(refs.length === 0){
+      const lines = full.split(/\r?\n/);
+      for(let i=0; i<lines.length && refs.length < 20; i++){
+        const t = lines[i].trim();
+        const m2 = t.match(/^(\d{1,3})[.、]\s+(.{10,200})/);
+        if(m2 && !/^[\u4e00-\u9fa5\s，。；、]/.test(m2[2]) && !refs.some(function(r){ return r.title === m2[2].substring(0, 80); })){
+          refs.push({ title: m2[2].substring(0, 120), authors:"", year:"", source:"" });
+        }
+      }
+    }
+    if(refs.length > 0){
+      renderRefs(refs.slice(0, 12), "本地提取(未接入AI) · 点击可跳转知网检索");
+    }else{
+      resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">未检测到参考文献章节</div>';
+    }
+  }
+
+  const cfg = getAiConfig();
+  if(!cfg || !cfg.key){
+    localExtract();
+    openAiCfgModal();
+    return;
+  }
+  try{
+    const messages = [
+      { role: "system", content: "你是文献检索专家。从用户提供的论文参考文献部分,提取文献列表。输出严格的JSON数组,每项格式:{\"title\":\"文献标题\",\"authors\":\"第一作者等\",\"year\":年份,\"source\":\"期刊或会议名\"}。只输出JSON数组,不要其他文字。最多12条。" },
+      { role: "user", content: "论文标题:" + item.name + "\n\n参考文献部分:\n" + refCtx.substring(0, 10000) }
+    ];
+    const r = await callAI(messages, 3000);
+    if(r.content){
+      let txt = r.content.trim();
+      const s = txt.indexOf("[");
+      const e = txt.lastIndexOf("]");
+      if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
+      const refs = JSON.parse(txt);
+      if(Array.isArray(refs) && refs.length > 0){
+        renderRefs(refs.filter(function(x){ return x && x.title; }).slice(0, 12), "AI 提取 · 点击文献跳转知网检索");
+        return;
+      }
+    }
+    localExtract();
+  }catch(e){
+    localExtract();
+  }
 }
 
 /* AI 对话面板 */
@@ -4532,7 +4949,7 @@ async function fetchRelatedPapers(){
   if(!item) return;
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ 正在检索相似文献…</div>';
+  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ AI 正在联想相似文献…</div>';
 
   /* 构造检索词: 标题 + 关键词 */
   const a = item.analysis || {};
@@ -4566,6 +4983,33 @@ async function fetchRelatedPapers(){
         toast("正在知网检索「" + t.substring(0, 20) + "…」");
       };
     }
+  }
+
+  /* AI 联想: 基于论文内容推荐真实存在的相似论文 */
+  const cfg = getAiConfig();
+  if(cfg && cfg.key){
+    try{
+      const paperCtx = (item.fullText || "").substring(0, 6000);
+      const messages = [
+        { role: "system", content: "你是学术文献专家。基于用户论文的研究主题,联想5篇与之研究内容最相似、真实存在且影响力大的学术论文(优先中文经典文献与高被引论文,按影响力/被引量从高到低排序)。输出严格的JSON数组,每项:{\"title\":\"论文标题\",\"authors\":\"作者\",\"year\":年份,\"cites\":\"大致被引次数(如 5000+)\"}。只输出JSON数组,不要其他文字。必须是真实存在的论文,不要编造。" },
+        { role: "user", content: "论文标题:" + item.name + "\n\n论文内容摘要:\n" + paperCtx }
+      ];
+      const r = await callAI(messages, 2000);
+      if(r.content){
+        let txt = r.content.trim();
+        const s = txt.indexOf("[");
+        const e = txt.lastIndexOf("]");
+        if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
+        const papers = JSON.parse(txt);
+        if(Array.isArray(papers) && papers.length > 0){
+          const valid = papers.filter(function(x){ return x && x.title; }).slice(0, 5);
+          if(valid.length > 0){
+            renderList(valid, "AI 联想 · 按被引量/影响力排序 · 点击跳转知网");
+            return;
+          }
+        }
+      }
+    }catch(e){ /* AI失败,走网络检索兜底 */ }
   }
 
   /* 本地兜底: 基于关键词组合生成检索建议 */
@@ -6777,12 +7221,43 @@ if(paperFullTextInput){
   paperFullTextInput.addEventListener("input", updatePaperEntryStats);
 }
 if(paperEntrySubmit){
-  paperEntrySubmit.onclick = function(){
+  paperEntrySubmit.onclick = async function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
     let fullText = paperFullTextInput ? paperFullTextInput.value : "";
     if(!fullText.trim()){
       toast("请粘贴论文全文");
       return;
+    }
+    /* AI 解析章节结构并排版(已接入AI时) */
+    const cfg = getAiConfig();
+    if(cfg && cfg.key){
+      const origLabel = paperEntrySubmit.innerHTML;
+      paperEntrySubmit.innerHTML = "AI 解析排版中…";
+      paperEntrySubmit.disabled = true;
+      try{
+        const messages = [
+          { role: "system", content: "你是专业的论文排版引擎。请对用户提供的论文文本重新排版,严格遵循以下规则:\n1. 合并被硬换行打断的句子(断行合并)\n2. 识别章节标题(如 摘要/Abstract/1. 引言/第X章/参考文献 等),标题独立成行\n3. 保持段落分段:不同段落之间用一个空行分隔,不得把全文挤成密密一片\n4. 删除页码、页眉页脚残留、乱码行\n5. 不改写、不删减、不增加任何实质内容,只调整排版\n6. 直接输出排版后的全文,不要任何解释或代码块标记" },
+          { role: "user", content: fullText.substring(0, 24000) }
+        ];
+        const r = await callAI(messages, 8000);
+        if(r.content){
+          let after = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+          if(after.length >= fullText.length * 0.5){
+            fullText = after;
+            toast("AI 已解析章节结构并排版");
+          }
+        }else{
+          fullText = compactReformatText(fullText);
+          toast("AI 不可用,已用本地排版");
+        }
+      }catch(e){
+        fullText = compactReformatText(fullText);
+      }finally{
+        paperEntrySubmit.innerHTML = origLabel;
+        paperEntrySubmit.disabled = false;
+      }
+    }else{
+      fullText = compactReformatText(fullText);
     }
     const result = addPaper(title, fullText);
     if(result && result.error === "duplicate"){
@@ -6797,6 +7272,78 @@ if(paperEntrySubmit){
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
     const archive = document.getElementById("archive");
     if(archive) archive.scrollIntoView({behavior:"smooth"});
+  };
+}
+
+/* ===== 录入弹窗 PDF 导入 ===== */
+const paperPdfBtn = document.getElementById("paperPdfBtn");
+if(paperPdfBtn){
+  paperPdfBtn.onclick = function(){
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = ".pdf";
+    input.onchange = function(){
+      const file = this.files[0];
+      if(!file) return;
+      if(file.size > 20*1024*1024){ toast("文件过大(超20MB)"); return; }
+      if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
+      paperPdfBtn.classList.add("busy");
+      paperPdfBtn.innerHTML = "⇪ 解析中…";
+      toast("正在解析PDF……", 2000);
+      const reader = new FileReader();
+      reader.onload = function(){
+        pdfjsLib.getDocument({data:new Uint8Array(this.result)}).promise.then(function(pdf){
+          const numPages = pdf.numPages;
+          const pageTexts = [];
+          let chain = Promise.resolve();
+          for(let p=1; p<=numPages; p++){
+            chain = chain.then(function(){
+              return pdf.getPage(p).then(function(page){
+                return page.getTextContent().then(function(tc){
+                  let txt = "";
+                  let lastY = null;
+                  for(let i=0; i<tc.items.length; i++){
+                    const item = tc.items[i];
+                    if(lastY !== null && Math.abs(item.transform[5] - lastY) > 3){
+                      txt += "\n";
+                    }
+                    txt += item.str;
+                    if(item.hasEOL) txt += "\n";
+                    lastY = item.transform[5];
+                  }
+                  pageTexts.push(txt);
+                });
+              });
+            });
+          }
+          return chain.then(function(){
+            const rawText = pageTexts.join("\n\n");
+            paperPdfBtn.classList.remove("busy");
+            paperPdfBtn.innerHTML = "⇪ 导入PDF";
+            if(rawText.trim().length < 50){
+              toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
+              return;
+            }
+            const fullText = reformatPdfText(rawText);
+            if(paperFullTextInput){
+              paperFullTextInput.value = fullText;
+              updatePaperEntryStats();
+            }
+            /* 标题留空时自动取PDF文件名(去扩展名) */
+            if(paperTitleInput && !paperTitleInput.value.trim()){
+              paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
+            }
+            toast("PDF已解析导入(" + numPages + "页) · 点「整理入册」AI将自动解析章节排版");
+          });
+        }).catch(function(e){
+          paperPdfBtn.classList.remove("busy");
+          paperPdfBtn.innerHTML = "⇪ 导入PDF";
+          toast("PDF解析失败:" + (e.message || "未知错误"));
+        });
+      };
+      reader.readAsArrayBuffer(file);
+    };
+    input.click();
   };
 }
 if(paperFullTextInput){
