@@ -898,6 +898,15 @@
     color:var(--accent); font-weight:600; font-size:11px;
     font-family:"Cormorant Garamond",serif;
   }
+  .pp-ref-text{ display:inline; }
+  .pp-ref-links{ display:inline-flex; gap:3px; margin-left:6px; vertical-align:baseline; }
+  .pp-ref-link{
+    display:inline-block; font-size:9.5px; font-weight:600;
+    padding:1px 5px; border-radius:4px; text-decoration:none;
+    border:1px solid var(--line); color:var(--ink-mute);
+    background:var(--paper); line-height:1.5; transition:all .12s;
+  }
+  .pp-ref-link:hover{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
 
   /* ===== 论文来源徽章(原文链接+多学术网站检索) ===== */
   .pp-src-row{ display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:5px 6px; margin:-10px 0 22px; }
@@ -3273,10 +3282,19 @@ function reformatPdfText(rawText){
   if(!rawText) return "";
   let text = rawText;
 
+  /* 0. 修复常见乱码: 替换常见编码错误字符 */
+  text = text.replace(/\uFFFD/g, "");               /* U+FFFD 替换字符 */
+  text = text.replace(/[\u200B\u200C\u200D\uFEFF]/g, ""); /* 零宽字符 */
+  text = text.replace(/\u00A0/g, " ");              /* 不间断空格 → 普通空格 */
+  text = text.replace(/\u2010\u2010/g, "-");         /* 数字区间断字符 -- → - */
+  text = text.replace(/[\u2010\u2011]/g, "-");       /* 连字符变体 → - */
+  text = text.replace(/\u2018|\u2019/g, "'");        /* 智能引号 → ' */
+  text = text.replace(/\u201C|\u201D/g, '"');       /* 智能双引号 → " */
+
   /* 1. 统一换行符 */
   text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  /* 2. 移除页眉页脚:纯数字行(页码)、短英文大写行(期刊名) */
+  /* 2. 移除页眉页脚 + 目录行 */
   text = text.split("\n").map(function(line){
     const trimmed = line.trim();
     if(!trimmed) return "";
@@ -3288,8 +3306,39 @@ function reformatPdfText(rawText){
     if(/^第\d+页$/.test(trimmed)) return "";
     /* DOI 行 */
     if(/^doi:\s*10\./i.test(trimmed)) return "";
+    /* 目录行: 标题....页码(如 1.1 引言 ... 23 / 第一章 引言 ... 5) */
+    if(/^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/.test(trimmed)) return "";
+    if(/^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(trimmed)) return "";
+    /* 目录页标题(单独一行"目录"/"Contents") */
+    if(/^(目\s*录|Contents|Table\s+of\s+Contents)$/i.test(trimmed)) return "";
     return line;
   }).join("\n");
+
+  /* 2.5. 目录区检测删除: 连续3行以上目录格式行 → 整段目录区删除 */
+  const lines2 = text.split("\n");
+  const tocFlags = lines2.map(function(l){
+    const t = l.trim();
+    if(!t) return false;
+    return /^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
+           /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
+           /^(\d+(?:\.\d+)*)\s+\S.*?\s+\d{1,4}$/.test(t) && t.length < 60 && !/[。！？；]/.test(t);
+  });
+  let tocStart = -1, tocCount = 0;
+  for(let i=0; i<lines2.length; i++){
+    if(tocFlags[i]){
+      if(tocStart < 0) tocStart = i;
+      tocCount++;
+    }else{
+      if(tocCount >= 3 && tocStart >= 0){
+        for(let k=tocStart; k<i; k++) lines2[k] = "";
+      }
+      tocStart = -1; tocCount = 0;
+    }
+  }
+  if(tocCount >= 3 && tocStart >= 0){
+    for(let k=tocStart; k<lines2.length; k++) lines2[k] = "";
+  }
+  text = lines2.join("\n");
 
   /* 3. 按双换行分段,段内合并断行 */
   const paragraphs = text.split(/\n{2,}/);
@@ -3319,8 +3368,12 @@ function reformatPdfText(rawText){
         else if(/^(\d+[\.\)、]|第[一二三四五六七八九十]+[章节卷]|Abstract|摘要|引言|Introduction|Conclusion|结论|参考文献|References|Keyword|关键词)/i.test(line)){
           merged += "\n" + line;
         }
-        /* 英文连字符断行:行末是- 且下一行以小写开头 → 合并去连字符 */
-        else if(/-$/.test(merged) && /^[a-z]/.test(firstChar)){
+        /* 英文连字符断行:行末是- 或 – 且下一行以小写开头 → 合并去连字符 */
+        else if(/[-–]$/.test(merged) && /^[a-z]/.test(firstChar)){
+          merged = merged.slice(0, -1) + line;
+        }
+        /* 英文连字符断行(行末是字母+连字符): word- → word */
+        else if(/[a-zA-Z]-$/.test(merged) && /^[a-z]/.test(firstChar)){
           merged = merged.slice(0, -1) + line;
         }
         /* 否则合并为一行(加空格) */
@@ -3480,11 +3533,21 @@ function extractPdfTextEnhanced(pdf, onPageDone){
    ============================================================ */
 function compactReformatText(rawText){
   if(!rawText) return "";
-  let text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  let text = rawText;
 
-  /* 1. 逐行过滤噪声(页码/DOI/期刊名/知网元信息/作者/单位) —— 循环+前瞻 */
+  /* 0. 修复常见乱码: 替换编码错误字符 */
+  text = text.replace(/\uFFFD/g, "");
+  text = text.replace(/[\u200B\u200C\u200D\uFEFF]/g, "");
+  text = text.replace(/\u00A0/g, " ");
+  text = text.replace(/[\u2010\u2011]/g, "-");
+  text = text.replace(/\u2018|\u2019/g, "'");
+  text = text.replace(/\u201C|\u201D/g, '"');
+  text = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  /* 1. 逐行过滤噪声(页码/DOI/期刊名/知网元信息/作者/单位/目录行) —— 循环+前瞻 */
   const rawLines = text.split("\n").map(function(l){ return l.trim(); });
   const AFFIL_RE = /^[（(][^()（）]{4,70}(大学|学院|研究所|研究院|医院|实验室|公司|学报)[^()（）]*[)）]\s*$/;
+  const TOC_LINE_RE = /^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/;
   const lines = [];
   for(let i=0; i<rawLines.length; i++){
     const trimmed = rawLines[i];
@@ -3500,8 +3563,17 @@ function compactReformatText(rawText){
     if(/^\d{4}\s*年\s*第\s*\d+\s*卷/.test(trimmed)){ lines.push(""); continue; }
     /* 作者单位行: (xx大学 xx学院,城市 邮编) */
     if(AFFIL_RE.test(trimmed)){ lines.push(""); continue; }
+    /* 目录行: 标题....页码 */
+    if(TOC_LINE_RE.test(trimmed) || /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(trimmed)){ lines.push(""); continue; }
+    /* 目录页标题 */
+    if(/^(目\s*录|Contents|Table\s+of\s+Contents)$/i.test(trimmed)){ lines.push(""); continue; }
     /* 中文作者行: 逗号/顿号分隔的2-6个中文短名(如"王五,赵六"、"张三,李四,王五") */
     if(/^[\u4e00-\u9fa5]{2,4}\d?\s*[,，、;；]\s*[\u4e00-\u9fa5]{2,4}/.test(trimmed) && /^[\u4e00-\u9fa5\d*,，、;；。\s]+$/.test(trimmed) && trimmed.length <= 40){ lines.push(""); continue; }
+    /* 中英文混合作者行: "李华,John Smith" / "王五, Zhang San" 等 */
+    if(/^[\u4e00-\u9fa5]{2,4}[,，]\s*[A-Z][a-zA-Z.\-\s]{2,30}$/.test(trimmed) && trimmed.length <= 40){ lines.push(""); continue; }
+    if(/^[A-Z][a-zA-Z.\-']{2,20}[,，]\s*[\u4e00-\u9fa5]{2,4}$/.test(trimmed) && trimmed.length <= 40){ lines.push(""); continue; }
+    /* 多作者行: "Zhang San, Li Si, Wang Wu" 英文逗号分隔多个拼音名 */
+    if(/^[A-Z][a-zA-Z.\-']{2,15}([,，]\s*[A-Z][a-zA-Z.\-']{2,15}){1,4}$/.test(trimmed) && trimmed.length <= 50){ lines.push(""); continue; }
     /* 中文作者行(空格分隔): "张三 李四" 两个中文短名 */
     if(/^[\u4e00-\u9fa5]{2,4}\s{1,3}[\u4e00-\u9fa5]{2,4}$/.test(trimmed) && trimmed.length <= 12){ lines.push(""); continue; }
     /* 前瞻: 单个中文作者名行(2-4字)且下一非空行是单位行 → 作者名删除 */
@@ -3515,10 +3587,34 @@ function compactReformatText(rawText){
     lines.push(trimmed);
   }
 
+  /* 1.5. 目录区检测删除: 连续3行以上目录格式行 → 整段删除 */
+  const tocFlags2 = lines.map(function(l){
+    const t = (l || "").trim();
+    if(!t) return false;
+    return TOC_LINE_RE.test(t) ||
+           /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(t) ||
+           /^(\d+(?:\.\d+)*)\s+\S.*?\s+\d{1,4}$/.test(t) && t.length < 60 && !/[。！？；]/.test(t);
+  });
+  let tocStart2 = -1, tocCount2 = 0;
+  for(let i=0; i<lines.length; i++){
+    if(tocFlags2[i]){
+      if(tocStart2 < 0) tocStart2 = i;
+      tocCount2++;
+    }else{
+      if(tocCount2 >= 3 && tocStart2 >= 0){
+        for(let k=tocStart2; k<i; k++) lines[k] = "";
+      }
+      tocStart2 = -1; tocCount2 = 0;
+    }
+  }
+  if(tocCount2 >= 3 && tocStart2 >= 0){
+    for(let k=tocStart2; k<lines.length; k++) lines[k] = "";
+  }
+
   /* 2. 断行合并:逐行判断是否接续上一行 */
   let paras = [];
   let cur = "";
-  const HEAD_RE = /^(\d+(\.\d+)*[\.\)、\s]|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
+  const HEAD_RE = /^(\[\d{1,3}(?:[-,]\d{1,3})*\]\s|\d+(\.\d+)*[\.\)、\s]|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
 
   for(let i=0; i<lines.length; i++){
     const line = lines[i];
@@ -3549,8 +3645,8 @@ function compactReformatText(rawText){
       paras.push(cur);
       cur = line;
     }
-    /* 英文连字符断行 → 合并去连字符 */
-    else if(/[-‐-]$/.test(cur) && /^[a-z]/.test(firstChar)){
+    /* 英文连字符断行 → 合并去连字符(支持 - – ‐ 等变体) */
+    else if(/[-‐–]$/.test(cur) && /^[a-z]/.test(firstChar)){
       cur = cur.slice(0, -1) + line;
     }
     /* 断行接续:合并为一行 */
@@ -4419,12 +4515,23 @@ function renderStructuredPaper(item, prText){
     }
   }
 
-  /* --- 参考文献 --- */
+  /* --- 参考文献(每条带学术网站检索链接) --- */
   if(st.references && st.references.length){
     h += '<h3 class="pp-h1 pp-refs-h">参考文献</h3><ol class="pp-refs">';
     for(let i=0; i<st.references.length; i++){
       const r = st.references[i].replace(/^\[\d{1,3}\]\s*/, "").trim();
-      h += '<li class="pp-ref" data-idx="[' + (i + 1) + ']">' + escapeHtml(r) + '</li>';
+      h += '<li class="pp-ref" data-idx="[' + (i + 1) + ']">';
+      h += '<span class="pp-ref-text">' + escapeHtml(r) + '</span>';
+      /* 每条文献的学术检索链接(谷歌学术/S2/CrossRef/知网) */
+      const sl = buildRefSearchLinks(r);
+      if(sl){
+        h += '<span class="pp-ref-links">';
+        h += '<a class="pp-ref-link" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>';
+        h += '<a class="pp-ref-link" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>';
+        h += '<a class="pp-ref-link" href="' + escapeHtml("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(sl.text) + "&korder=TI") + '" target="_blank" rel="noopener" title="知网检索">知</a>';
+        h += '</span>';
+      }
+      h += '</li>';
     }
     h += '</ol>';
   }
@@ -4931,8 +5038,15 @@ function parsePaperStructure(rawText, faithful){
 
   const ABS_RE   = /^(摘\s*要|Abstract)\s*[:：]?\s*/i;
   const KW_RE    = /^(关键词|关 键 词|Keywords?|Key\s*words?)\s*[:：]\s*/i;
-  const REF_RE   = /^(参\s*考\s*文\s*献|References|Bibliography|文\s*献)\s*[:：]?\s*$/i;
-  const REF_ENTRY_RE = /^\[\d{1,3}\]\s*/;
+  const REF_RE   = /^(参\s*考\s*文\s*献|References|Bibliography|文\s*献)(\s*[:：]?\s*)?$/i;
+  const REF_RE_LOOSE = /^(参\s*考\s*文\s*献|References|Bibliography)/i;
+  /* 参考文献条目: [1] / [1,2] / 1. / 1) / 1空格(英文常见) */
+  const REF_ENTRY_RE = /^\[\d{1,3}(?:[-,]\d{1,3})*\]\s*/;
+  const REF_NUM_RE = /^\d{1,3}[.、)]\s+/;
+  /* 英文文献行: Author, A., & Author, B. (Year). Title... */
+  const REF_EN_RE = /^[A-Z][a-zA-Z.\-']+(,\s|[，]\s|\s+[&]\s+)/;
+  /* 目录行: 纯数字+点+页码(如 1.1 ... 23 / 第一章 引言 ... 5) */
+  const TOC_RE = /^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/;
   const NUM_RE   = /^(\d+(?:\.\d+)*)\s*[.、)）]?\s+(\S.*)$/;
   const CHAP_RE  = /^第[一二三四五六七八九十百\d]+[章节部篇]\s*(.*)$/;
   const CN_NUM_RE = /^([一二三四五六七八九十]+)\s*[、．.]\s*(.+)$/;
@@ -4982,17 +5096,50 @@ function parsePaperStructure(rawText, faithful){
       continue;
     }
 
-    /* --- 参考文献标题 --- */
-    if(REF_RE.test(p)){ mode = "refs"; continue; }
+    /* --- 目录过滤(目录区行:含....+页码,或密集数字行) --- */
+    if(TOC_RE.test(p) || /^第[一二三四五六七八九十百\d]+[章节部篇].*?\.{2,}\s*\d{1,4}\s*$/.test(p)) continue;
 
-    /* --- 参考文献条目 --- */
+    /* --- 参考文献标题(严格:独立行;宽松:行首包含且后跟条目) --- */
+    if(REF_RE.test(p)){ mode = "refs"; continue; }
+    if(REF_RE_LOOSE.test(p)){
+      /* 参考文献标题与首条文献在同一行(如"参考文献 [1] Vaswani...") */
+      const after = p.replace(REF_RE_LOOSE, "").trim();
+      if(after && REF_ENTRY_RE.test(after)){
+        mode = "refs";
+        st.references.push(after.replace(REF_ENTRY_RE, "").trim());
+        continue;
+      }else if(after){
+        mode = "refs";
+        continue;
+      }
+      mode = "refs"; continue;
+    }
+
+    /* --- 参考文献条目(多行连接 + 英文格式识别) --- */
     if(mode === "refs"){
-      if(REF_ENTRY_RE.test(p) || p.length < 260){
+      const isRefStart = REF_ENTRY_RE.test(p) || REF_NUM_RE.test(p) || REF_EN_RE.test(p);
+      if(isRefStart){
         st.references.push(p);
         continue;
       }
+      /* 英文文献跨行续接:前一行已存在且当前行不以引用编号开头 → 追加到上一条 */
+      if(st.references.length > 0 && p.length < 400){
+        const last = st.references[st.references.length - 1];
+        /* 不以新文献编号开头,且上一行不以句号结尾 → 续接 */
+        if(!/^[【\[]?\d{1,3}[.、\])]/.test(p) && !/^\d{1,3}\s/.test(p) && !/\.$/.test(last)){
+          st.references[st.references.length - 1] = last + " " + p;
+          continue;
+        }
+        /* 以数字开头但不是引用编号 → 可能是独立条目(如 GB/T 7714) */
+        if(p.length > 15 && p.length < 400){
+          st.references.push(p);
+          continue;
+        }
+      }
       /* 超长段落 → 可能回到正文 */
-      mode = "body";
+      if(p.length >= 400){ mode = "body"; }
+      else if(st.references.length > 0){ st.references[st.references.length - 1] += " " + p; }
+      continue;
     }
 
     /* --- 标题(首行短行) --- */
@@ -5147,12 +5294,33 @@ function splitIntoChunks(text, size){
 function localMarkBlock(text){
   const lines = compactReformatText(text).split(/\r?\n/);
   const out = [];
+  let inRefs = false;
   for(let i=0; i<lines.length; i++){
     const t = lines[i].trim();
     if(!t) continue;
+    /* 参考文献标题 */
+    if(/^(参\s*考\s*文\s*献|References|Bibliography)\s*[:：]?$/i.test(t)){
+      out.push("#H1 " + t);
+      inRefs = true;
+      continue;
+    }
+    /* 参考文献条目(支持 [n] / n. / n) / 英文作者开头) */
+    if(inRefs){
+      if(/^\[\d{1,3}(?:[-,]\d{1,3})*\]\s+/.test(t) || /^\d{1,3}[.、)]\s+/.test(t) ||
+         /^[A-Z][a-zA-Z.\-']+(,\s|[，]\s|\s+[&]\s+)/.test(t)){
+        out.push("#R " + t);
+        continue;
+      }
+      /* 续行:前一行是文献且当前不以新编号开头 → 追加到前一条 */
+      if(out.length > 0 && out[out.length-1].indexOf("#R ") === 0){
+        out[out.length-1] += " " + t;
+        continue;
+      }
+    }
     const isHead = t.length <= 60 && !/[。！？；;]/.test(t) &&
       (/^(\d+(?:\.\d+)*)\s*[.、)）]?\s+\S/.test(t) || /^第[一二三四五六七八九十百\d]+[章节部篇]/.test(t) ||
-       /^(摘\s*要|Abstract|引\s*言|结\s*论|参考文献|References|致\s*谢|关键词|Keywords?)/i.test(t.replace(/\s+/g,"")));
+       /^(摘\s*要|Abstract|引\s*言|结\s*论|致\s*谢|关键词|Keywords?)/i.test(t.replace(/\s+/g,"")));
+    if(isHead) inRefs = false;
     out.push(isHead ? "#H1 " + t : "#P " + t);
   }
   return out.join("\n");
@@ -5227,8 +5395,38 @@ function buildAcademicLinks(title){
     { name:"arXiv",    url:"https://arxiv.org/search/?query=" + q + "&searchtype=all" },
     { name:"ResearchGate", url:"https://www.researchgate.net/search?q=" + q },
     { name:"PubMed",   url:"https://pubmed.ncbi.nlm.nih.gov/?term=" + q },
-    { name:"CORE",     url:"https://core.ac.uk/search?q=" + q }
+    { name:"CORE",     url:"https://core.ac.uk/search?q=" + q },
+    { name:"IEEE Xplore", url:"https://ieeexplore.ieee.org/search/searchresult.jsp?newsearch=true&queryText=" + q },
+    { name:"ACM DL",   url:"https://dl.acm.org/doi/proceedings/10.1145/?query=" + q },
+    { name:"Springer", url:"https://link.springer.com/search?query=" + q },
+    { name:"ScienceDirect", url:"https://www.sciencedirect.com/search?query=" + q },
+    { name:"Wiley",    url:"https://onlinelibrary.wiley.com/doi/search/" + q },
+    { name:"JSTOR",    url:"https://www.jstor.org/action/doBasicSearch?Query=" + q }
   ];
+}
+
+/* ---- 7b3. 从参考文献条目提取检索关键词(用于文献级检索链接) ---- */
+function buildRefSearchLinks(refText){
+  if(!refText) return null;
+  let t = refText.replace(/^\[\d{1,3}(?:[-,]\d{1,3})*\]\s*/, "").replace(/^\d{1,3}[.、)]\s+/, "").trim();
+  /* 尝试提取标题: 第一个句号或问号后的内容(作者.(年份).标题...) */
+  const dotIdx = t.indexOf(".");
+  let title = t;
+  if(dotIdx > 10 && dotIdx < 80) title = t.slice(dotIdx + 1).trim();
+  /* 中文文献:书名号《》内为标题 */
+  const m = t.match(/《([^》]{3,100})》/);
+  if(m) title = m[1];
+  /* 截断到合理长度 */
+  title = title.replace(/^[A-Z][a-z]+,\s+[A-Z]\.?\s*/i, "").replace(/^\d{4}\.\s*/, "").trim();
+  if(!title || title.length < 5) title = t.slice(0, 80);
+  const q = encodeURIComponent(title.slice(0, 120));
+  return {
+    text: title,
+    scholar: "https://scholar.google.com/scholar?q=" + q,
+    semantic: "https://www.semanticscholar.org/search?q=" + q,
+    crossref: "https://api.crossref.org/works?query.bibliographic=" + q + "&rows=3",
+    doi: "https://doi.org/"
+  };
 }
 
 async function fetchPaperSourceUrl(title){
@@ -5321,7 +5519,7 @@ async function aiStructuredReformat(fullText, onProgress, onStage, opts){
     let aiFailedCount = 0;
     for(let i=0; i<chunks.length; i++){
       if(onProgress) onProgress(i + 1, chunks.length);
-      const sys = "你是专业的论文排版引擎。请把用户提供的论文全文片段重新排版为结构化标记文本。无论论文是什么类型(中文学术期刊/知网格式/英文论文/学位论文/会议论文),都归纳为统一的标准学术结构:标题→摘要→关键词→正文章节→参考文献。\n\n【最高优先级规则——逐字保真】#P/#A/#R 的内容必须是原文文字的逐字复制,仅允许三种字符级操作:(a)删除换行符以合并被断行拆开的同一段落;(b)合并行末英文断词连字符;(c)整行删除无关内容。严禁改写/缩写/扩写/润色/替换标点/翻译/调整语序。没有把握时原样输出。\n\n输出规则(严格遵守):\n1. 每行输出一个元素,行首使用以下标记:\n#T 论文标题(仅当片段包含论文大标题时,整个排版只输出一次)\n#A 摘要内容(仅当片段包含摘要部分时)\n#K 关键词,多个用分号分隔(仅当片段包含关键词时)\n#H1 一级章节标题(如 1 引言/2 方法/结论/参考文献/致谢)\n#H2 二级小节标题(如 2.1 研究设计)\n#H3 三级小节标题\n#R 参考文献条目(一条一行,保留编号之外的完整内容)\n#P 正文段落\n2. 无关内容清除:删除一切与论文实质内容无关的文字——\n   · 作者姓名与作者单位(如\"张三 李四\"、\"(某某大学 计算机学院,北京 100000)\")\n   · 期刊名/卷号/期号/页码/出版信息\n   · 收稿日期/修回日期/网络首发时间\n   · 基金项目及编号、作者简介、通讯作者及邮箱\n   · 中图分类号/文献标识码/文章编号/DOI\n   · 页眉页脚、页码、目录、版权声明、网站水印、广告、乱码\n   判断标准:读者阅读论文实质内容时不需要的文字,整行删除。\n3. 段落合并:被换行拆开的同一自然段必须合并为一行,以#P开头输出;相邻的语义段落不要合并\n4. 断词合并:行末英文连字符与下一行单词合并;中文行直接拼接\n5. 除规则2整行删除外,不增删任何正文文字\n6. 章节标题判断标准:编号开头(1/2.1/第一章)或标准学术章节词(引言/相关工作/方法/实验/结果/讨论/结论/参考文献/致谢)\n7. 直接输出标记文本,不要任何解释,不要用代码块包裹";
+      const sys = "你是专业的论文排版引擎。请把用户提供的论文全文片段重新排版为结构化标记文本。无论论文是什么类型(中文学术期刊/知网格式/英文论文/学位论文/会议论文),都归纳为统一的标准学术结构:标题→摘要→关键词→正文章节→参考文献。\n\n【最高优先级规则——逐字保真】#P/#A/#R 的内容必须是原文文字的逐字复制,仅允许三种字符级操作:(a)删除换行符以合并被断行拆开的同一段落;(b)合并行末英文断词连字符;(c)整行删除无关内容。严禁改写/缩写/扩写/润色/替换标点/翻译/调整语序。没有把握时原样输出。\n\n输出规则(严格遵守):\n1. 每行输出一个元素,行首使用以下标记:\n#T 论文标题(仅当片段包含论文大标题时,整个排版只输出一次)\n#A 摘要内容(仅当片段包含摘要部分时)\n#K 关键词,多个用分号分隔(仅当片段包含关键词时)\n#H1 一级章节标题(如 1 引言/2 方法/结论/参考文献/致谢)\n#H2 二级小节标题(如 2.1 研究设计)\n#H3 三级小节标题\n#R 参考文献条目(一条一行,保留编号之外的完整内容)\n#P 正文段落\n2. 无关内容清除:删除一切与论文实质内容无关的文字——\n   · 作者姓名与作者单位(如\"张三 李四\"、\"(某某大学 计算机学院,北京 100000)\")\n   · 期刊名/卷号/期号/页码/出版信息\n   · 收稿日期/修回日期/网络首发时间\n   · 基金项目及编号、作者简介、通讯作者及邮箱\n   · 中图分类号/文献标识码/文章编号/DOI\n   · 页眉页脚、页码、目录(TOC)、版权声明、网站水印、广告、乱码字符\n   判断标准:读者阅读论文实质内容时不需要的文字,整行删除。\n3. 段落合并:被换行拆开的同一自然段必须合并为一行,以#P开头输出;相邻的语义段落不要合并\n4. 断词合并:行末英文连字符(- – ‐)与下一行单词合并;中文行直接拼接\n5. 除规则2整行删除外,不增删任何正文文字\n6. 章节标题判断标准:编号开头(1/2.1/第一章)或标准学术章节词(引言/相关工作/方法/实验/结果/讨论/结论/参考文献/致谢)\n7. 参考文献多行合并:一条参考文献跨多行时必须合并为一行,以#R开头输出;参考文献编号格式:[1]/[1,2]/[1-3]/1./1)/1空格;英文文献格式:Author, A. (Year). Title...;中文文献格式:作者. 标题[J]. 期刊, 年: 页\n8. 乱码修复:替换字符U+FFFD删除;零宽字符删除;智能引号转直引号;不间断空格转普通空格\n9. 目录区(TOC)删除:连续多行\"标题....页码\"格式 → 整段目录区删除,不保留\n10. 直接输出标记文本,不要任何解释,不要用代码块包裹";
       try{
         const r = await callAI(
           [{ role: "system", content: sys }, { role: "user", content: chunks[i] }],
