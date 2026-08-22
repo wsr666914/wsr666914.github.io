@@ -838,6 +838,66 @@
     border-bottom:1px solid var(--line-soft);
   }
   .pr-section-title:first-child{ margin-top:0; }
+
+  /* ===== 论文结构化排版(标题/摘要/关键词/章节/参考文献) ===== */
+  .pp-doc{ white-space:normal; text-indent:0; }
+  .pp-doc *{ text-indent:0; }
+  .pp-head{ text-align:center; margin:4px 0 22px; }
+  .pp-title{
+    font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    font-size:26px; font-weight:700; color:var(--ink);
+    line-height:1.4; letter-spacing:.01em; margin:0;
+  }
+  .pp-rule{ width:58px; height:2px; background:var(--accent); margin:14px auto 0; border-radius:2px; opacity:.85; }
+  .pp-abstract{
+    background:rgba(181,101,29,.05);
+    border:1px solid rgba(181,101,29,.18);
+    border-left:3px solid var(--accent);
+    border-radius:10px; padding:14px 18px 13px; margin:0 0 26px;
+  }
+  .pp-abs-tag{
+    display:inline-block; font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    font-weight:700; font-size:13px; letter-spacing:.4em;
+    color:var(--accent); margin-bottom:6px;
+  }
+  .pp-abs-body{
+    font-size:14px; line-height:1.95; text-align:justify;
+    color:var(--ink-soft); margin:0; white-space:normal;
+  }
+  .pp-kw-row{ margin-top:11px; display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+  .pp-kw-label{
+    font-size:12px; color:var(--accent); font-weight:600;
+    letter-spacing:.15em; font-family:"Cormorant Garamond","Noto Serif SC",serif;
+  }
+  .pp-kw-chip{
+    font-size:11px; padding:2px 11px; border-radius:999px;
+    background:rgba(47,93,98,.09); color:var(--teal);
+    border:1px solid rgba(47,93,98,.22); line-height:1.7; white-space:nowrap;
+  }
+  .pp-h1{
+    font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    font-size:18.5px; font-weight:700; color:var(--ink);
+    margin:28px 0 12px; padding-left:11px;
+    border-left:3px solid var(--accent); line-height:1.4;
+  }
+  .pp-h2{ font-size:15.5px; font-weight:600; color:var(--ink-soft); margin:20px 0 9px; line-height:1.5; }
+  .pp-h3{ font-size:14px; font-weight:600; color:var(--ink-soft); margin:15px 0 7px; line-height:1.5; }
+  .pp-para{
+    font-size:14px; line-height:1.98; text-align:justify;
+    margin:0 0 13px; text-indent:2em; color:var(--ink-soft); white-space:normal;
+  }
+  .pp-refs-h{ margin-top:32px; }
+  .pp-refs{ margin:0; padding:0; list-style:none; }
+  .pp-ref{
+    font-size:12px; line-height:1.8; color:var(--secondary-ink, var(--ink-soft));
+    margin:0 0 9px; padding-left:2.4em; position:relative;
+    text-align:justify; white-space:normal;
+  }
+  .pp-ref::before{
+    content:attr(data-idx); position:absolute; left:0;
+    color:var(--accent); font-weight:600; font-size:11px;
+    font-family:"Cormorant Garamond",serif;
+  }
   mark.hl{
     border-radius:3px; padding:1px 2px; color:inherit;
     cursor:pointer; transition:filter .15s;
@@ -3238,6 +3298,119 @@ function reformatPdfText(rawText){
 }
 
 /* ============================================================
+   PDF 增强文本提取(共享) —— 坐标级行序重建
+   · 按y坐标分组为行(容差4),行内按x排序
+   · 双栏检测: x轴最大间隙显著且位于页面中部 → 先左栏后右栏
+   · 跨页页眉/页脚过滤: 首尾行在≥半数页面重复出现则删除
+   · 英文词间补空格;返回 Promise<{text, pages}>
+   ============================================================ */
+function extractPdfTextEnhanced(pdf){
+  const numPages = pdf.numPages;
+  const pageData = [];   /* 每页: {lines:[], first:"", last:""} */
+  let chain = Promise.resolve();
+  for(let p=1; p<=numPages; p++){
+    chain = chain.then(function(){
+      return pdf.getPage(p).then(function(page){
+        return page.getTextContent().then(function(tc){
+          const viewport = page.getViewport({ scale: 1 });
+          const pageW = viewport.width;
+          /* --- 收集文本项(x/y坐标) --- */
+          const items = [];
+          for(let i=0; i<tc.items.length; i++){
+            const it = tc.items[i];
+            if(!it.str || !it.str.trim()) continue;
+            items.push({ x: it.transform[4], y: it.transform[5], str: it.str });
+          }
+          if(items.length === 0){ pageData.push({ lines: [], first: "", last: "" }); return; }
+
+          /* --- 按行分组(y容差4,自上而下) --- */
+          const sorted = items.slice().sort(function(a, b){ return b.y - a.y; });
+          const rows = [];
+          let row = null;
+          for(let i=0; i<sorted.length; i++){
+            const it = sorted[i];
+            if(row && Math.abs(row.y - it.y) <= 4){ row.items.push(it); }
+            else{ row = { y: it.y, items: [it] }; rows.push(row); }
+          }
+          rows.forEach(function(r){ r.items.sort(function(a, b){ return a.x - b.x; }); });
+
+          /* --- 双栏检测: x轴最大间隙显著且位于页面中部 --- */
+          let splitX = -1;
+          const xs = items.map(function(i){ return i.x; }).sort(function(a, b){ return a - b; });
+          if(xs.length >= 20){
+            let maxGap = 0, gapAt = -1;
+            for(let i=1; i<xs.length; i++){
+              const gap = xs[i] - xs[i-1];
+              if(gap > maxGap){ maxGap = gap; gapAt = (xs[i] + xs[i-1]) / 2; }
+            }
+            if(maxGap > pageW * 0.14 && gapAt > pageW * 0.28 && gapAt < pageW * 0.72){
+              splitX = gapAt;
+            }
+          }
+
+          /* --- 行序: 双栏先左栏后右栏,单栏自上而下 --- */
+          let orderedRows;
+          if(splitX > 0){
+            const left = rows.filter(function(r){ return r.items[0].x < splitX; });
+            const right = rows.filter(function(r){ return r.items[0].x >= splitX; });
+            orderedRows = left.concat(right);
+          }else{
+            orderedRows = rows;
+          }
+
+          /* --- 组装行文本(行内按x排序,英文词间补空格) --- */
+          const lines = [];
+          for(let i=0; i<orderedRows.length; i++){
+            const its = orderedRows[i].items;
+            let line = "";
+            for(let j=0; j<its.length; j++){
+              if(j > 0 && /[A-Za-z0-9,.;:)]$/.test(line) && /^[A-Za-z(]/.test(its[j].str)){
+                line += " ";
+              }
+              line += its[j].str;
+            }
+            line = line.replace(/\s{2,}/g, " ").trim();
+            if(line) lines.push(line);
+          }
+          pageData.push({
+            lines: lines,
+            first: lines[0] || "",
+            last: lines[lines.length - 1] || ""
+          });
+        });
+      });
+    });
+  }
+  return chain.then(function(){
+    /* --- 跨页页眉/页脚过滤: 首尾行在多页重复出现则删除 --- */
+    const headCount = {}, tailCount = {};
+    for(let i=0; i<pageData.length; i++){
+      const pd = pageData[i];
+      if(pd.first){ headCount[pd.first] = (headCount[pd.first] || 0) + 1; }
+      if(pd.last){ tailCount[pd.last] = (tailCount[pd.last] || 0) + 1; }
+    }
+    const repMin = Math.max(3, Math.ceil(pageData.length * 0.5));
+    function isRepeated(s, counts){
+      if(!s) return false;
+      const c = counts[s] || 0;
+      if(c < repMin) return false;
+      /* 纯页码/短数字行已在 reformatPdfText 中处理;这里只删重复文本行 */
+      return s.length >= 4 && !/^\d{1,4}(-\d{1,4})?$/.test(s);
+    }
+    const pageTexts = [];
+    for(let i=0; i<pageData.length; i++){
+      const pd = pageData[i];
+      let lines = pd.lines.slice();
+      if(lines.length > 2 && isRepeated(pd.first, headCount)) lines.shift();
+      if(lines.length > 1 && isRepeated(pd.last, tailCount)) lines.pop();
+      pageTexts.push(lines.join("\n"));
+    }
+    const rawText = pageTexts.join("\n\n");
+    return { text: reformatPdfText(rawText), pages: numPages };
+  });
+}
+
+/* ============================================================
    一键紧凑排版 —— 行间无空行,断行合并为完整段落
    · 断行接续:非句末换行合并为同一行
    · 段落分隔:仅单个换行,无空行
@@ -3659,7 +3832,7 @@ function cleanPaperText(text){
 }
 
 /* 录入论文 */
-function addPaper(title, fullText, analysis){
+function addPaper(title, fullText, analysis, structured){
   const trimmedText = fullText.trim();
   if(!trimmedText) return { error:"empty" };
   /* 提取标题:用户指定 > 首个非空行 > 前40字 */
@@ -3697,6 +3870,7 @@ function addPaper(title, fullText, analysis){
     fullText: trimmedText,
     outline: outline,
     analysis: paperAnalysis,
+    structured: structured || null,
     highlights: [],
     addedAt: new Date().toISOString()
   };
@@ -3710,10 +3884,14 @@ function addPaper(title, fullText, analysis){
 /* 论文查看器状态 */
 let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[] };
 
-/* 推入操作历史(撤销用): 记录全文变更前的快照 */
+/* 推入操作历史(撤销用): 记录全文+结构化排版变更前的快照 */
 function pushTextHistory(item){
   if(!item) return;
-  prState.history.push({ type:"text", fullText:item.fullText });
+  prState.history.push({
+    type:"text",
+    fullText:item.fullText,
+    structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
+  });
   if(prState.history.length > 50) prState.history.shift();
 }
 /* 推入标注操作历史 */
@@ -3738,7 +3916,8 @@ function openPaperReader(itemId){
     outline: item.outline,
     analysis: item.analysis,
     highlights: item.highlights,
-    description: item.description
+    description: item.description,
+    structured: item.structured || null
   }));
   updateSaveBtnState();
 
@@ -4075,6 +4254,11 @@ const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八�
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
+  /* 结构化排版优先: AI/本地归纳出的标准结构 → 美观渲染 */
+  if(item.structured && (item.structured.sections || item.structured.abstract)){
+    renderStructuredPaper(item, prText);
+    return;
+  }
   const lines = (item.fullText || "").split(/\r?\n/);
   const outlineMap = {};
   if(item.outline){
@@ -4094,6 +4278,65 @@ function renderPaperText(item){
     }
   }
   prText.innerHTML = html;
+}
+
+/* ============================================================
+   结构化论文渲染 —— 标题/摘要/关键词/章节/参考文献 美观排版
+   ============================================================ */
+function renderStructuredPaper(item, prText){
+  const st = item.structured;
+  if(!st) return;
+  let h = '<article class="pp-doc">';
+
+  /* --- 标题区 --- */
+  const title = st.title || item.name || "";
+  if(title){
+    h += '<header class="pp-head"><h2 class="pp-title">' + escapeHtml(title) + '</h2><div class="pp-rule"></div></header>';
+  }
+
+  /* --- 摘要卡片(摘要+关键词) --- */
+  if(st.abstract || (st.keywords && st.keywords.length)){
+    h += '<section class="pp-abstract">';
+    if(st.abstract){
+      h += '<span class="pp-abs-tag">摘 要</span><p class="pp-abs-body">' + escapeHtml(st.abstract) + '</p>';
+    }
+    if(st.keywords && st.keywords.length){
+      h += '<div class="pp-kw-row"><span class="pp-kw-label">关键词</span>';
+      for(let i=0; i<st.keywords.length; i++){
+        h += '<span class="pp-kw-chip">' + escapeHtml(st.keywords[i]) + '</span>';
+      }
+      h += '</div>';
+    }
+    h += '</section>';
+  }
+
+  /* --- 章节正文 --- */
+  for(let i=0; i<(st.sections || []).length; i++){
+    const sec = st.sections[i];
+    const hasParas = sec.paras && sec.paras.some(function(p){ return p && p.trim(); });
+    if(!sec.heading && !hasParas) continue;
+    if(sec.heading){
+      const lv = Math.max(1, Math.min(3, sec.level || 1));
+      h += '<h3 class="pp-h' + lv + '">' + escapeHtml(sec.heading) + '</h3>';
+    }
+    for(let j=0; j<(sec.paras || []).length; j++){
+      const p = sec.paras[j];
+      if(p && p.trim()) h += '<p class="pp-para">' + escapeHtml(p.trim()) + '</p>';
+    }
+  }
+
+  /* --- 参考文献 --- */
+  if(st.references && st.references.length){
+    h += '<h3 class="pp-h1 pp-refs-h">参考文献</h3><ol class="pp-refs">';
+    for(let i=0; i<st.references.length; i++){
+      const r = st.references[i].replace(/^\[\d{1,3}\]\s*/, "").trim();
+      h += '<li class="pp-ref" data-idx="[' + (i + 1) + ']">' + escapeHtml(r) + '</li>';
+    }
+    h += '</ol>';
+  }
+
+  h += '</article>';
+  prText.innerHTML = h;
 }
 
 /* 将高亮应用到 DOM —— 先重建全文再应用,避免 DOM 残留导致嵌套/空白页 */
@@ -4187,8 +4430,9 @@ function undoLastAction(){
   }
   const op = prState.history.pop();
   if(op.type === "text"){
-    /* 回退全文(撤销删除/排版/清理) */
+    /* 回退全文+结构化排版(撤销删除/排版/清理) */
     item.fullText = op.fullText;
+    item.structured = op.structured || null;
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
@@ -4222,6 +4466,7 @@ function closePaperReader(){
         item.analysis = prState.snapshot.analysis;
         item.highlights = prState.snapshot.highlights;
         item.description = prState.snapshot.description;
+        item.structured = prState.snapshot.structured || null;
         saveState();
         render();
       }
@@ -4266,6 +4511,8 @@ function deleteSelectedText(sel){
   const n = txt.trim().length;
   if(!confirm("确定删除选中的 " + n + " 字?\n删除后可点「↶ 撤销」恢复。")) return;
   pushTextHistory(item);
+  /* 同步删除结构化排版中的对应文本 */
+  applyDeletionToStructured(item, target);
   item.fullText = item.fullText.slice(0, idx) + item.fullText.slice(idx + target.length);
   item.fullText = item.fullText.replace(/\n{3,}/g, "\n\n");
   item.outline = generateOutline(item.fullText);
@@ -4430,6 +4677,8 @@ async function toggleRedundancyCheck(){
         const cur = state.items.find(function(i){ return i.id === prState.itemId; });
         if(!cur) return;
         pushTextHistory(cur);
+        /* 同步删除结构化排版中的标红内容 */
+        applyDeletionToStructured(cur, flags.map(function(f){ return f.text; }));
         let ft = cur.fullText;
         for(let f=0; f<flags.length; f++){
           ft = ft.split(flags[f].text).join("");
@@ -4542,7 +4791,7 @@ function updateNavAiState(){
     btn.title = "配置 AI 接口(智谱 GLM-4-Flash 免费直连)";
   }
 }
-async function callAI(messages, maxTokens){
+async function callAI(messages, maxTokens, temperature){
   const cfg = getAiConfig();
   if(!cfg || !cfg.endpoint || !cfg.key) return { error: "nokey" };
   try{
@@ -4552,7 +4801,7 @@ async function callAI(messages, maxTokens){
       body: JSON.stringify({
         model: cfg.model || "glm-4-flash",
         messages: messages,
-        temperature: 0.6,
+        temperature: (typeof temperature === "number") ? temperature : 0.6,
         max_tokens: maxTokens || 2000
       })
     });
@@ -4568,6 +4817,318 @@ async function callAI(messages, maxTokens){
   }catch(e){
     return { error: "网络错误: " + (e.message || "未知") };
   }
+}
+
+/* ============================================================
+   论文结构化排版系统 —— AI通读全文,归纳为标准学术结构:
+   标题 / 摘要 / 关键词 / 章节正文 / 参考文献
+   · AI分块通读 + 标记协议(#T/#A/#K/#H1/#H2/#R/#P)
+   · 本地 parsePaperStructure 兜底(无AI/失败时)
+   ============================================================ */
+
+/* ---- 1. 本地结构解析: 从纯文本归纳标准结构 ---- */
+function parsePaperStructure(rawText){
+  const st = { title:"", abstract:"", keywords:[], sections:[], references:[] };
+  if(!rawText || !rawText.trim()) return st;
+  const paras = compactReformatText(rawText).split(/\r?\n/).map(function(s){ return s.trim(); }).filter(Boolean);
+  if(paras.length === 0) return st;
+
+  const ABS_RE   = /^(摘\s*要|Abstract)\s*[:：]?\s*/i;
+  const KW_RE    = /^(关键词|关 键 词|Keywords?|Key\s*words?)\s*[:：]\s*/i;
+  const REF_RE   = /^(参\s*考\s*文\s*献|References|Bibliography|文\s*献)\s*[:：]?\s*$/i;
+  const REF_ENTRY_RE = /^\[\d{1,3}\]\s*/;
+  const NUM_RE   = /^(\d+(?:\.\d+)*)\s*[.、)）]?\s+(\S.*)$/;
+  const CHAP_RE  = /^第[一二三四五六七八九十百\d]+[章节部篇]\s*(.*)$/;
+  const CN_NUM_RE = /^([一二三四五六七八九十]+)\s*[、．.]\s*(.+)$/;
+  const KNOWN_HEAD = /^(摘\s*要|Abstract|引\s*言|前\s*言|绪\s*论|相关工作|文献综述|研究背景|背景|方\s*法|方法论|研究方法|研究设计|模型|算\s*法|实\s*验|实验设置|实验结果|实验与分析|结果与分析|结\s*果|分\s*析|讨\s*论|结\s*论|总\s*结|展\s*望|致\s*谢|附\s*录|数据来源|研究假设|研究意义)(\s*[:：])?$/;
+
+  let mode = "body";
+  let curSec = null;
+  function newSec(level, heading){
+    curSec = { level: level, heading: heading, paras: [] };
+    st.sections.push(curSec);
+  }
+  function isHeadingLine(p){
+    if(p.length > 60 || /[。！？；;]/.test(p)) return 0;
+    const m = p.match(NUM_RE);
+    if(m){
+      const depth = (m[1].match(/\./g) || []).length;
+      return Math.min(3, depth + 1);
+    }
+    if(CHAP_RE.test(p) || CN_NUM_RE.test(p)) return 1;
+    if(KNOWN_HEAD.test(p.replace(/\s+/g,""))) return 1;
+    return 0;
+  }
+
+  for(let i=0; i<paras.length; i++){
+    let p = paras[i];
+
+    /* --- 摘要 --- */
+    if(mode === "abstract"){
+      if(KW_RE.test(p) || REF_RE.test(p) || isHeadingLine(p)){ mode = "body"; }
+      else{ st.abstract += (st.abstract ? " " : "") + p; continue; }
+    }
+    const absM = p.match(ABS_RE);
+    if(absM && !st.abstract && p.length < 900){
+      const rest = p.slice(absM[0].length).trim();
+      if(rest){ st.abstract = rest; mode = "body"; }
+      else{ mode = "abstract"; }
+      continue;
+    }
+
+    /* --- 关键词 --- */
+    if(KW_RE.test(p)){
+      const kwStr = p.replace(KW_RE, "");
+      const kws = kwStr.split(/[;；,，、]\s*/).map(function(s){ return s.trim(); })
+        .filter(function(s){ return s && s.length <= 40; });
+      if(kws.length > 0){ st.keywords = st.keywords.concat(kws).slice(0, 12); }
+      mode = "body";
+      continue;
+    }
+
+    /* --- 参考文献标题 --- */
+    if(REF_RE.test(p)){ mode = "refs"; continue; }
+
+    /* --- 参考文献条目 --- */
+    if(mode === "refs"){
+      if(REF_ENTRY_RE.test(p) || p.length < 260){
+        st.references.push(p);
+        continue;
+      }
+      /* 超长段落 → 可能回到正文 */
+      mode = "body";
+    }
+
+    /* --- 标题(首行短行) --- */
+    if(!st.title && !curSec && i === 0 && p.length <= 60 && !/[。！？]/.test(p) && !ABS_RE.test(p)){
+      st.title = p;
+      continue;
+    }
+    if(!st.title && i <= 1 && p.length >= 6 && p.length <= 60 && !/[。！？]/.test(p) && paras.length > 3 && !curSec && st.abstract){
+      st.title = st.title || p;
+      continue;
+    }
+
+    /* --- 章节标题 --- */
+    const lv = isHeadingLine(p);
+    if(lv > 0){
+      newSec(lv, p);
+      mode = "body";
+      continue;
+    }
+
+    /* --- 正文段落 --- */
+    if(!curSec) newSec(1, "");
+    curSec.paras.push(p);
+  }
+
+  /* 兜底: 未识别出任何结构 → 全部作为正文 */
+  if(st.sections.length === 0 && st.abstract === "" && paras.length > 0){
+    newSec(1, "");
+    for(let i=0; i<paras.length; i++) curSec.paras.push(paras[i]);
+  }
+  return st;
+}
+
+/* ---- 2. 标记协议解析: 解析AI输出的结构化标记文本 ---- */
+function parseMarkedPaper(marked){
+  const st = { title:"", abstract:"", keywords:[], sections:[], references:[] };
+  if(!marked) return st;
+  const lines = marked.split(/\r?\n/);
+  let mode = "body";
+  let curSec = null;
+  function newSec(level, heading){
+    curSec = { level: level, heading: heading, paras: [] };
+    st.sections.push(curSec);
+  }
+  for(let i=0; i<lines.length; i++){
+    let line = lines[i].trim();
+    if(!line) continue;
+    /* 剥离可能的代码块标记 */
+    if(/^```/.test(line)) continue;
+
+    if(line.indexOf("#T ") === 0){ if(!st.title) st.title = line.slice(3).trim(); mode = "body"; continue; }
+    if(line.indexOf("#A ") === 0){ st.abstract += (st.abstract ? " " : "") + line.slice(3).trim(); mode = "abstract"; continue; }
+    if(line.indexOf("#A") === 0){ mode = "abstract"; continue; }
+    if(line.indexOf("#K ") === 0){
+      const kws = line.slice(3).split(/[;；,，、]\s*/).map(function(s){ return s.trim(); })
+        .filter(function(s){ return s && s.length <= 40; });
+      st.keywords = st.keywords.concat(kws).slice(0, 12);
+      mode = "body";
+      continue;
+    }
+    let hMatch = null;
+    if(line.indexOf("#H1 ") === 0) hMatch = { level: 1, text: line.slice(4).trim() };
+    else if(line.indexOf("#H2 ") === 0) hMatch = { level: 2, text: line.slice(4).trim() };
+    else if(line.indexOf("#H3 ") === 0) hMatch = { level: 3, text: line.slice(4).trim() };
+    else if(line.indexOf("#H1") === 0) hMatch = { level: 1, text: line.slice(3).trim() };
+    else if(line.indexOf("#H2") === 0) hMatch = { level: 2, text: line.slice(3).trim() };
+    else if(line.indexOf("#H3") === 0) hMatch = { level: 3, text: line.slice(3).trim() };
+    if(hMatch){
+      const htxt = hMatch.text;
+      if(/^参\s*考\s*文\s*献|References|Bibliography/i.test(htxt)){ mode = "refs"; curSec = null; continue; }
+      if(/^摘\s*要|Abstract/i.test(htxt) && !st.abstract){ mode = "abstract"; curSec = null; continue; }
+      if(/^关键词|Key\s*words?/i.test(htxt)){ mode = "body"; continue; }
+      newSec(hMatch.level, htxt);
+      mode = "body";
+      continue;
+    }
+    if(line.indexOf("#R ") === 0){ st.references.push(line.slice(3).trim()); mode = "refs"; continue; }
+    if(line.indexOf("#R") === 0){ mode = "refs"; continue; }
+    if(line.indexOf("#P ") === 0) line = line.slice(3).trim();
+    else if(line.indexOf("#P") === 0) line = line.slice(2).trim();
+
+    if(!line) continue;
+    if(mode === "abstract"){ st.abstract += (st.abstract ? " " : "") + line; continue; }
+    if(mode === "refs"){ st.references.push(line); continue; }
+    if(!curSec) newSec(1, "");
+    curSec.paras.push(line);
+  }
+  return st;
+}
+
+/* ---- 3. structured → 纯文本(保持fullText与结构同步) ---- */
+function structuredToText(st){
+  if(!st) return "";
+  const parts = [];
+  if(st.title) parts.push(st.title);
+  if(st.abstract) parts.push("摘要：" + st.abstract);
+  if(st.keywords && st.keywords.length > 0) parts.push("关键词：" + st.keywords.join("；"));
+  if(st.sections) for(let i=0; i<st.sections.length; i++){
+    const sec = st.sections[i];
+    if(sec.heading) parts.push(sec.heading);
+    for(let j=0; j<sec.paras.length; j++){
+      if(sec.paras[j] && sec.paras[j].trim()) parts.push(sec.paras[j].trim());
+    }
+  }
+  if(st.references && st.references.length > 0){
+    parts.push("参考文献");
+    for(let i=0; i<st.references.length; i++) parts.push(st.references[i]);
+  }
+  return parts.join("\n\n");
+}
+
+/* ---- 4. structured 有效内容总长(校验AI结果是否丢内容) ---- */
+function structuredTextLength(st){
+  if(!st) return 0;
+  let len = (st.title || "").length + (st.abstract || "").length;
+  (st.keywords || []).forEach(function(k){ len += k.length; });
+  (st.sections || []).forEach(function(sec){
+    len += (sec.heading || "").length;
+    (sec.paras || []).forEach(function(p){ len += p.length; });
+  });
+  (st.references || []).forEach(function(r){ len += r.length; });
+  return len;
+}
+
+/* ---- 5. 句子边界分块(AI长文通读用) ---- */
+function splitIntoChunks(text, size){
+  const chunks = [];
+  if(!text) return chunks;
+  let start = 0;
+  while(start < text.length){
+    let end = Math.min(text.length, start + size);
+    if(end < text.length){
+      /* 在 end 前找最后一个句子边界 */
+      const win = text.substring(Math.max(start, end - 320), end);
+      let cutAt = -1;
+      for(let i = win.length - 1; i >= 0; i--){
+        const ch = win.charAt(i);
+        if(ch === "。" || ch === "！" || ch === "？" || ch === "…" || ch === "!" || ch === "?"){
+          cutAt = i; break;
+        }
+        if(ch === "." && i > 0 && /\s/.test(win.charAt(i - 1))){ cutAt = i; break; }
+      }
+      if(cutAt >= 0){ end = Math.max(start + 200, Math.max(start, end - 320) + cutAt + 1); }
+    }
+    chunks.push(text.substring(start, end));
+    start = end;
+  }
+  return chunks;
+}
+
+/* ---- 6. 本地块标记(AI某块失败时的兜底) ---- */
+function localMarkBlock(text){
+  const lines = compactReformatText(text).split(/\r?\n/);
+  const out = [];
+  for(let i=0; i<lines.length; i++){
+    const t = lines[i].trim();
+    if(!t) continue;
+    const isHead = t.length <= 60 && !/[。！？；;]/.test(t) &&
+      (/^(\d+(?:\.\d+)*)\s*[.、)）]?\s+\S/.test(t) || /^第[一二三四五六七八九十百\d]+[章节部篇]/.test(t) ||
+       /^(摘\s*要|Abstract|引\s*言|结\s*论|参考文献|References|致\s*谢|关键词|Keywords?)/i.test(t.replace(/\s+/g,"")));
+    out.push(isHead ? "#H1 " + t : "#P " + t);
+  }
+  return out.join("\n");
+}
+
+/* ---- 7. AI 结构化排版主函数: 分块通读 → 标记合并 → 结构归纳 ---- */
+async function aiStructuredReformat(fullText, onProgress){
+  const clean = compactReformatText(fullText || "");
+  const cfg = getAiConfig();
+  if(!clean) return { st: { title:"", abstract:"", keywords:[], sections:[], references:[] }, usedAI:false };
+  if(!cfg || !cfg.key){
+    return { st: parsePaperStructure(clean), usedAI:false, noKey:true };
+  }
+
+  const chunks = splitIntoChunks(clean, 4200);
+  let marked = "";
+  let aiFailedCount = 0;
+  for(let i=0; i<chunks.length; i++){
+    if(onProgress) onProgress(i + 1, chunks.length);
+    const sys = "你是专业的论文结构化排版引擎。请把用户提供的论文片段整理为结构化标记文本,无论论文是什么类型(中文学术期刊/知网格式/英文论文/学位论文/会议论文),都归纳为标准学术结构。\n\n输出规则(严格遵守):\n1. 每行输出一个元素,行首使用以下标记:\n#T 论文标题(仅当片段包含论文大标题时,整个通读只输出一次)\n#A 摘要内容(仅当片段包含摘要部分时)\n#K 关键词,多个用分号分隔(仅当片段包含关键词时)\n#H1 一级章节标题(如 摘要/1 引言/2 方法/结论/参考文献/致谢)\n#H2 二级小节标题(如 2.1 研究设计)\n#H3 三级小节标题\n#R 参考文献条目(一条一行,保留原有编号信息之外的完整内容)\n#P 正文段落\n2. 段落合并:被换行拆开的同一自然段必须合并为一行,以#P开头输出\n3. 断词合并:行末英文连字符与下一行单词合并;中文行直接拼接\n4. 噪声清除:删除页码、页眉页脚、乱码行、收稿日期/基金项目/作者简介等与正文无关的内容\n5. 不改写、不翻译、不增删实质内容,只做结构归纳与排版\n6. 章节标题判断标准:编号开头(1/2.1/第一章)或标准学术章节词(摘要/引言/相关工作/方法/实验/结果/讨论/结论/参考文献/致谢)\n7. 直接输出标记文本,不要任何解释,不要用代码块包裹";
+    try{
+      const r = await callAI(
+        [{ role: "system", content: sys }, { role: "user", content: chunks[i] }],
+        4500, 0.15
+      );
+      if(r.content){
+        let c = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+        marked += "\n" + c;
+      }else{
+        aiFailedCount++;
+        marked += "\n" + localMarkBlock(chunks[i]);
+      }
+    }catch(e){
+      aiFailedCount++;
+      marked += "\n" + localMarkBlock(chunks[i]);
+    }
+  }
+
+  const st = parseMarkedPaper(marked);
+  /* 校验: AI结果内容损失过大 → 整体弃用,本地兜底 */
+  const aiLen = structuredTextLength(st);
+  if(aiLen < clean.length * 0.45){
+    return { st: parsePaperStructure(clean), usedAI:false, degraded:true };
+  }
+  /* AI没归纳出任何结构 → 本地兜底 */
+  if(st.sections.length === 0 && !st.abstract){
+    return { st: parsePaperStructure(clean), usedAI:false, degraded:true };
+  }
+  return { st: st, usedAI: (aiFailedCount < chunks.length) };
+}
+
+/* ---- 8. 删除同步: 把删除的文本从structured各字段移除 ---- */
+function applyDeletionToStructured(item, removedTexts){
+  const st = item && item.structured;
+  if(!st) return;
+  const rms = Array.isArray(removedTexts) ? removedTexts : [removedTexts];
+  if(rms.length === 0) return;
+  function cut(s){
+    if(!s) return s;
+    for(let i=0; i<rms.length; i++){ s = s.split(rms[i]).join(""); }
+    return s.replace(/\s{2,}/g, " ").trim();
+  }
+  st.title = cut(st.title);
+  st.abstract = cut(st.abstract);
+  if(st.keywords) st.keywords = st.keywords.map(cut).filter(Boolean);
+  if(st.sections) for(let i=0; i<st.sections.length; i++){
+    const sec = st.sections[i];
+    sec.heading = cut(sec.heading);
+    sec.paras = (sec.paras || []).map(cut).filter(function(p){ return p && p.length > 1; });
+  }
+  if(st.references) st.references = st.references.map(cut).filter(function(r){ return r && r.length > 2; });
+  if(st.sections) st.sections = st.sections.filter(function(sec){ return sec.heading || (sec.paras && sec.paras.length > 0); });
 }
 
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
@@ -4633,7 +5194,8 @@ async function runAiRead(){
 }
 
 /* ============================================================
-   AI 一键排版 —— AI重排全文(章节结构/段落分段),本地兜底
+   AI 一键排版 —— AI通读全文,归纳为标准学术结构后美观渲染
+   (标题/摘要/关键词/章节/参考文献),本地结构解析兜底
    ============================================================ */
 async function aiReformatPaper(btn){
   const cur = state.items.find(function(x){ return x.id === prState.itemId; });
@@ -4641,61 +5203,44 @@ async function aiReformatPaper(btn){
   const cfg = getAiConfig();
   const before = cur.fullText;
 
-  /* 未配置AI → 本地排版 */
-  if(!cfg || !cfg.key){
-    const after = compactReformatText(before);
-    if(after === before){ toast("排版已是最优,无需调整"); return; }
-    pushTextHistory(cur);
-    cur.fullText = after;
-    cur.outline = generateOutline(after);
-    cur.analysis = analyzePaper(after);
-    saveState();
-    markDirty();
-    applyHighlightsToDom(cur);
-    toast("本地排版完成 · 接入AI可获得章节级智能排版");
-    openAiCfgModal();
-    return;
-  }
-
-  /* AI 排版 */
   if(btn){
     btn.classList.add("busy");
-    const orig = btn.innerHTML;
-    btn.innerHTML = "◫ AI排版中…";
+    btn.innerHTML = cfg && cfg.key ? "◫ AI通读中…" : "◫ 排版中…";
   }
   const bodyEl = document.getElementById("prText");
   if(bodyEl) bodyEl.style.opacity = ".55";
   try{
-    const messages = [
-      { role: "system", content: "你是专业的论文排版引擎。请对用户提供的论文文本重新排版,严格遵循以下规则:\n1. 合并被硬换行打断的句子(断行合并)\n2. 识别章节标题(如 摘要/Abstract/1. 引言/第X章/参考文献 等),标题独立成行\n3. 保持段落分段:不同段落之间用一个空行分隔,不得把全文挤成密密一片\n4. 删除页码、页眉页脚残留、乱码行\n5. 不改写、不删减、不增加任何实质内容,只调整排版\n6. 直接输出排版后的全文,不要任何解释或代码块标记" },
-      { role: "user", content: before.substring(0, 24000) }
-    ];
-    const r = await callAI(messages, 8000);
-    let after = null;
-    if(r.content){
-      after = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
-      /* 安全检查: AI输出长度异常(过短)则拒绝 */
-      if(after.length < before.length * 0.5){
-        after = null;
-      }
-    }
-    if(!after){
-      /* AI失败 → 本地兜底 */
-      after = compactReformatText(before);
-      toast("AI排版不可用,已用本地排版");
-    }
-    if(after === before){
-      toast("排版已是最优,无需调整");
-      return;
-    }
+    /* AI分块通读(进度回调) / 本地结构解析兜底 */
+    const result = await aiStructuredReformat(before, function(i, n){
+      if(btn) btn.innerHTML = "◫ AI通读 " + i + "/" + n;
+    });
+    const st = result.st;
+    const after = structuredToText(st);
+
     pushTextHistory(cur);
+    cur.structured = st;
     cur.fullText = after;
     cur.outline = generateOutline(after);
     cur.analysis = analyzePaper(after);
+    cur.description = "全文 " + after.length + " 字 · " + after.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
     saveState();
     markDirty();
     applyHighlightsToDom(cur);
-    toast(r.content ? "AI排版完成:章节结构识别 · 段落分段保留" : "本地排版完成");
+
+    if(result.usedAI){
+      const bits = [];
+      if(st.title) bits.push("标题");
+      if(st.abstract) bits.push("摘要");
+      if(st.keywords && st.keywords.length) bits.push("关键词");
+      if(st.sections && st.sections.length) bits.push(st.sections.length + "个章节");
+      if(st.references && st.references.length) bits.push(st.references.length + "条文献");
+      toast("AI 结构化排版完成:" + bits.join(" · "));
+    }else if(result.noKey){
+      toast("本地结构化排版完成 · 接入AI可获得更精准的章节归纳");
+      openAiCfgModal();
+    }else{
+      toast("AI 暂不可用,已完成本地结构化排版");
+    }
   }catch(e){
     toast("排版失败: " + (e.message || "未知错误"));
   }finally{
@@ -6341,48 +6886,30 @@ function renderGallery(){
           if(file.size > 10*1024*1024){ toast("文件过大(超10MB)"); return; }
           const fname = file.name.toLowerCase();
           if(fname.endsWith(".pdf")){
-            /* PDF 文本提取 */
+            /* PDF 文本提取(双栏检测+页眉页脚过滤) → AI结构化排版 */
             if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
             toast("正在解析PDF……", 2000);
             const reader = new FileReader();
             reader.onload = function(){
               pdfjsLib.getDocument({data:new Uint8Array(this.result)}).promise.then(function(pdf){
-                const numPages = pdf.numPages;
-                const pageTexts = [];
-                let chain = Promise.resolve();
-                for(let p=1; p<=numPages; p++){
-                  chain = chain.then(function(){
-                    return pdf.getPage(p).then(function(page){
-                      return page.getTextContent().then(function(tc){
-                        let txt = "";
-                        let lastY = null;
-                        for(let i=0; i<tc.items.length; i++){
-                          const item = tc.items[i];
-                          if(lastY !== null && Math.abs(item.transform[5] - lastY) > 3){
-                            txt += "\n";
-                          }
-                          txt += item.str;
-                          if(item.hasEOL) txt += "\n";
-                          lastY = item.transform[5];
-                        }
-                        pageTexts.push(txt);
-                      });
-                    });
-                  });
+                return extractPdfTextEnhanced(pdf);
+              }).then(function(res){
+                if(res.text.trim().length < 50){
+                  toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
+                  return;
                 }
-                return chain.then(function(){
-                  const rawText = pageTexts.join("\n\n");
-                  if(rawText.trim().length < 50){
-                    toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
-                    return;
-                  }
-                  const fullText = reformatPdfText(rawText);
-                  target.fullText = fullText;
-                  target.analysis = analyzePaper(fullText);
-                  target.outline = generateOutline(fullText);
+                /* AI 通读全文归纳标准结构;未配置/失败 → 本地结构解析兜底 */
+                toast("PDF已解析(" + res.pages + "页) · 正在归纳结构排版…", 2500);
+                return aiStructuredReformat(res.text, function(i, n){
+                  toast("AI 通读 " + i + "/" + n + " …", 1500);
+                }).then(function(result){
+                  target.structured = result.st;
+                  target.fullText = structuredToText(result.st);
+                  target.analysis = analyzePaper(target.fullText);
+                  target.outline = generateOutline(target.fullText);
                   saveState();
                   render();
-                  toast("「" + target.name + "」PDF已解析,可点「查看全文」阅读标注");
+                  toast("「" + target.name + "」PDF已结构化排版,可点「查看全文」阅读标注");
                 });
               }).catch(function(e){
                 toast("PDF解析失败:" + (e.message || "未知错误"));
@@ -6390,15 +6917,18 @@ function renderGallery(){
             };
             reader.readAsArrayBuffer(file);
           }else{
-            /* TXT/MD 直接读取 */
+            /* TXT/MD 直接读取 → 结构化排版 */
             const reader = new FileReader();
             reader.onload = function(){
-              target.fullText = this.result;
-              target.analysis = analyzePaper(this.result);
-              target.outline = generateOutline(this.result);
-              saveState();
-              render();
-              toast("「" + target.name + "」全文已上传,可点「查看全文」阅读标注");
+              aiStructuredReformat(this.result, null).then(function(result){
+                target.structured = result.st;
+                target.fullText = structuredToText(result.st);
+                target.analysis = analyzePaper(target.fullText);
+                target.outline = generateOutline(target.fullText);
+                saveState();
+                render();
+                toast("「" + target.name + "」全文已结构化排版,可点「查看全文」阅读标注");
+              });
             };
             reader.readAsText(file, "UTF-8");
           }
@@ -7228,38 +7758,31 @@ if(paperEntrySubmit){
       toast("请粘贴论文全文");
       return;
     }
-    /* AI 解析章节结构并排版(已接入AI时) */
+    /* AI 通读全文 → 归纳标准学术结构(标题/摘要/关键词/章节/参考文献);本地结构解析兜底 */
+    let structured = null;
     const cfg = getAiConfig();
+    const origLabel = paperEntrySubmit.innerHTML;
     if(cfg && cfg.key){
-      const origLabel = paperEntrySubmit.innerHTML;
-      paperEntrySubmit.innerHTML = "AI 解析排版中…";
       paperEntrySubmit.disabled = true;
       try{
-        const messages = [
-          { role: "system", content: "你是专业的论文排版引擎。请对用户提供的论文文本重新排版,严格遵循以下规则:\n1. 合并被硬换行打断的句子(断行合并)\n2. 识别章节标题(如 摘要/Abstract/1. 引言/第X章/参考文献 等),标题独立成行\n3. 保持段落分段:不同段落之间用一个空行分隔,不得把全文挤成密密一片\n4. 删除页码、页眉页脚残留、乱码行\n5. 不改写、不删减、不增加任何实质内容,只调整排版\n6. 直接输出排版后的全文,不要任何解释或代码块标记" },
-          { role: "user", content: fullText.substring(0, 24000) }
-        ];
-        const r = await callAI(messages, 8000);
-        if(r.content){
-          let after = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
-          if(after.length >= fullText.length * 0.5){
-            fullText = after;
-            toast("AI 已解析章节结构并排版");
-          }
-        }else{
-          fullText = compactReformatText(fullText);
-          toast("AI 不可用,已用本地排版");
-        }
+        const result = await aiStructuredReformat(fullText, function(i, n){
+          paperEntrySubmit.innerHTML = "AI 通读 " + i + "/" + n + "…";
+        });
+        structured = result.st;
+        fullText = structuredToText(structured);
+        toast(result.usedAI ? "AI 已归纳论文结构:标题/摘要/关键词/章节/参考文献" : "AI 暂不可用,已完成本地结构化排版");
       }catch(e){
-        fullText = compactReformatText(fullText);
+        structured = parsePaperStructure(fullText);
+        fullText = structuredToText(structured);
       }finally{
         paperEntrySubmit.innerHTML = origLabel;
         paperEntrySubmit.disabled = false;
       }
     }else{
-      fullText = compactReformatText(fullText);
+      structured = parsePaperStructure(fullText);
+      fullText = structuredToText(structured);
     }
-    const result = addPaper(title, fullText);
+    const result = addPaper(title, fullText, null, structured);
     if(result && result.error === "duplicate"){
       toast("此论文已在册中");
       return;
@@ -7293,48 +7816,23 @@ if(paperPdfBtn){
       const reader = new FileReader();
       reader.onload = function(){
         pdfjsLib.getDocument({data:new Uint8Array(this.result)}).promise.then(function(pdf){
-          const numPages = pdf.numPages;
-          const pageTexts = [];
-          let chain = Promise.resolve();
-          for(let p=1; p<=numPages; p++){
-            chain = chain.then(function(){
-              return pdf.getPage(p).then(function(page){
-                return page.getTextContent().then(function(tc){
-                  let txt = "";
-                  let lastY = null;
-                  for(let i=0; i<tc.items.length; i++){
-                    const item = tc.items[i];
-                    if(lastY !== null && Math.abs(item.transform[5] - lastY) > 3){
-                      txt += "\n";
-                    }
-                    txt += item.str;
-                    if(item.hasEOL) txt += "\n";
-                    lastY = item.transform[5];
-                  }
-                  pageTexts.push(txt);
-                });
-              });
-            });
+          return extractPdfTextEnhanced(pdf);
+        }).then(function(res){
+          paperPdfBtn.classList.remove("busy");
+          paperPdfBtn.innerHTML = "⇪ 导入PDF";
+          if(res.text.trim().length < 50){
+            toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
+            return;
           }
-          return chain.then(function(){
-            const rawText = pageTexts.join("\n\n");
-            paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入PDF";
-            if(rawText.trim().length < 50){
-              toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
-              return;
-            }
-            const fullText = reformatPdfText(rawText);
-            if(paperFullTextInput){
-              paperFullTextInput.value = fullText;
-              updatePaperEntryStats();
-            }
-            /* 标题留空时自动取PDF文件名(去扩展名) */
-            if(paperTitleInput && !paperTitleInput.value.trim()){
-              paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
-            }
-            toast("PDF已解析导入(" + numPages + "页) · 点「整理入册」AI将自动解析章节排版");
-          });
+          if(paperFullTextInput){
+            paperFullTextInput.value = res.text;
+            updatePaperEntryStats();
+          }
+          /* 标题留空时自动取PDF文件名(去扩展名) */
+          if(paperTitleInput && !paperTitleInput.value.trim()){
+            paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
+          }
+          toast("PDF已解析导入(" + res.pages + "页) · 点「整理入册」AI将通读并归纳结构排版");
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入PDF";
