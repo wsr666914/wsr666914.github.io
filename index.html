@@ -621,6 +621,116 @@
   }
   .pr-outline-item:hover{ color:var(--ink); background:rgba(255,255,255,.4); border-left-color:var(--line); }
   .pr-outline-item.active{ color:var(--teal); border-left-color:var(--teal); font-weight:500; background:rgba(47,93,98,.06); }
+
+  /* ===== 左侧 AI 工具栏 ===== */
+  .pr-ai-btns{ display:flex; flex-direction:column; gap:8px; margin-top:14px; }
+  .pr-ai-btn{
+    padding:10px 14px; border:1px solid var(--line); border-radius:10px;
+    background:var(--paper); cursor:pointer; text-align:left;
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:14px; font-weight:600;
+    color:var(--ink-soft); transition:all .2s; letter-spacing:.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .pr-ai-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.05); transform:translateX(2px); }
+  .pr-ai-btn.active{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
+  .pr-ai-result{ margin-top:14px; }
+  .pr-ai-hint{
+    font-size:12px; line-height:2; color:var(--ink-mute);
+    padding:14px 12px; border:1px dashed var(--line); border-radius:10px; text-align:center;
+  }
+  .pr-ai-loading{
+    font-size:13px; color:var(--teal); padding:16px 12px; text-align:center;
+    animation:pulse 1.2s ease-in-out infinite;
+  }
+  @keyframes pulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+  .pa-block{ margin-bottom:14px; padding:0 2px; }
+  .pa-block-h{
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:600;
+    color:var(--ink); margin:0 0 6px; display:flex; align-items:center; gap:6px;
+  }
+  .pa-block-h .ms-ic{ color:var(--teal); font-size:13px; }
+  .pa-text{
+    font-size:13px; line-height:1.85; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word;
+    text-align:justify;
+  }
+  .pa-mute{ font-size:12px; color:var(--ink-mute); font-style:italic; padding:6px 0; }
+  .pa-kws{ display:flex; flex-wrap:wrap; gap:6px; }
+  .pa-kw{
+    display:inline-block; padding:2px 10px; border-radius:99px; font-size:11px;
+    background:rgba(47,93,98,.08); color:var(--teal); border:1px solid rgba(47,93,98,.15);
+  }
+  .pa-field{ display:flex; flex-direction:column; gap:2px; margin-bottom:14px; }
+  .pa-label{
+    font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:600; letter-spacing:.16em;
+    text-transform:uppercase; color:var(--ink-mute);
+  }
+  .pa-val{ font-size:14px; font-weight:600; color:var(--teal); }
+  .pa-metrics{ display:flex; gap:12px; padding-top:10px; border-top:1px solid var(--line-soft); }
+  .pa-metrics span{ font-size:11px; color:var(--ink-mute); }
+  .pa-metrics b{ color:var(--ink); font-size:13px; }
+
+  /* ===== 联想论文列表 ===== */
+  .rel-list{ display:flex; flex-direction:column; gap:8px; }
+  .rel-item{
+    display:block; padding:10px 12px; border:1px solid var(--line); border-radius:10px;
+    background:var(--paper); cursor:pointer; text-decoration:none; transition:all .2s;
+  }
+  .rel-item:hover{ border-color:var(--teal); background:rgba(47,93,98,.05); transform:translateX(2px); }
+  .rel-rank{
+    font-family:"JetBrains Mono",monospace; font-size:10px; color:#B0432C; font-weight:600;
+  }
+  .rel-title{
+    font-size:13px; line-height:1.5; color:var(--ink); font-weight:500; margin:2px 0 4px;
+  }
+  .rel-meta{ font-size:11px; color:var(--ink-mute); }
+
+  /* ===== AI 对话面板 ===== */
+  .pr-chat{ display:none; flex-direction:column; margin-top:14px; height:400px; }
+  .pr-chat.show{ display:flex; }
+  .pr-chat-log{
+    flex:1; overflow-y:auto; padding:10px; border:1px solid var(--line-soft);
+    border-radius:10px; background:rgba(255,255,255,.5); display:flex; flex-direction:column; gap:10px;
+  }
+  .chat-msg{ max-width:92%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.7; word-break:break-word; white-space:pre-wrap; }
+  .chat-msg.user{
+    align-self:flex-end; background:var(--teal); color:var(--paper-soft);
+    border-bottom-right-radius:3px;
+  }
+  .chat-msg.ai{
+    align-self:flex-start; background:var(--paper); border:1px solid var(--line);
+    color:var(--ink-soft); border-bottom-left-radius:3px;
+  }
+  .chat-msg.err{ align-self:flex-start; background:rgba(176,67,44,.08); border:1px solid rgba(176,67,44,.25); color:#B0432C; }
+  .pr-chat-row{ display:flex; gap:8px; margin-top:10px; }
+  .pr-chat-row input{
+    flex:1; padding:8px 12px; border:1px solid var(--line); border-radius:8px;
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px; background:var(--paper);
+    color:var(--ink); outline:none;
+  }
+  .pr-chat-row input:focus{ border-color:var(--teal); }
+  .pr-chat-row button{
+    width:36px; height:36px; border:none; border-radius:8px; background:var(--teal);
+    color:var(--paper-soft); font-size:16px; cursor:pointer; transition:all .2s; flex-shrink:0;
+  }
+  .pr-chat-row button:hover{ filter:brightness(1.15); }
+
+  /* ===== 删除模式按钮 + 检查标红 ===== */
+  .pr-del-btn.on{ border-color:#B0432C; background:rgba(176,67,44,.1); color:#B0432C; }
+  #prCheckRed.on{ border-color:#B0432C; background:rgba(176,67,44,.1); color:#B0432C; }
+  .pr-text .red-flag{
+    background:rgba(176,67,44,.14); color:#B0432C;
+    text-decoration:underline wavy #B0432C; text-decoration-skip-ink:none;
+    border-radius:2px; padding:0 1px;
+  }
+  .red-check-bar{
+    margin:0 0 10px; padding:8px 12px; border:1px solid rgba(176,67,44,.3); border-radius:8px;
+    background:rgba(176,67,44,.06); display:flex; align-items:center; justify-content:space-between; gap:10px;
+    font-size:12px; color:#B0432C;
+  }
+  .red-check-bar button{
+    padding:3px 10px; border:1px solid #B0432C; border-radius:6px; background:#B0432C;
+    color:#fff; font-size:11px; cursor:pointer; white-space:nowrap;
+  }
   .pr-text-wrap{
     flex:1; overflow-y:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
@@ -632,14 +742,17 @@
     white-space:pre-wrap; word-break:break-word; text-align:justify;
     text-justify:inter-ideograph;
   }
-  /* 论文段落分隔:双换行产生段落间距 */
+  /* 论文段落分隔:段落行缩进+间距 */
+  .pr-text .pr-para-line{
+    margin:0 0 1.15em; text-indent:2em;
+  }
   .pr-text > p, .pr-text > div{
     margin:0 0 14px; text-indent:0;
   }
   /* 首行缩进(中文论文风格) */
   .pr-text{ text-indent:2em; }
   .pr-text > p:first-child, .pr-text > .pr-section-title{ text-indent:0; }
-  .pr-text .pr-section-title{ text-indent:0; }
+  .pr-text .pr-section-title, .pr-text h4{ text-indent:0; }
   .pr-section-anchor{ display:block; padding-top:20px; margin-top:-20px; }
   .pr-section-title{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
@@ -1249,17 +1362,71 @@
           <button class="pr-hl-undo" id="prHlUndo" title="撤销最近一次标注">↶</button>
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标注">×</button>
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
+          <span class="pr-hl-sep"></span>
+          <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
+          <button class="pr-hl-fmt" id="prCheckRed" title="检查可删除内容:标红乱码/冗余,再次点击取消标红">🔍 检查</button>
         </div>
-        <button class="pr-reformat-btn" id="prReformat" title="一键重新排版:合并断行/去除空行/段落重排">◫ 一键排版</button>
+        <button class="pr-reformat-btn" id="prReformat" title="一键重新排版:合并断行/去空行/保留段落结构">◫ 一键排版</button>
+        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(端点/密钥/模型)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
     </div>
     <div class="pr-body">
-      <aside class="pr-outline" id="prOutline"></aside>
+      <aside class="pr-outline" id="prOutline">
+        <div class="pr-outline-section">智能工具 · AI LAB</div>
+        <div class="pr-ai-btns">
+          <button class="pr-ai-btn" id="prAiRead" title="AI快速分析文章内容与核心">✦ AI 解读</button>
+          <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">💬 AI 提问</button>
+          <button class="pr-ai-btn" id="prRelated" title="检索知网内与该论文研究内容相似的论文五篇">⇄ 联想论文</button>
+        </div>
+        <div class="pr-ai-result" id="prAiResult">
+          <div class="pr-ai-hint">点击上方按钮开始<br>· AI 解读: 快速提炼内容与核心<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇</div>
+        </div>
+        <div class="pr-chat" id="prChat">
+          <div class="pr-chat-log" id="prChatLog"></div>
+          <div class="pr-chat-row">
+            <input type="text" id="prChatInput" placeholder="向 AI 提问…" maxlength="500">
+            <button id="prChatSend" title="发送">↑</button>
+          </div>
+        </div>
+      </aside>
       <div class="pr-text-wrap" id="prTextWrap">
         <div class="pr-text" id="prText"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- AI 接口配置模态框 -->
+<div class="modal-bg" id="aiCfgModal">
+  <div class="modal">
+    <h3>AI 接口配置 <span class="sub">OpenAI 兼容</span></h3>
+    <div class="form-group">
+      <label>服务商预设</label>
+      <select id="aiPreset">
+        <option value="deepseek">DeepSeek (deepseek-chat · 推荐)</option>
+        <option value="zhipu">智谱 GLM (glm-4-plus)</option>
+        <option value="kimi">Kimi (moonshot-v1-32k)</option>
+        <option value="qwen">通义千问 (qwen-plus)</option>
+        <option value="custom">自定义</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>API 端点</label>
+      <input type="text" id="aiEndpoint" placeholder="https://api.deepseek.com">
+    </div>
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="aiKey" placeholder="sk-…">
+    </div>
+    <div class="form-group">
+      <label>模型名称</label>
+      <input type="text" id="aiModel" placeholder="deepseek-chat">
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn primary" id="aiCfgSave">保存配置</button>
+      <button class="modal-btn" id="aiCfgClose">关闭</button>
     </div>
   </div>
 </div>
@@ -3452,7 +3619,7 @@ function addPaper(title, fullText, analysis){
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null };
 
 /* 打开论文查看器 */
 function openPaperReader(itemId){
@@ -3463,6 +3630,14 @@ function openPaperReader(itemId){
   prState.activeColor = null;
   prState.activeFmt = null;
   prState.dirty = false;
+  /* 快照: 打开时的原始数据副本,退出选「取消」时恢复 */
+  prState.snapshot = JSON.parse(JSON.stringify({
+    fullText: item.fullText,
+    outline: item.outline,
+    analysis: item.analysis,
+    highlights: item.highlights,
+    description: item.description
+  }));
   updateSaveBtnState();
 
   /* 标题 + 元信息 */
@@ -3475,73 +3650,22 @@ function openPaperReader(itemId){
     prMeta.textContent = (item.description || "") + " · " + ds;
   }
 
-  /* 渲染论文分析(左侧栏) */
-  const prOutline = document.getElementById("prOutline");
-  if(prOutline){
-    const a = item.analysis || analyzePaper(item.fullText || "");
-    let ah = '<div class="pr-outline-section">论文解读 · ANALYSIS</div>';
-
-    /* 研究领域 */
-    if(a.field){
-      ah += '<div class="pa-field"><span class="pa-label">研究领域</span><span class="pa-val">' + escapeHtml(a.field) + '</span></div>';
-    }
-
-    /* 摘要 */
-    ah += '<div class="pa-block">';
-    ah += '<div class="pa-block-h"><span class="ms-ic">§</span> 摘要</div>';
-    if(a.abstract){
-      ah += '<div class="pa-text">' + escapeHtml(a.abstract) + '</div>';
-    } else {
-      ah += '<div class="pa-mute">未检测到摘要</div>';
-    }
-    ah += '</div>';
-
-    /* 关键词 */
-    if(a.keywords && a.keywords.length > 0){
-      ah += '<div class="pa-block">';
-      ah += '<div class="pa-block-h"><span class="ms-ic">❦</span> 关键词</div>';
-      ah += '<div class="pa-kws">';
-      for(let i=0; i<a.keywords.length; i++){
-        ah += '<span class="pa-kw">' + escapeHtml(a.keywords[i]) + '</span>';
-      }
-      ah += '</div></div>';
-    }
-
-    /* 方法 */
-    if(a.methods){
-      ah += '<div class="pa-block">';
-      ah += '<div class="pa-block-h"><span class="ms-ic">⚒</span> 研究方法</div>';
-      ah += '<div class="pa-text">' + escapeHtml(a.methods) + '</div>';
-      ah += '</div>';
-    }
-
-    /* 创新贡献 */
-    if(a.contributions){
-      ah += '<div class="pa-block">';
-      ah += '<div class="pa-block-h"><span class="ms-ic">✦</span> 创新贡献</div>';
-      ah += '<div class="pa-text">' + escapeHtml(a.contributions) + '</div>';
-      ah += '</div>';
-    }
-
-    /* 结论 */
-    if(a.conclusion){
-      ah += '<div class="pa-block">';
-      ah += '<div class="pa-block-h"><span class="ms-ic">❧</span> 主要结论</div>';
-      ah += '<div class="pa-text">' + escapeHtml(a.conclusion) + '</div>';
-      ah += '</div>';
-    }
-
-    /* 指标 */
-    if(a.metrics && a.metrics.chars){
-      ah += '<div class="pa-metrics">';
-      ah += '<span><b>' + a.metrics.chars + '</b> 字</span>';
-      ah += '<span><b>' + (a.metrics.paragraphs||0) + '</b> 段</span>';
-      ah += '<span><b>' + (a.metrics.sections||0) + '</b> 节</span>';
-      ah += '</div>';
-    }
-
-    prOutline.innerHTML = ah;
+  /* 左侧栏已是静态AI工具面板:重置结果区/聊天区状态 */
+  prState.delMode = false;
+  prState.checkRed = false;
+  prState.chat = [];
+  const aiResult = document.getElementById("prAiResult");
+  if(aiResult){
+    aiResult.innerHTML = '<div class="pr-ai-hint">点击上方按钮开始<br>· AI 解读: 快速提炼内容与核心<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇</div>';
   }
+  const chatPanel = document.getElementById("prChat");
+  if(chatPanel) chatPanel.classList.remove("show");
+  const chatLog = document.getElementById("prChatLog");
+  if(chatLog) chatLog.innerHTML = "";
+  const delModeBtn = document.getElementById("prDelMode");
+  if(delModeBtn) delModeBtn.classList.remove("on");
+  const checkRedBtn = document.getElementById("prCheckRed");
+  if(checkRedBtn) checkRedBtn.classList.remove("on");
 
   /* 渲染全文 + 应用高亮 (applyHighlightsToDom 内部会先重建全文) */
   applyHighlightsToDom(item);
@@ -3555,7 +3679,7 @@ function openPaperReader(itemId){
   const prClose = document.getElementById("prClose");
   if(prClose) prClose.onclick = closePaperReader;
 
-  /* 一键重新排版:合并断行/去除空行/段落重排 */
+  /* 一键重新排版:合并断行/去空行/保留段落结构 (不重置快照,排版算更改) */
   const prReformat = document.getElementById("prReformat");
   if(prReformat){
     prReformat.onclick = function(){
@@ -3573,9 +3697,9 @@ function openPaperReader(itemId){
       cur.analysis = analyzePaper(after);
       saveState();
       markDirty();
-      /* 重新渲染整个阅读器(大纲+全文+高亮) */
-      openPaperReader(cur.id);
-      toast("已重新排版:断行合并 · 空行清除 · 段落重排");
+      /* 局部刷新全文+高亮(不重开阅读器,保留快照与dirty状态) */
+      applyHighlightsToDom(cur);
+      toast("已重新排版:断行合并 · 空行清除 · 段落结构保留");
     };
   }
 
@@ -3615,8 +3739,9 @@ function openPaperReader(itemId){
     };
   }
 
-  /* 格式按钮: 加粗/划线/备注 */
+  /* 格式按钮: 加粗/划线/备注 (排除删除/检查按钮) */
   for(let i=0; i<fmtBtns.length; i++){
+    if(fmtBtns[i].id === "prDelMode" || fmtBtns[i].id === "prCheckRed") continue;
     fmtBtns[i].onclick = function(){
       const fmt = this.dataset.fmt;
       /* 再次点击取消 */
@@ -3684,6 +3809,15 @@ function openPaperReader(itemId){
       /* 点击其他地方关闭弹窗 */
       if(popup && !noteEl) popup.classList.remove("show");
 
+      /* 删除模式: 选中文字后确认删除 */
+      if(prState.delMode){
+        const selD = window.getSelection();
+        if(selD && !selD.isCollapsed && selD.rangeCount > 0){
+          deleteSelectedText(selD);
+        }
+        return;
+      }
+
       if(!prState.activeColor && !prState.activeFmt) return;
       const sel = window.getSelection();
       if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
@@ -3728,6 +3862,67 @@ function openPaperReader(itemId){
       applyHighlightsToDom(item2);
     };
   }
+
+  /* ===== 删除模式按钮 ===== */
+  const prDelModeBtn = document.getElementById("prDelMode");
+  if(prDelModeBtn){
+    prDelModeBtn.onclick = function(){
+      prState.delMode = !prState.delMode;
+      this.classList.toggle("on", prState.delMode);
+      if(prState.delMode){
+        deactivateAllColor();
+        deactivateAllFmt();
+        toast("删除模式:选中文字后确认删除 (或直接按 Delete 键)");
+      }else{
+        toast("已退出删除模式");
+      }
+    };
+  }
+
+  /* ===== 检查可删除内容(标红乱码/冗余) ===== */
+  const prCheckRedBtn = document.getElementById("prCheckRed");
+  if(prCheckRedBtn){
+    prCheckRedBtn.onclick = function(){
+      toggleRedundancyCheck();
+    };
+  }
+
+  /* ===== 键盘删除键: 阅读器内选中文字按 Delete/Backspace 删除 ===== */
+  document.onkeydown = function(e){
+    const modal = document.getElementById("paperReaderModal");
+    if(!modal || !modal.classList.contains("show")) return;
+    /* 仅 Delete/Backspace 且有文字选区 且焦点不在输入框 */
+    if(e.key !== "Delete" && e.key !== "Backspace") return;
+    const tag = (e.target && e.target.tagName) || "";
+    if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+    const sel = window.getSelection();
+    if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+    /* 选区必须在论文正文内 */
+    const prTextEl = document.getElementById("prText");
+    if(!prTextEl || !prTextEl.contains(sel.anchorNode)) return;
+    e.preventDefault();
+    deleteSelectedText(sel);
+  };
+
+  /* ===== AI 按钮组 ===== */
+  const prAiReadBtn = document.getElementById("prAiRead");
+  if(prAiReadBtn) prAiReadBtn.onclick = runAiRead;
+  const prAiAskBtn = document.getElementById("prAiAsk");
+  if(prAiAskBtn) prAiAskBtn.onclick = toggleChatPanel;
+  const prRelatedBtn = document.getElementById("prRelated");
+  if(prRelatedBtn) prRelatedBtn.onclick = fetchRelatedPapers;
+  const prAiCfgBtn = document.getElementById("prAiCfg");
+  if(prAiCfgBtn) prAiCfgBtn.onclick = openAiCfgModal;
+
+  /* AI 聊天发送 */
+  const prChatSend = document.getElementById("prChatSend");
+  const prChatInput = document.getElementById("prChatInput");
+  if(prChatSend && prChatInput){
+    prChatSend.onclick = function(){ sendChatMessage(); };
+    prChatInput.onkeydown = function(e){
+      if(e.key === "Enter"){ e.preventDefault(); sendChatMessage(); }
+    };
+  }
 }
 
 /* 标记为有未保存改动 */
@@ -3750,7 +3945,10 @@ function savePaperHighlights(){
   toast("标注已保存 · 下次进入仍可见");
 }
 
-/* 渲染论文全文 (按行渲染,章节标题加锚点) —— 每次调用都重建 DOM */
+/* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
+/* 标题行识别正则: 编号标题/章节词/Abstract 等,且行长较短 */
+const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
+
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
@@ -3761,13 +3959,15 @@ function renderPaperText(item){
   }
   let html = "";
   for(let i=0; i<lines.length; i++){
-    const isHeader = outlineMap[i];
-    const lineText = escapeHtml(lines[i] || "");
+    const raw = lines[i] || "";
+    const isHeader = outlineMap[i] || (PR_HEAD_LINE_RE.test(raw) && raw.trim().length > 1 && raw.trim().length < 50);
+    const lineText = escapeHtml(raw);
     html += '<span class="pr-section-anchor" id="pr-line-' + i + '"></span>';
     if(isHeader){
       html += '<h4 class="pr-section-title">' + lineText + '</h4>';
     }else{
-      html += '<p style="margin:0 0 1em;">' + (lineText || "&nbsp;") + '</p>';
+      /* 段落: 首行缩进2em + 段间距1.15em,结构清晰不拥挤 */
+      html += '<p class="pr-para-line">' + (lineText || "&nbsp;") + '</p>';
     }
   }
   prText.innerHTML = html;
@@ -3859,15 +4059,26 @@ function undoLastHighlight(){
   toast("已撤销一处标注");
 }
 
-/* 关闭论文查看器 —— 有未保存改动时提醒 */
+/* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 function closePaperReader(){
   if(prState.dirty){
-    const choice = confirm("标注有未保存的改动,是否保存后再退出?\n(取消则放弃未保存的标注标记)");
+    const choice = confirm("论文有未保存的更改(标注/排版/删除等)。\n\n【确定】保存更改后退出\n【取消】放弃更改,恢复打开时的原文");
     if(choice){
       savePaperHighlights();
     } else {
-      /* 仍保留已自动存盘的数据,仅清除dirty标记 */
+      /* 真实恢复快照: 回滚到打开阅读器时的原始数据 */
+      const item = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(item && prState.snapshot){
+        item.fullText = prState.snapshot.fullText;
+        item.outline = prState.snapshot.outline;
+        item.analysis = prState.snapshot.analysis;
+        item.highlights = prState.snapshot.highlights;
+        item.description = prState.snapshot.description;
+        saveState();
+        render();
+      }
       prState.dirty = false;
+      updateSaveBtnState();
     }
   }
   const modal = document.getElementById("paperReaderModal");
@@ -3876,8 +4087,488 @@ function closePaperReader(){
   prState.itemId = null;
   prState.activeColor = null;
   prState.activeFmt = null;
+  prState.delMode = false;
+  prState.checkRed = false;
+  prState.snapshot = null;
+  prState.chat = [];
   const popup = document.getElementById("prNotePopup");
   if(popup) popup.classList.remove("show");
+  const chat = document.getElementById("prChat");
+  if(chat) chat.classList.remove("show");
+}
+
+/* ============================================================
+   删除选中文字 —— 从 fullText 中定位并删除(需确认)
+   ============================================================ */
+function deleteSelectedText(sel){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item || !item.fullText) return;
+  const txt = sel.toString();
+  if(!txt.trim()){ toast("选中的是空白"); return; }
+  /* 渲染时空行显示为 &nbsp;(\u00A0),选区文本需映射回换行 */
+  const mapped = txt.replace(/\u00A0/g, "\n");
+  let idx = item.fullText.indexOf(mapped);
+  let target = mapped;
+  if(idx < 0){ idx = item.fullText.indexOf(txt); target = txt; }
+  if(idx < 0){
+    /* 兜底: 压缩空白逐段匹配 */
+    toast("无法精确定位选中文字,请重新选择");
+    return;
+  }
+  const n = txt.trim().length;
+  if(!confirm("确定删除选中的 " + n + " 字?\n删除后可退出时选「取消」恢复原文。")) return;
+  item.fullText = item.fullText.slice(0, idx) + item.fullText.slice(idx + target.length);
+  item.fullText = item.fullText.replace(/\n{3,}/g, "\n\n");
+  item.outline = generateOutline(item.fullText);
+  item.analysis = analyzePaper(item.fullText);
+  item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+  saveState();
+  markDirty();
+  sel.removeAllRanges();
+  applyHighlightsToDom(item);
+  toast("已删除 " + n + " 字");
+}
+
+/* ============================================================
+   检查可删除内容 —— 真实检测乱码/页眉页脚残留/重复行/字体残留
+   标红显示,再次点击取消标红;支持一键删除全部标红内容
+   ============================================================ */
+let redCheckState = { active:false, flags:[] };
+
+function detectRedundantSegments(text){
+  const flags = [];
+  const seen = {};
+  function add(t, reason){
+    const key = t.trim();
+    if(!key || seen[key]) return;
+    seen[key] = true;
+    flags.push({ text: t, reason: reason });
+  }
+  const lines = text.split(/\r?\n/);
+  for(let i=0; i<lines.length; i++){
+    const line = lines[i];
+    const t = line.trim();
+    if(!t) continue;
+    /* 1. 不可见/异常字符 (零宽字符、控制符、替换符) */
+    const bad = (line.match(/[\uFFFD\u200B-\u200D\uFEFF\u0000-\u0008\u000B\u000C\u000E-\u001F]/g) || []).length;
+    if(bad > 0){ add(line, "异常字符×" + bad); continue; }
+    /* 2. 疑似乱码: 特殊符号占比过高 */
+    const clean = line.replace(/[\u4e00-\u9fa5a-zA-Z0-9\s，。、；：！？“”（）《》—\-…·%.,;:!?()'"\/\[\]]/g, "");
+    if(line.length >= 6 && clean.length / line.length > 0.45){ add(line, "疑似乱码"); continue; }
+    /* 3. 页码 */
+    if(/^\d{1,4}(-\d{1,4})?$/.test(t)){ add(line, "页码"); continue; }
+    /* 4. DOI 残留 */
+    if(/^doi\s*:/i.test(t)){ add(line, "DOI残留"); continue; }
+    /* 5. 全大写期刊名残留 */
+    if(/^[A-Z][A-Z\s.&]{3,50}$/.test(t) && t.length < 50){ add(line, "期刊名残留"); continue; }
+    /* 6. 字体名残留 */
+    if(/(SimSun|SimHei|Times New Roman|宋体|黑体|楷体|Cambria|Calibri|Wingdings)/i.test(t) && t.length < 60){ add(line, "字体名残留"); continue; }
+    /* 7. 纯符号行 */
+    if(t.length <= 12 && /^[\s·。.,、;；:：!！?？\-—_=+~`@#$%^&*()（）[\]{}<>《》"']+/.test(t) && !/[\u4e00-\u9fa5a-zA-Z0-9]/.test(t)){ add(line, "纯符号行"); continue; }
+  }
+  /* 8. 重复行(出现≥3次) */
+  const lineCount = {};
+  for(let i=0; i<lines.length; i++){
+    const t = lines[i].trim();
+    if(t.length > 4 && !PR_HEAD_LINE_RE.test(t)) lineCount[t] = (lineCount[t]||0) + 1;
+  }
+  for(const k in lineCount){
+    if(lineCount[k] >= 3) add(k, "重复" + lineCount[k] + "次");
+  }
+  return flags;
+}
+
+function toggleRedundancyCheck(){
+  const btn = document.getElementById("prCheckRed");
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item || !item.fullText){ toast("当前无全文"); return; }
+
+  /* 取消标红 */
+  if(redCheckState.active){
+    redCheckState.active = false;
+    redCheckState.flags = [];
+    if(btn) btn.classList.remove("on");
+    applyHighlightsToDom(item);
+    const bar = document.querySelector(".red-check-bar");
+    if(bar) bar.remove();
+    toast("已取消标红");
+    return;
+  }
+
+  /* 执行检查 */
+  const flags = detectRedundantSegments(item.fullText);
+  if(flags.length === 0){
+    toast("检查完毕:未发现乱码/冗余内容");
+    return;
+  }
+  redCheckState.active = true;
+  redCheckState.flags = flags;
+  if(btn) btn.classList.add("on");
+
+  /* 先渲染全文,再标红 */
+  applyHighlightsToDom(item);
+  const prText = document.getElementById("prText");
+  if(prText){
+    for(let f=0; f<flags.length; f++){
+      const walker = document.createTreeWalker(prText, NodeFilter.SHOW_TEXT, {
+        acceptNode: function(node){
+          if(node.parentElement && ["MARK","STRONG","U","SPAN"].indexOf(node.parentElement.tagName) >= 0) return NodeFilter.FILTER_REJECT;
+          return node.nodeValue.indexOf(flags[f].text) >= 0 ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+        }
+      }, false);
+      let node;
+      while((node = walker.nextNode())){
+        const idx = node.nodeValue.indexOf(flags[f].text);
+        if(idx >= 0){
+          try{
+            const range = document.createRange();
+            range.setStart(node, idx);
+            range.setEnd(node, idx + flags[f].text.length);
+            const span = document.createElement("span");
+            span.className = "red-flag";
+            span.title = flags[f].reason;
+            range.surroundContents(span);
+          }catch(e){}
+          break;
+        }
+      }
+    }
+  }
+
+  /* 顶部检查操作条 */
+  const wrap = document.getElementById("prTextWrap");
+  if(wrap){
+    const bar = document.createElement("div");
+    bar.className = "red-check-bar";
+    bar.innerHTML = '<span>⚠ 检出 ' + flags.length + ' 处疑似冗余(乱码/页码/重复行等),悬停查看原因</span><button id="redDelAll">删除全部标红</button>';
+    wrap.insertBefore(bar, wrap.firstChild);
+    const delAll = bar.querySelector("#redDelAll");
+    if(delAll){
+      delAll.onclick = function(){
+        if(!confirm("确定删除全部 " + flags.length + " 处标红内容?")) return;
+        const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+        if(!cur) return;
+        let ft = cur.fullText;
+        for(let f=0; f<flags.length; f++){
+          ft = ft.split(flags[f].text).join("");
+        }
+        ft = ft.replace(/\n{3,}/g, "\n\n").trim();
+        cur.fullText = ft;
+        cur.outline = generateOutline(ft);
+        cur.analysis = analyzePaper(ft);
+        saveState();
+        markDirty();
+        /* 关闭标红状态 */
+        redCheckState.active = false;
+        redCheckState.flags = [];
+        const b = document.getElementById("prCheckRed");
+        if(b) b.classList.remove("on");
+        const barEl = document.querySelector(".red-check-bar");
+        if(barEl) barEl.remove();
+        applyHighlightsToDom(cur);
+        toast("已删除 " + flags.length + " 处冗余内容");
+      };
+    }
+  }
+  toast("检出 " + flags.length + " 处疑似冗余,已标红");
+}
+
+/* ============================================================
+   AI 接口 —— OpenAI 兼容协议 (DeepSeek/智谱GLM/Kimi/通义)
+   ============================================================ */
+const AI_CFG_KEY = "shuyingshidan_ai_cfg";
+const AI_PRESETS = {
+  deepseek: { endpoint: "https://api.deepseek.com", model: "deepseek-chat" },
+  zhipu:    { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-plus" },
+  kimi:     { endpoint: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k" },
+  qwen:     { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" }
+};
+function getAiConfig(){
+  try{
+    return JSON.parse(localStorage.getItem(AI_CFG_KEY) || "null");
+  }catch(e){ return null; }
+}
+function openAiCfgModal(){
+  const modal = document.getElementById("aiCfgModal");
+  if(!modal) return;
+  const cfg = getAiConfig() || {};
+  const ep = document.getElementById("aiEndpoint");
+  const key = document.getElementById("aiKey");
+  const model = document.getElementById("aiModel");
+  const preset = document.getElementById("aiPreset");
+  if(ep) ep.value = cfg.endpoint || "";
+  if(key) key.value = cfg.key || "";
+  if(model) model.value = cfg.model || "";
+  if(preset){
+    /* 匹配预设 */
+    let matched = "custom";
+    for(const p in AI_PRESETS){
+      if(cfg.endpoint === AI_PRESETS[p].endpoint && cfg.model === AI_PRESETS[p].model){ matched = p; break; }
+    }
+    preset.value = matched;
+  }
+  modal.classList.add("show");
+  /* 预设切换 */
+  preset.onchange = function(){
+    const p = AI_PRESETS[this.value];
+    if(p){
+      if(ep) ep.value = p.endpoint;
+      if(model) model.value = p.model;
+    }
+  };
+  const saveBtn = document.getElementById("aiCfgSave");
+  if(saveBtn){
+    saveBtn.onclick = function(){
+      const cfg2 = {
+        endpoint: (ep ? ep.value : "").trim().replace(/\/+$/, ""),
+        key: (key ? key.value : "").trim(),
+        model: (model ? model.value : "").trim() || "deepseek-chat"
+      };
+      if(cfg2.endpoint && cfg2.key){
+        localStorage.setItem(AI_CFG_KEY, JSON.stringify(cfg2));
+        toast("AI 接口已配置 ✓");
+        modal.classList.remove("show");
+      }else{
+        toast("请填写完整的端点与 API Key");
+      }
+    };
+  }
+  const closeBtn = document.getElementById("aiCfgClose");
+  if(closeBtn){
+    closeBtn.onclick = function(){ modal.classList.remove("show"); };
+  }
+}
+async function callAI(messages, maxTokens){
+  const cfg = getAiConfig();
+  if(!cfg || !cfg.endpoint || !cfg.key) return { error: "nokey" };
+  try{
+    const resp = await fetch(cfg.endpoint + "/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },
+      body: JSON.stringify({
+        model: cfg.model || "deepseek-chat",
+        messages: messages,
+        temperature: 0.6,
+        max_tokens: maxTokens || 2000
+      })
+    });
+    if(!resp.ok){
+      const errText = await resp.text().catch(function(){ return ""; });
+      return { error: "HTTP " + resp.status + (errText ? " · " + errText.substring(0, 120) : "") };
+    }
+    const data = await resp.json();
+    if(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content){
+      return { content: data.choices[0].message.content };
+    }
+    return { error: "响应解析失败" };
+  }catch(e){
+    return { error: "网络错误: " + (e.message || "未知") };
+  }
+}
+
+/* AI 解读: 联网AI深度解读,无配置时本地深度分析兜底 */
+async function runAiRead(){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item || !item.fullText){ toast("当前无全文"); return; }
+  const resultEl = document.getElementById("prAiResult");
+  if(!resultEl) return;
+  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在深度解读论文,请稍候…</div>';
+
+  const cfg = getAiConfig();
+  if(cfg && cfg.key){
+    const paperCtx = (item.fullText || "").substring(0, 12000);
+    const messages = [
+      { role: "system", content: "你是资深论文审读专家。请基于用户提供的论文全文,输出结构化中文解读,包含以下小节:【研究领域】【核心问题】【研究方法】【主要发现】【创新点】【局限性】【一句话总结】。每节2-4句,专业准确,不编造论文中没有的内容。" },
+      { role: "user", content: "论文标题:" + item.name + "\n\n论文全文:\n" + paperCtx }
+    ];
+    const r = await callAI(messages, 2200);
+    if(r.content){
+      let ah = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> AI 深度解读</div>';
+      ah += '<div class="pa-text">' + escapeHtml(r.content) + '</div></div>';
+      ah += '<div class="pa-metrics" style="margin-top:10px;"><span>AI 模型: ' + escapeHtml(cfg.model) + '</span></div>';
+      resultEl.innerHTML = ah;
+      return;
+    }
+    resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">AI 调用失败(' + escapeHtml(r.error || "") + '),已切换本地解读</div>';
+  }
+
+  /* 本地深度分析兜底 */
+  const a = item.analysis || analyzePaper(item.fullText);
+  let ah = "";
+  if(!cfg || !cfg.key){
+    ah += '<div class="pa-mute" style="margin-bottom:8px;">当前为本地分析 · 配置 AI 后可获得更强的深度解读(工具栏 ⚙ AI)</div>';
+  }
+  if(a.field) ah += '<div class="pa-field"><span class="pa-label">研究领域</span><span class="pa-val">' + escapeHtml(a.field) + '</span></div>';
+  ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">§</span> 摘要</div>';
+  ah += a.abstract ? '<div class="pa-text">' + escapeHtml(a.abstract) + '</div>' : '<div class="pa-mute">未检测到摘要</div>';
+  ah += '</div>';
+  if(a.keywords && a.keywords.length > 0){
+    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❦</span> 关键词</div><div class="pa-kws">';
+    for(let i=0; i<a.keywords.length; i++) ah += '<span class="pa-kw">' + escapeHtml(a.keywords[i]) + '</span>';
+    ah += '</div></div>';
+  }
+  if(a.methods){
+    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⚒</span> 研究方法</div><div class="pa-text">' + escapeHtml(a.methods) + '</div></div>';
+  }
+  if(a.contributions){
+    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> 创新贡献</div><div class="pa-text">' + escapeHtml(a.contributions) + '</div></div>';
+  }
+  if(a.conclusion){
+    ah += '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❧</span> 主要结论</div><div class="pa-text">' + escapeHtml(a.conclusion) + '</div></div>';
+  }
+  if(a.metrics && a.metrics.chars){
+    ah += '<div class="pa-metrics"><span><b>' + a.metrics.chars + '</b> 字</span><span><b>' + (a.metrics.paragraphs||0) + '</b> 段</span><span><b>' + (a.metrics.sections||0) + '</b> 节</span></div>';
+  }
+  resultEl.innerHTML = ah;
+}
+
+/* AI 对话面板 */
+function toggleChatPanel(){
+  const chat = document.getElementById("prChat");
+  if(!chat) return;
+  chat.classList.toggle("show");
+  if(chat.classList.contains("show")){
+    prState.chat = prState.chat || [];
+    if(prState.chat.length === 0){
+      appendChatMsg("ai", "你好,我是论文研讨助手。你可以问我这篇论文的任何问题,例如:\n· 这篇论文的核心贡献是什么?\n· 研究方法有什么局限?\n· 结论如何延伸应用?");
+    }
+    const input = document.getElementById("prChatInput");
+    if(input) input.focus();
+  }
+}
+function appendChatMsg(role, text){
+  const log = document.getElementById("prChatLog");
+  if(!log) return;
+  const div = document.createElement("div");
+  div.className = "chat-msg " + (role === "user" ? "user" : (role === "err" ? "err" : "ai"));
+  div.textContent = text;
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+async function sendChatMessage(){
+  const input = document.getElementById("prChatInput");
+  const q = input ? input.value.trim() : "";
+  if(!q) return;
+  input.value = "";
+  prState.chat = prState.chat || [];
+  prState.chat.push({ role: "user", content: q });
+  appendChatMsg("user", q);
+
+  const cfg = getAiConfig();
+  if(!cfg || !cfg.key){
+    appendChatMsg("err", "尚未配置 AI 接口。请点击工具栏「⚙ AI」配置 API Key(支持 DeepSeek / 智谱GLM / Kimi / 通义千问)后再来提问。");
+    return;
+  }
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item) return;
+  appendChatMsg("ai", "…思考中");
+  const log = document.getElementById("prChatLog");
+  const thinking = log ? log.lastChild : null;
+
+  const sys = "你是论文研讨助手,擅长深度解析学术论文。以下是论文全文(可能截断)。请基于论文内容回答用户问题:准确、专业、有条理;若问题超出论文范围,结合领域知识回答并注明「论文外补充」。回答控制在500字内。\n\n论文标题:" + item.name + "\n\n论文全文:\n" + (item.fullText || "").substring(0, 12000);
+  const messages = [{ role: "system", content: sys }].concat(prState.chat.slice(-10));
+  const r = await callAI(messages, 1600);
+  if(thinking && thinking.textContent === "…思考中") thinking.remove();
+  if(r.content){
+    prState.chat.push({ role: "assistant", content: r.content });
+    appendChatMsg("ai", r.content);
+  }else{
+    appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请检查 ⚙ AI 配置(端点/密钥/模型)或稍后重试。");
+  }
+}
+
+/* ============================================================
+   联想论文 —— 百度学术检索相似论文五篇,按引用数排名
+   点击跳转知网检索该论文
+   ============================================================ */
+async function fetchRelatedPapers(){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item) return;
+  const resultEl = document.getElementById("prAiResult");
+  if(!resultEl) return;
+  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ 正在检索相似文献…</div>';
+
+  /* 构造检索词: 标题 + 关键词 */
+  const a = item.analysis || {};
+  let kw = item.name || "";
+  if(a.keywords && a.keywords.length > 0){
+    kw += " " + a.keywords.slice(0, 3).join(" ");
+  }
+  kw = kw.trim() || "学术论文";
+
+  /* 渲染结果 */
+  function renderList(papers, note){
+    let h = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⇄</span> 相似文献 · 知网联想</div>';
+    if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
+    h += '<div class="rel-list" style="margin-top:8px;">';
+    for(let i=0; i<papers.length; i++){
+      const p = papers[i];
+      h += '<div class="rel-item" data-title="' + escapeHtml(p.title) + '">';
+      h += '<div class="rel-rank">#' + (i+1) + (p.cites ? ' · 被引 ' + escapeHtml(p.cites) : '') + '</div>';
+      h += '<div class="rel-title">' + escapeHtml(p.title) + '</div>';
+      h += '<div class="rel-meta">点击在知网检索 →</div>';
+      h += '</div>';
+    }
+    h += '</div></div>';
+    resultEl.innerHTML = h;
+    /* 点击跳知网 */
+    const items = resultEl.querySelectorAll(".rel-item");
+    for(let i=0; i<items.length; i++){
+      items[i].onclick = function(){
+        const t = this.dataset.title;
+        window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(t) + "&korder=TI", "_blank");
+        toast("正在知网检索「" + t.substring(0, 20) + "…」");
+      };
+    }
+  }
+
+  /* 本地兜底: 基于关键词组合生成检索建议 */
+  function localFallback(){
+    const kws = (a.keywords || []).slice(0, 4);
+    const suggestions = [];
+    if(item.name) suggestions.push({ title: item.name + " 相关研究综述", cites: "" });
+    for(let i=0; i<kws.length && suggestions.length < 5; i++){
+      suggestions.push({ title: kws[i] + " 研究进展", cites: "" });
+      if(suggestions.length < 5 && i+1 < kws.length) suggestions.push({ title: kws[i] + " " + kws[i+1] + " 方法研究", cites: "" });
+    }
+    while(suggestions.length < 5) suggestions.push({ title: kw.split(/\s+/)[0] + " 前沿研究", cites: "" });
+    renderList(suggestions.slice(0, 5), "网络检索不可达,以下为基于论文关键词的知网检索建议");
+  }
+
+  /* 抓取百度学术 */
+  try{
+    const htmlText = await fetchViaProxy("https://xueshu.baidu.com/s?wd=" + encodeURIComponent(kw), 10000);
+    if(!htmlText){ localFallback(); return; }
+    const doc = new DOMParser().parseFromString(htmlText, "text/html");
+    doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+    /* 解析结果: 标题 + 引用数 */
+    const results = [];
+    const blocks = doc.querySelectorAll(".result, .sc_default_result, #page_dl .result");
+    for(let i=0; i<blocks.length && results.length < 12; i++){
+      const titleEl = blocks[i].querySelector(".sc_default_title, h3 a, .t a, a[data-click]");
+      if(!titleEl) continue;
+      const title = cleanText(titleEl);
+      if(!title || title.length < 6 || title.length > 120) continue;
+      /* 排除自身论文 */
+      if(item.name && title.indexOf(item.name.substring(0, 10)) >= 0 && title.length - item.name.length < 8) continue;
+      /* 引用数 */
+      let cites = "";
+      const blockText = cleanText(blocks[i]);
+      const cm = blockText.match(/被引[：:]?\s*([\d,，]+)/);
+      if(cm) cites = cm[1];
+      results.push({ title: title, cites: cites });
+    }
+    if(results.length === 0){ localFallback(); return; }
+    /* 按引用数降序 */
+    results.sort(function(x, y){
+      const cx = parseInt((x.cites || "0").replace(/[^\d]/g, ""), 10) || 0;
+      const cy = parseInt((y.cites || "0").replace(/[^\d]/g, ""), 10) || 0;
+      return cy - cx;
+    });
+    renderList(results.slice(0, 5), "来源: 百度学术 · 按被引量排序");
+  }catch(e){
+    localFallback();
+  }
 }
 
 /* ============================================================
