@@ -898,6 +898,48 @@
     color:var(--accent); font-weight:600; font-size:11px;
     font-family:"Cormorant Garamond",serif;
   }
+
+  /* ===== 论文来源徽章(原文链接/知网检索) ===== */
+  .pp-src-row{ display:flex; justify-content:center; flex-wrap:wrap; gap:8px; margin:-10px 0 22px; }
+  .pp-src-badge{
+    font-size:11px; padding:3px 13px; border-radius:999px;
+    border:1px solid var(--line); color:var(--ink-mute); text-decoration:none;
+    background:var(--paper); transition:all .15s; line-height:1.7; white-space:nowrap;
+  }
+  .pp-src-badge:hover{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
+  .pp-src-badge.pp-src-doi{
+    border-color:rgba(47,93,98,.35); color:var(--teal); background:rgba(47,93,98,.05);
+  }
+  .pp-src-badge.pp-src-doi:hover{ border-color:var(--teal); color:var(--teal); }
+
+  /* ===== AI排版进度条(全局浮动) ===== */
+  .pp-progress{
+    position:fixed; left:50%; bottom:36px;
+    transform:translateX(-50%) translateY(24px);
+    width:min(460px, calc(100vw - 48px));
+    background:var(--paper); border:1px solid var(--line);
+    border-radius:12px; box-shadow:0 14px 44px rgba(26,22,16,.2);
+    padding:13px 18px 12px; z-index:12000;
+    opacity:0; pointer-events:none;
+    transition:opacity .25s, transform .25s;
+  }
+  .pp-progress.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+  .pp-prog-label{ display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; gap:12px; }
+  .pp-prog-label .pp-pl{
+    font-size:12.5px; font-weight:600; color:var(--ink);
+    font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .pp-prog-label .pp-pp{
+    font-size:11px; color:var(--accent); font-weight:600;
+    font-variant-numeric:tabular-nums; flex-shrink:0;
+  }
+  .pp-prog-track{ height:5px; background:var(--line-soft); border-radius:4px; overflow:hidden; }
+  .pp-prog-fill{
+    height:100%; width:0%;
+    background:linear-gradient(90deg, var(--accent), #d9964f);
+    border-radius:4px; transition:width .35s ease;
+  }
   mark.hl{
     border-radius:3px; padding:1px 2px; color:inherit;
     cursor:pointer; transition:filter .15s;
@@ -3421,7 +3463,7 @@ function compactReformatText(rawText){
   if(!rawText) return "";
   let text = rawText.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 
-  /* 1. 逐行过滤噪声(页码/DOI/全大写期刊名) */
+  /* 1. 逐行过滤噪声(页码/DOI/期刊名/知网元信息/作者单位) */
   const lines = text.split("\n").map(function(line){
     const trimmed = line.trim();
     if(!trimmed) return "";
@@ -3429,6 +3471,19 @@ function compactReformatText(rawText){
     if(/^第\d+页$/.test(trimmed)) return "";                       /* 第X页 */
     if(/^doi:\s*10\./i.test(trimmed)) return "";                   /* DOI */
     if(/^[A-Z][A-Z\s.&]{3,50}$/.test(trimmed) && trimmed.length < 50) return ""; /* 期刊名 */
+    /* 知网/学术元信息行(收稿/基金/简介/分类号等) */
+    if(/^(收稿日期|修回日期|网络首发|首发日期|基金项目|基金资助|作者简介|作者贡献|通信作者|通讯作者|中图分类号|文献标识码|文章编号|引用本文|转载|版权|开放科学|数据可用性)/i.test(trimmed)) return "";
+    /* 期刊卷期行 */
+    if(/^第\s*\d+\s*卷\s*第\s*\d+\s*期/.test(trimmed)) return "";
+    if(/^\d{4}\s*年\s*第\s*\d+\s*卷/.test(trimmed)) return "";
+    /* 作者单位行: (xx大学 xx学院,城市 邮编) */
+    if(/^[（(][^()（）]{4,70}(大学|学院|研究所|研究院|医院|实验室|公司|学报)[^()（）]*[)）]\s*$/.test(trimmed)) return "";
+    /* 中文作者行: 逗号/顿号分隔的2-6个中文短名(如"王五,赵六"、"张三,李四,王五") */
+    if(/^[\u4e00-\u9fa5]{2,4}\d?\s*[,，、;；]\s*[\u4e00-\u9fa5]{2,4}/.test(trimmed) && /^[\u4e00-\u9fa5\d*,，、;；。\s]+$/.test(trimmed) && trimmed.length <= 40) return "";
+    /* 中文作者行(空格分隔): "张三 李四" 两个中文短名 */
+    if(/^[\u4e00-\u9fa5]{2,4}\s{1,3}[\u4e00-\u9fa5]{2,4}$/.test(trimmed) && trimmed.length <= 12) return "";
+    /* 纯邮箱行 */
+    if(/^[\w.+-]+@[\w-]+(\.[\w-]+)+$/.test(trimmed)) return "";
     return trimmed;
   });
 
@@ -4292,6 +4347,14 @@ function renderStructuredPaper(item, prText){
   const title = st.title || item.name || "";
   if(title){
     h += '<header class="pp-head"><h2 class="pp-title">' + escapeHtml(title) + '</h2><div class="pp-rule"></div></header>';
+    /* 来源徽章: 原文链接(联网查询) + 知网检索直达 */
+    const cnki = st.cnkiUrl || ("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(title) + "&korder=TI");
+    h += '<div class="pp-src-row">';
+    if(st.sourceUrl){
+      h += '<a class="pp-src-badge pp-src-doi" href="' + escapeHtml(st.sourceUrl) + '" target="_blank" rel="noopener">🔗 原文链接</a>';
+    }
+    h += '<a class="pp-src-badge" href="' + escapeHtml(cnki) + '" target="_blank" rel="noopener">知网检索原文</a>';
+    h += '</div>';
   }
 
   /* --- 摘要卡片(摘要+关键词) --- */
@@ -5062,50 +5125,151 @@ function localMarkBlock(text){
   return out.join("\n");
 }
 
-/* ---- 7. AI 结构化排版主函数: 分块通读 → 标记合并 → 结构归纳 ---- */
-async function aiStructuredReformat(fullText, onProgress){
+/* ---- 7a. AI排版进度条(全局浮动,所有排版入口共用) ---- */
+let ppProgHideTimer = null;
+function ppProgressShow(label){
+  const el = document.getElementById("ppProgress");
+  if(!el) return;
+  if(ppProgHideTimer){ clearTimeout(ppProgHideTimer); ppProgHideTimer = null; }
+  const lb = document.getElementById("ppProgLabel");
+  if(lb) lb.textContent = label || "AI 排版中…";
+  const fill = document.getElementById("ppProgFill");
+  const pc = document.getElementById("ppProgPct");
+  if(fill) fill.style.width = "0%";
+  if(pc) pc.textContent = "0%";
+  el.classList.add("show");
+}
+function ppProgressUpdate(pct, label){
+  const el = document.getElementById("ppProgress");
+  if(!el) return;
+  const p = Math.max(0, Math.min(100, Math.round(pct)));
+  const fill = document.getElementById("ppProgFill");
+  const pc = document.getElementById("ppProgPct");
+  const lb = document.getElementById("ppProgLabel");
+  if(fill) fill.style.width = p + "%";
+  if(pc) pc.textContent = p + "%";
+  if(label && lb) lb.textContent = label;
+}
+function ppProgressHide(delay){
+  const el = document.getElementById("ppProgress");
+  if(!el) return;
+  if(ppProgHideTimer){ clearTimeout(ppProgHideTimer); ppProgHideTimer = null; }
+  ppProgHideTimer = setTimeout(function(){ el.classList.remove("show"); }, delay == null ? 800 : delay);
+}
+
+/* ---- 7b. 联网查询论文原文链接: CrossRef / Semantic Scholar 公开学术API并行 ---- */
+function ppFetchTimeout(url, ms){
+  return new Promise(function(resolve, reject){
+    const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+    const timer = setTimeout(function(){ if(ctl) ctl.abort(); reject(new Error("timeout")); }, ms);
+    fetch(url, ctl ? { signal: ctl.signal } : {}).then(function(r){ return r.text(); }).then(function(t){
+      clearTimeout(timer); resolve(t);
+    }).catch(function(e){ clearTimeout(timer); reject(e); });
+  });
+}
+function ppNormTitle(s){
+  return (s || "").toLowerCase().replace(/[\s:：,，.。;；!！?？'’"“”()（）\-—_《》]/g, "");
+}
+function ppTitleMatch(a, b){
+  const na = ppNormTitle(a), nb = ppNormTitle(b);
+  if(!na || !nb) return false;
+  if(na === nb) return true;
+  if(na.length >= 8 && nb.length >= 8 && (na.indexOf(nb) >= 0 || nb.indexOf(na) >= 0)) return true;
+  /* 字符重合率(宽松中文标题匹配) */
+  let hit = 0;
+  for(let i=0; i<na.length; i++){ if(nb.indexOf(na.charAt(i)) >= 0) hit++; }
+  return na.length > 0 && hit / na.length >= 0.8 && Math.abs(na.length - nb.length) <= Math.max(6, na.length * 0.35);
+}
+async function fetchPaperSourceUrl(title){
+  const q = (title || "").trim();
+  if(!q || q.length < 4) return null;
+  /* 知网检索直达(兜底,始终可用) */
+  const cnkiSearch = "https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(q) + "&korder=TI";
+  /* CrossRef + Semantic Scholar 并行查询(公开免费API,无需密钥) */
+  const jobs = [];
+  jobs.push(ppFetchTimeout("https://api.crossref.org/works?query.bibliographic=" + encodeURIComponent(q) + "&rows=4&select=title,DOI", 5000).then(function(txt){
+    const j = JSON.parse(txt);
+    const items = (j.message && j.message.items) || [];
+    for(let i=0; i<items.length; i++){
+      const t = items[i].title && items[i].title[0];
+      if(t && ppTitleMatch(t, q) && items[i].DOI) return "https://doi.org/" + items[i].DOI;
+    }
+    return null;
+  }).catch(function(){ return null; }));
+  jobs.push(ppFetchTimeout("https://api.semanticscholar.org/graph/v1/paper/search?query=" + encodeURIComponent(q) + "&limit=4&fields=title,url", 5000).then(function(txt){
+    const j = JSON.parse(txt);
+    const items = (j && j.data) || [];
+    for(let i=0; i<items.length; i++){
+      if(items[i].title && ppTitleMatch(items[i].title, q) && items[i].url) return items[i].url;
+    }
+    return null;
+  }).catch(function(){ return null; }));
+  const results = await Promise.all(jobs);
+  return { url: results[0] || results[1] || null, cnki: cnkiSearch };
+}
+
+/* ---- 7c. AI 结构化排版主函数: 分块排版 → 标记合并 → 结构归纳 → 联网核对原文 ---- */
+async function aiStructuredReformat(fullText, onProgress, onStage){
   const clean = compactReformatText(fullText || "");
   const cfg = getAiConfig();
   if(!clean) return { st: { title:"", abstract:"", keywords:[], sections:[], references:[] }, usedAI:false };
-  if(!cfg || !cfg.key){
-    return { st: parsePaperStructure(clean), usedAI:false, noKey:true };
-  }
+  let st;
+  let usedAI = false;
+  let noKey = false;
 
-  const chunks = splitIntoChunks(clean, 4200);
-  let marked = "";
-  let aiFailedCount = 0;
-  for(let i=0; i<chunks.length; i++){
-    if(onProgress) onProgress(i + 1, chunks.length);
-    const sys = "你是专业的论文结构化排版引擎。请把用户提供的论文片段整理为结构化标记文本,无论论文是什么类型(中文学术期刊/知网格式/英文论文/学位论文/会议论文),都归纳为标准学术结构。\n\n输出规则(严格遵守):\n1. 每行输出一个元素,行首使用以下标记:\n#T 论文标题(仅当片段包含论文大标题时,整个通读只输出一次)\n#A 摘要内容(仅当片段包含摘要部分时)\n#K 关键词,多个用分号分隔(仅当片段包含关键词时)\n#H1 一级章节标题(如 摘要/1 引言/2 方法/结论/参考文献/致谢)\n#H2 二级小节标题(如 2.1 研究设计)\n#H3 三级小节标题\n#R 参考文献条目(一条一行,保留原有编号信息之外的完整内容)\n#P 正文段落\n2. 段落合并:被换行拆开的同一自然段必须合并为一行,以#P开头输出\n3. 断词合并:行末英文连字符与下一行单词合并;中文行直接拼接\n4. 噪声清除:删除页码、页眉页脚、乱码行、收稿日期/基金项目/作者简介等与正文无关的内容\n5. 不改写、不翻译、不增删实质内容,只做结构归纳与排版\n6. 章节标题判断标准:编号开头(1/2.1/第一章)或标准学术章节词(摘要/引言/相关工作/方法/实验/结果/讨论/结论/参考文献/致谢)\n7. 直接输出标记文本,不要任何解释,不要用代码块包裹";
-    try{
-      const r = await callAI(
-        [{ role: "system", content: sys }, { role: "user", content: chunks[i] }],
-        4500, 0.15
-      );
-      if(r.content){
-        let c = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
-        marked += "\n" + c;
-      }else{
+  if(!cfg || !cfg.key){
+    st = parsePaperStructure(clean);
+    noKey = true;
+  }else{
+    const chunks = splitIntoChunks(clean, 4200);
+    let marked = "";
+    let aiFailedCount = 0;
+    for(let i=0; i<chunks.length; i++){
+      if(onProgress) onProgress(i + 1, chunks.length);
+      const sys = "你是专业的论文排版引擎。请把用户提供的论文全文片段重新排版为结构化标记文本。无论论文是什么类型(中文学术期刊/知网格式/英文论文/学位论文/会议论文),都归纳为统一的标准学术结构:标题→摘要→关键词→正文章节→参考文献。\n\n输出规则(严格遵守):\n1. 每行输出一个元素,行首使用以下标记:\n#T 论文标题(仅当片段包含论文大标题时,整个排版只输出一次)\n#A 摘要内容(仅当片段包含摘要部分时)\n#K 关键词,多个用分号分隔(仅当片段包含关键词时)\n#H1 一级章节标题(如 1 引言/2 方法/结论/参考文献/致谢)\n#H2 二级小节标题(如 2.1 研究设计)\n#H3 三级小节标题\n#R 参考文献条目(一条一行,保留编号之外的完整内容)\n#P 正文段落\n2. 无关内容清除(极重要,必须严格执行):删除一切与论文实质内容无关的文字——\n   · 作者姓名与作者单位(如\"张三 李四\"、\"(某某大学 计算机学院,北京 100000)\")\n   · 期刊名/卷号/期号/页码/出版信息\n   · 收稿日期/修回日期/网络首发时间\n   · 基金项目及编号、作者简介、通讯作者及邮箱\n   · 中图分类号/文献标识码/文章编号/DOI\n   · 页眉页脚、页码、目录、版权声明、网站水印、广告、乱码\n   判断标准:读者阅读论文实质内容时不需要的文字,一律删除,绝不保留。\n3. 段落合并:被换行拆开的同一自然段必须合并为一行,以#P开头输出;相邻的语义段落不要合并\n4. 断词合并:行末英文连字符与下一行单词合并;中文行直接拼接\n5. 不改写、不翻译、不增删正文实质内容,只做结构归纳与排版\n6. 章节标题判断标准:编号开头(1/2.1/第一章)或标准学术章节词(引言/相关工作/方法/实验/结果/讨论/结论/参考文献/致谢)\n7. 直接输出标记文本,不要任何解释,不要用代码块包裹";
+      try{
+        const r = await callAI(
+          [{ role: "system", content: sys }, { role: "user", content: chunks[i] }],
+          4500, 0.15
+        );
+        if(r.content){
+          let c = r.content.replace(/^```[a-z]*\n?/i, "").replace(/\n?```\s*$/, "").trim();
+          marked += "\n" + c;
+        }else{
+          aiFailedCount++;
+          marked += "\n" + localMarkBlock(chunks[i]);
+        }
+      }catch(e){
         aiFailedCount++;
         marked += "\n" + localMarkBlock(chunks[i]);
       }
-    }catch(e){
-      aiFailedCount++;
-      marked += "\n" + localMarkBlock(chunks[i]);
+    }
+
+    st = parseMarkedPaper(marked);
+    /* 校验: AI结果内容损失过大 → 整体弃用,本地兜底 */
+    const aiLen = structuredTextLength(st);
+    if(aiLen < clean.length * 0.45){
+      st = parsePaperStructure(clean);
+    }else if(st.sections.length === 0 && !st.abstract){
+      /* AI没归纳出任何结构 → 本地兜底 */
+      st = parsePaperStructure(clean);
+    }else{
+      usedAI = (aiFailedCount < chunks.length);
     }
   }
 
-  const st = parseMarkedPaper(marked);
-  /* 校验: AI结果内容损失过大 → 整体弃用,本地兜底 */
-  const aiLen = structuredTextLength(st);
-  if(aiLen < clean.length * 0.45){
-    return { st: parsePaperStructure(clean), usedAI:false, degraded:true };
-  }
-  /* AI没归纳出任何结构 → 本地兜底 */
-  if(st.sections.length === 0 && !st.abstract){
-    return { st: parsePaperStructure(clean), usedAI:false, degraded:true };
-  }
-  return { st: st, usedAI: (aiFailedCount < chunks.length) };
+  /* 联网核对原文: 查询论文原链接(CrossRef/SemanticScholar) + 知网检索直达 */
+  if(onStage) onStage("query");
+  const linkTitle = st.title || (clean.split(/\r?\n/)[0] || "").trim();
+  try{
+    const src = await fetchPaperSourceUrl(linkTitle);
+    if(src){
+      st.sourceUrl = src.url;
+      st.cnkiUrl = src.cnki;
+    }
+  }catch(e){ /* 网络失败静默降级 */ }
+
+  return { st: st, usedAI: usedAI, noKey: noKey };
 }
 
 /* ---- 8. 删除同步: 把删除的文本从structured各字段移除 ---- */
@@ -5194,8 +5358,8 @@ async function runAiRead(){
 }
 
 /* ============================================================
-   AI 一键排版 —— AI通读全文,归纳为标准学术结构后美观渲染
-   (标题/摘要/关键词/章节/参考文献),本地结构解析兜底
+   AI 一键排版 —— 通读全文→排除无关内容→归纳标准学术结构
+   (标题/摘要/关键词/章节/参考文献)→联网核对原文→美观渲染
    ============================================================ */
 async function aiReformatPaper(btn){
   const cur = state.items.find(function(x){ return x.id === prState.itemId; });
@@ -5205,15 +5369,20 @@ async function aiReformatPaper(btn){
 
   if(btn){
     btn.classList.add("busy");
-    btn.innerHTML = cfg && cfg.key ? "◫ AI通读中…" : "◫ 排版中…";
+    btn.innerHTML = cfg && cfg.key ? "◫ AI 排版中…" : "◫ 排版中…";
   }
   const bodyEl = document.getElementById("prText");
   if(bodyEl) bodyEl.style.opacity = ".55";
+  ppProgressShow(cfg && cfg.key ? "AI 正在通读全文并排版…" : "正在排版并排除无关内容…");
   try{
-    /* AI分块通读(进度回调) / 本地结构解析兜底 */
+    /* AI分块排版(进度回调) / 本地结构解析兜底 / 联网核对原文 */
     const result = await aiStructuredReformat(before, function(i, n){
-      if(btn) btn.innerHTML = "◫ AI通读 " + i + "/" + n;
+      ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
+      if(btn) btn.innerHTML = "◫ AI 排版 " + i + "/" + n;
+    }, function(stage){
+      if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
     });
+    ppProgressUpdate(94, "正在渲染标准结构…");
     const st = result.st;
     const after = structuredToText(st);
 
@@ -5227,6 +5396,8 @@ async function aiReformatPaper(btn){
     markDirty();
     applyHighlightsToDom(cur);
 
+    ppProgressUpdate(100, "排版完成");
+    ppProgressHide(900);
     if(result.usedAI){
       const bits = [];
       if(st.title) bits.push("标题");
@@ -5234,14 +5405,15 @@ async function aiReformatPaper(btn){
       if(st.keywords && st.keywords.length) bits.push("关键词");
       if(st.sections && st.sections.length) bits.push(st.sections.length + "个章节");
       if(st.references && st.references.length) bits.push(st.references.length + "条文献");
-      toast("AI 结构化排版完成:" + bits.join(" · "));
+      toast("AI 排版完成 · 无关内容已清除:" + bits.join(" · ") + (st.sourceUrl ? " · 已联网找到原文链接" : ""));
     }else if(result.noKey){
-      toast("本地结构化排版完成 · 接入AI可获得更精准的章节归纳");
+      toast("本地排版完成 · 接入 AI 可智能排除无关内容并精准归纳结构");
       openAiCfgModal();
     }else{
-      toast("AI 暂不可用,已完成本地结构化排版");
+      toast("AI 暂不可用,已完成本地排版");
     }
   }catch(e){
+    ppProgressHide(0);
     toast("排版失败: " + (e.message || "未知错误"));
   }finally{
     if(btn){ btn.classList.remove("busy"); btn.innerHTML = "◫ 一键排版"; }
@@ -6898,10 +7070,13 @@ function renderGallery(){
                   toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
                   return;
                 }
-                /* AI 通读全文归纳标准结构;未配置/失败 → 本地结构解析兜底 */
-                toast("PDF已解析(" + res.pages + "页) · 正在归纳结构排版…", 2500);
+                /* AI 通读全文 → 排版并排除无关内容;未配置/失败 → 本地结构解析兜底;联网核对原文 */
+                toast("PDF已解析(" + res.pages + "页) · AI 正在排版…", 2500);
+                ppProgressShow("AI 正在通读论文并排版…");
                 return aiStructuredReformat(res.text, function(i, n){
-                  toast("AI 通读 " + i + "/" + n + " …", 1500);
+                  ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
+                }, function(stage){
+                  if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
                 }).then(function(result){
                   target.structured = result.st;
                   target.fullText = structuredToText(result.st);
@@ -6909,7 +7084,9 @@ function renderGallery(){
                   target.outline = generateOutline(target.fullText);
                   saveState();
                   render();
-                  toast("「" + target.name + "」PDF已结构化排版,可点「查看全文」阅读标注");
+                  ppProgressUpdate(100, "排版完成");
+                  ppProgressHide(900);
+                  toast("「" + target.name + "」AI 排版完成,可点「查看全文」阅读标注");
                 });
               }).catch(function(e){
                 toast("PDF解析失败:" + (e.message || "未知错误"));
@@ -6917,17 +7094,24 @@ function renderGallery(){
             };
             reader.readAsArrayBuffer(file);
           }else{
-            /* TXT/MD 直接读取 → 结构化排版 */
+            /* TXT/MD 直接读取 → AI排版+排除无关内容+联网核对原文 */
             const reader = new FileReader();
             reader.onload = function(){
-              aiStructuredReformat(this.result, null).then(function(result){
+              ppProgressShow("AI 正在通读论文并排版…");
+              aiStructuredReformat(this.result, function(i, n){
+                ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
+              }, function(stage){
+                if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
+              }).then(function(result){
                 target.structured = result.st;
                 target.fullText = structuredToText(result.st);
                 target.analysis = analyzePaper(target.fullText);
                 target.outline = generateOutline(target.fullText);
                 saveState();
                 render();
-                toast("「" + target.name + "」全文已结构化排版,可点「查看全文」阅读标注");
+                ppProgressUpdate(100, "排版完成");
+                ppProgressHide(900);
+                toast("「" + target.name + "」AI 排版完成,可点「查看全文」阅读标注");
               });
             };
             reader.readAsText(file, "UTF-8");
@@ -7758,20 +7942,27 @@ if(paperEntrySubmit){
       toast("请粘贴论文全文");
       return;
     }
-    /* AI 通读全文 → 归纳标准学术结构(标题/摘要/关键词/章节/参考文献);本地结构解析兜底 */
+    /* AI 通读全文 → 排版为标准学术结构并排除无关内容(标题/摘要/关键词/章节/参考文献) → 联网核对原文 */
     let structured = null;
     const cfg = getAiConfig();
     const origLabel = paperEntrySubmit.innerHTML;
     if(cfg && cfg.key){
       paperEntrySubmit.disabled = true;
+      ppProgressShow("AI 正在通读论文并排版…");
       try{
         const result = await aiStructuredReformat(fullText, function(i, n){
-          paperEntrySubmit.innerHTML = "AI 通读 " + i + "/" + n + "…";
+          paperEntrySubmit.innerHTML = "AI 排版 " + i + "/" + n + "…";
+          ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
+        }, function(stage){
+          if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
         });
         structured = result.st;
         fullText = structuredToText(structured);
-        toast(result.usedAI ? "AI 已归纳论文结构:标题/摘要/关键词/章节/参考文献" : "AI 暂不可用,已完成本地结构化排版");
+        ppProgressUpdate(100, "排版完成");
+        ppProgressHide(900);
+        toast(result.usedAI ? "AI 排版完成 · 无关内容已清除,已归纳为标准学术结构" : "AI 暂不可用,已完成本地排版");
       }catch(e){
+        ppProgressHide(0);
         structured = parsePaperStructure(fullText);
         fullText = structuredToText(structured);
       }finally{
@@ -7779,8 +7970,15 @@ if(paperEntrySubmit){
         paperEntrySubmit.disabled = false;
       }
     }else{
-      structured = parsePaperStructure(fullText);
+      /* 未配置AI: 本地排版 + 联网核对原文 */
+      ppProgressShow("正在排版并联网核对原文…");
+      const result = await aiStructuredReformat(fullText, null, function(stage){
+        if(stage === "query") ppProgressUpdate(70, "正在联网核对论文原文…");
+      });
+      structured = result.st;
       fullText = structuredToText(structured);
+      ppProgressUpdate(100, "排版完成");
+      ppProgressHide(900);
     }
     const result = addPaper(title, fullText, null, structured);
     if(result && result.error === "duplicate"){
@@ -7832,7 +8030,7 @@ if(paperPdfBtn){
           if(paperTitleInput && !paperTitleInput.value.trim()){
             paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
           }
-          toast("PDF已解析导入(" + res.pages + "页) · 点「整理入册」AI将通读并归纳结构排版");
+          toast("PDF已解析导入(" + res.pages + "页) · 点「整理入册」AI 将自动排版并排除无关内容");
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入PDF";
@@ -7969,6 +8167,12 @@ function toast(msg, duration){
   showLoginScreen();
 })();
 </script>
+
+<!-- AI排版进度条(全局浮动) -->
+<div class="pp-progress" id="ppProgress">
+  <div class="pp-prog-label"><span class="pp-pl" id="ppProgLabel">AI 排版中…</span><span class="pp-pp" id="ppProgPct">0%</span></div>
+  <div class="pp-prog-track"><div class="pp-prog-fill" id="ppProgFill"></div></div>
+</div>
 
 </body>
 </html>
