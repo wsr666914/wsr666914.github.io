@@ -453,6 +453,8 @@
     animation:fadeUp .25s ease backwards;
   }
   .batch-row.dup{ opacity:.55; background:rgba(176,67,44,.04); border-left-color:var(--ink-mute); }
+  .batch-row.need-review{ background:rgba(155,123,51,.05); border-left-color:#9B7B33; }
+  .batch-row.need-review .batch-row-tag{ color:#9B7B33; }
   .batch-row-top{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
   .batch-row-name{
     flex:1; min-width:140px; background:transparent; border:none; border-bottom:1px dashed var(--line);
@@ -697,6 +699,37 @@
   .card-meta-btn:hover{ border-color:var(--accent); color:var(--accent); }
   .card-meta-btn.ready{ color:var(--teal); border-color:var(--teal); background:rgba(47,93,98,.06); }
   .card-meta-btn.loading{ opacity:.5; cursor:wait; }
+
+  /* ============ 知网搜索按钮 ============ */
+  .card-cnki-btn{
+    margin:0; padding:5px 14px; border:1px solid var(--line);
+    border-radius:8px; background:rgba(155,123,51,.06);
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:500;
+    letter-spacing:.02em; color:#9B7B33; cursor:pointer;
+    transition:all .2s; display:inline-flex; align-items:center; gap:5px;
+  }
+  .card-cnki-btn:hover{ background:#9B7B33; color:var(--paper-soft); border-color:#9B7B33; }
+
+  /* ============ 批量删除模式 ============ */
+  .bulk-bar{
+    position:fixed; left:50%; bottom:28px; transform:translateX(-50%) translateY(80px);
+    display:flex; align-items:center; gap:12px; padding:10px 18px;
+    background:var(--paper); border:1px solid var(--ink); border-radius:12px;
+    box-shadow:0 12px 36px rgba(26,22,16,.22); z-index:120;
+    transition:transform .3s cubic-bezier(.2,.8,.25,1), opacity .3s; opacity:0;
+    font-size:14px; color:var(--ink);
+  }
+  .bulk-bar.show{ transform:translateX(-50%) translateY(0); opacity:1; }
+  .bulk-bar #bulkCount{ font-weight:600; letter-spacing:.02em; }
+  .modal-btn.danger{ border-color:#B0432C; color:#B0432C; }
+  .modal-btn.danger:hover{ background:#B0432C; color:var(--paper-soft); }
+  .card.bulk-mode{ outline:1px dashed var(--line); }
+  .card-check{
+    position:absolute; top:10px; left:10px; width:18px; height:18px;
+    accent-color:var(--ink); cursor:pointer; z-index:5;
+  }
+  .card.bulk-selected{ outline:2px solid var(--ink); background:rgba(26,22,16,.04); }
+  .toolbar-actions{ display:flex; gap:10px; align-items:center; }
 
   /* ============ 概要模态框 ============ */
   .meta-body{ max-height:62vh; overflow-y:auto; padding-right:8px; }
@@ -970,8 +1003,32 @@
     <input id="searchInput" type="text" placeholder="检索名目……" />
   </div>
   <div class="toolbar-actions">
+    <button class="btn-link" id="pendingBtn" style="display:none" title="低置信条目待人工确认">识别列表</button>
+    <button class="btn-link" id="batchSelectBtn" title="勾选多条批量删除">✕ 批量删除</button>
   </div>
 </section>
+
+<!-- 批量删除操作条 -->
+<div class="bulk-bar" id="bulkBar" style="display:none">
+  <span id="bulkCount">已选 0 项</span>
+  <button class="modal-btn" id="bulkAll">全选本页</button>
+  <button class="modal-btn danger" id="bulkDelete">删除所选</button>
+  <button class="modal-btn" id="bulkCancel">退出</button>
+</div>
+
+<!-- 识别列表模态框 -->
+<div class="modal-bg" id="pendingModal">
+  <div class="modal modal-batch">
+    <h3>识别列表 <span class="sub">PENDING REVIEW</span></h3>
+    <p>联网识别仍低置信的条目自动进入此列表 —— 请人工确认门类后点「确认」。</p>
+    <div class="batch-hint" id="pendingCount"></div>
+    <div class="batch-list" id="pendingList"></div>
+    <div class="modal-actions">
+      <span class="batch-row-tag"></span>
+      <button class="modal-btn" id="pendingClose">关闭</button>
+    </div>
+  </div>
+</div>
 
 <section class="gallery" id="archive"></section>
 
@@ -1110,7 +1167,10 @@ const CATEGORIES = {
   novel: {
     name:"小说", color:"#B0432C", icon:"❦",
     svg:'<path d="M3 5.5C5 4.5 8 4.5 12 6c4-1.5 7-1.5 9-.5v13c-2-1-5-1-9 .5-4-1.5-7-1.5-9-.5v-13z"/><path d="M12 6v13"/>',
-    keywords:["小说","novel","fiction","卷","部","书","著","章","回"],
+    /* 网络小说为主: 网文流派/平台/连载词 */
+    keywords:["小说","novel","fiction","网络小说","网文","连载","起点","晋江","番茄小说","纵横","17k","飞卢",
+      "玄幻","修真","修仙","仙侠","武侠","都市","穿越","重生","系统","金手指","升级","爽文","脑洞",
+      "无限流","克苏鲁","御兽","种田","宫斗","宅斗","宅斗","种田文","女频","男频","大主宰","斗破"],
     patterns:[/第[一二三四五六七八九十百千]+[章节回]/, /卷[一二三四五六七八九十]+/]
   },
   movie: {
@@ -1122,7 +1182,10 @@ const CATEGORIES = {
   literature: {
     name:"文学", color:"#5C6B4A", icon:"❧",
     svg:'<path d="M4 19c2-1 4-1 8 0 4-1 6-1 8 0"/><path d="M6 19V5c2-.8 4-.8 6 0v14"/><path d="M18 19V5c-2-.8-4-.8-6 0"/><path d="M9 9h2M9 12h2"/>',
-    keywords:["散文","诗集","诗选","随笔","集子","文丛","文集","回忆录","传记","memoir","essays","poetry","选集","手记","札记","漫记"],
+    /* 传统文学/经典/严肃文学: 与网文区分 */
+    keywords:["散文","诗集","诗选","随笔","集子","文丛","文集","回忆录","传记","memoir","essays","poetry","选集","手记","札记","漫记",
+      "名著","经典","文学","鲁迅","老舍","茅盾","巴金","沈从文","汪曾祺","萧红","朱自清","冰心","徐志摩","海子","顾城","北岛",
+      "诗经","楚辞","唐诗","宋词","元曲","论语","史记","古文","戏曲","戏剧","话剧","悲剧","喜剧","荒诞派","意识流","魔幻现实主义"],
     patterns:[]
   },
   paper: {
@@ -1685,19 +1748,63 @@ function saveOnlineCache(){
 loadOnlineCache();
 
 /* ============================================================
-   联网智能分类 —— 以百科词条真实内容为核心,而非封闭词表
-   策略:
-   1. 抓取百度百科词条页,解析词条定义句(「X是…创作的长篇小说」)
-   2. 定义句模式匹配 → 高置信归类
-   3. 定义句不明确 → 全文关键特征加权打分
-   4. 百科失败 → 搜索摘要(百度/必应/搜狗)同样方法分析
+   联网智能分类 v2 —— 多渠道深查 + 多源投票 (宁慢勿错)
+   渠道:
+   1. 垂直平台存在性检查 (最强信号): 起点/晋江/番茄 → 小说(网文为主)
+      下厨房/美食杰 → 菜品, 豆瓣读书/电影(弱信号)
+   2. 三百科定义句 (次强信号): 百度百科为主, 搜狗/360百科补充
+   3. 多引擎搜索摘要特征分析 (百度/必应/搜狗)
+   聚合: 各源投票加权,第一名须显著领先才采纳
    ============================================================ */
+
+/* 垂直平台检查配置: 若标题在平台搜索有结果 → 强烈指向该门类 */
+const VERTICAL_SOURCES = [
+  /* 网文平台 → 小说 (小说模块以网络小说为主) */
+  { cat:"novel", name:"起点中文网", url:function(t){ return "https://www.qidian.com/soushu/" + encodeURIComponent(t) + ".html"; },
+    selectors:[".book-mid-info h4 a", ".book-img-text a", "h4 a", "a"], minLen:2 },
+  { cat:"novel", name:"晋江文学城", url:function(t){ return "https://www.jjwxc.net/search.php?kw=" + encodeURIComponent(t); },
+    selectors:[".novel-title", "td a", "a"], minLen:2 },
+  { cat:"novel", name:"番茄小说", url:function(t){ return "https://fanqienovel.com/search/" + encodeURIComponent(t); },
+    selectors:[".book-name", "a"], minLen:2 },
+  /* 菜谱平台 → 菜品 */
+  { cat:"dish", name:"下厨房", url:function(t){ return "https://www.xiachufang.com/search/?keyword=" + encodeURIComponent(t); },
+    selectors:[".recipe a", ".normal-recipe-name", "a[href*='/recipe/']", "a"], minLen:2 },
+  { cat:"dish", name:"美食杰", url:function(t){ return "https://www.meishij.net/china/caipu/search.php?kw=" + encodeURIComponent(t); },
+    selectors:[".list_s li a", "a"], minLen:2 },
+  /* 读书/电影平台 (JS渲染,结果可能拿不到,弱信号) */
+  { cat:"novel", name:"豆瓣读书", url:function(t){ return "https://book.douban.com/subject_search?search_text=" + encodeURIComponent(t); },
+    selectors:["a"], minLen:2, weak:true },
+  { cat:"movie", name:"豆瓣电影", url:function(t){ return "https://movie.douban.com/subject_search?search_text=" + encodeURIComponent(t); },
+    selectors:["a"], minLen:2, weak:true }
+];
+
+/* 垂直平台检查: 搜索标题,若结果区含标题 → 该门类 */
+async function checkVerticalSource(src, title){
+  try{
+    const htmlText = await fetchViaProxy(src.url(title), 9000);
+    if(!htmlText) return null;
+    const doc = new DOMParser().parseFromString(htmlText, "text/html");
+    doc.querySelectorAll("script, style, nav, header, footer").forEach(function(e){ e.remove(); });
+    for(let s=0; s<src.selectors.length; s++){
+      let items;
+      try{ items = doc.querySelectorAll(src.selectors[s]); }catch(e){ continue; }
+      if(!items || items.length === 0) continue;
+      for(let i=0; i<items.length && i<40; i++){
+        const t = cleanText(items[i]);
+        if(t && t.length >= src.minLen && t.indexOf(title) >= 0){
+          return { found:true, cat:src.cat, source:src.name, weak:!!src.weak };
+        }
+      }
+    }
+  }catch(e){}
+  return null;
+}
 
 /* 定义句模式库: 百科词条开头通常为「X是……」的定性描述 */
 const CAT_DEF_PATTERNS = [
-  { cat:"novel",     re:/(是|为)[^。]{0,30}(长篇|中篇|短篇|科幻|武侠|言情|悬疑|推理|网络小说|小说作品)|(作者|作家)[^。]{0,8}(著|创作|撰写|所著小说)|出版[^。]{0,10}(小说|图书|单行本)/ },
+  { cat:"novel",     re:/(是|为)[^。]{0,30}(长篇|中篇|短篇|科幻|武侠|言情|悬疑|推理|网络小说|小说作品|奇幻|仙侠|玄幻|都市小说)|(作者|作家|网文作者)[^。]{0,8}(著|创作|撰写|所著|连载于)|出版[^。]{0,10}(小说|图书|单行本)/ },
   { cat:"movie",     re:/(是|为)[^。]{0,30}(电影|影片|纪录片|动画片|电视剧|剧集|微电影)|(执导|导演)[^。]{0,15}(电影|影片)|主演[^。]{0,30}饰演|票房收入|影院上映/ },
-  { cat:"literature",re:/(是|为)[^。]{0,30}(散文集|诗集|散文|诗歌|随笔集|杂文集|文集|文学经典|代表诗作)|现代诗|朦胧诗派/ },
+  { cat:"literature",re:/(是|为)[^。]{0,30}(散文集|诗集|散文|诗歌|随笔集|杂文集|文集|文学经典|代表诗作|文学作品)|现代诗|朦胧诗派|(鲁迅|老舍|茅盾|巴金|朱自清|冰心|沈从文)[^。]{0,10}(散文|杂文|诗作|文集)/ },
   { cat:"paper",     re:/(是|为)[^。]{0,30}(论文|学位论文|期刊论文|学术论文|综述论文)|摘要[:：]|关键词[:：]|参考文献格式|学报[刊版]/ },
   { cat:"dish",      re:/(是|为)[^。]{0,25}(一道|一道[传统经典地方特色名]*|传统|经典|地方|特色)?[名菜菜品菜肴]|家常菜|地方名菜|[主料辅料调料][:：]/ },
   { cat:"snack",     re:/(是|为)[^。]{0,30}(零食|小吃|休闲食品|特产|糕点|蜜饯|膨化食品|坚果制品|肉脯)/ },
@@ -1708,9 +1815,9 @@ const CAT_DEF_PATTERNS = [
 
 /* 特征词加权库: 用于定义句不明确时的全文打分 */
 const CAT_FEATURE_WORDS = [
-  { cat:"novel",     words:{ "小说":5, "长篇小说":6, "网络小说":4, "科幻小说":6, "武侠小说":6, "作者":2, "出版":2, "小说家":4, "章节":2, "番外":3 } },
+  { cat:"novel",     words:{ "小说":5, "长篇小说":6, "网络小说":5, "科幻小说":6, "武侠小说":6, "玄幻":4, "仙侠":4, "修仙":4, "连载":4, "起点":4, "晋江":4, "番茄小说":5, "网文":4, "作者":2, "出版":2, "小说家":4, "章节":2, "番外":3 } },
   { cat:"movie",     words:{ "电影":5, "导演":3, "主演":3, "票房":4, "影片":4, "饰演":3, "上映":3, "片长":4, "剧情片":6, "电视剧":4, "动画电影":6, "影院":3 } },
-  { cat:"literature",words:{ "散文":5, "诗歌":5, "诗集":6, "散文集":6, "随笔":4, "杂文":4, "文集":4, "诗人":4, "诗作":5, "文学流派":4 } },
+  { cat:"literature",words:{ "散文":5, "诗歌":5, "诗集":6, "散文集":6, "随笔":4, "杂文":4, "文集":4, "诗人":4, "诗作":5, "文学流派":4, "鲁迅":3, "朱自清":3, "海子":3, "老舍":2 } },
   { cat:"paper",     words:{ "论文":6, "学术":3, "研究方法":4, "实验结果":4, "摘要":3, "关键词":4, "参考文献":4, "学报":5, "期刊":4, "学位":3, "arxiv":4, "doi":5 } },
   { cat:"dish",      words:{ "菜谱":5, "做法":4, "食材":4, "主料":5, "辅料":5, "调料":4, "烹饪":4, "菜肴":4, "名菜":6, "家常菜":6, "口感":2, "步骤":3 } },
   { cat:"snack",     words:{ "零食":6, "小吃":4, "特产":3, "糕点":5, "休闲食品":6, "膨化":5, "坚果":4, "蜜饯":5, "肉脯":5, "饼干":4 } },
@@ -1804,7 +1911,7 @@ async function fetchSearchSnippetsFrom(engineUrl, title, maxCount){
   return snippets;
 }
 
-/* 联网智能分类主入口: 百科词条优先,搜索摘要兜底 */
+/* 联网智能分类主入口 v2: 多渠道深查 + 多源投票 (可慢,求准) */
 async function classifyOnline(name){
   const raw = (name || "").trim();
   if(!raw) return null;
@@ -1820,39 +1927,118 @@ async function classifyOnline(name){
     return r;
   }
 
-  /* 源1: 百度百科词条页 (定义句最可靠) */
-  try{
-    const htmlText = await fetchViaProxy("https://baike.baidu.com/item/" + raw, 8000);
-    if(htmlText){
-      const text = extractBaikeText(htmlText);
-      if(text){
-        const inferred = inferCatSmart(text);
-        if(inferred && inferred.confidence >= 0.68) return cacheAndReturn(inferred);
+  /* ===== 渠道1: 垂直平台存在性检查 (全部并行发起) ===== */
+  const verticalResults = await Promise.all(
+    VERTICAL_SOURCES.map(function(src){ return checkVerticalSource(src, raw); })
+  );
+  const strongHits = verticalResults.filter(function(r){ return r && r.found && !r.weak; });
+  /* 强垂直命中: 两个及以上同类强命中 → 直接定类 */
+  if(strongHits.length >= 2){
+    const cats = {};
+    for(let i=0; i<strongHits.length; i++) cats[strongHits[i].cat] = (cats[strongHits[i].cat]||0) + 1;
+    const best = Object.entries(cats).sort(function(a,b){ return b[1]-a[1]; })[0];
+    if(best[1] >= 2){
+      return cacheAndReturn({ cat:best[0], confidence:0.95, source:"联网·垂直平台(" + best[1] + "源)" });
+    }
+  }
+
+  /* ===== 渠道2: 三百科定义句 (并行) ===== */
+  const baikeResults = await Promise.all([
+    (async function(){
+      try{
+        const htmlText = await fetchViaProxy("https://baike.baidu.com/item/" + raw, 9000);
+        return htmlText ? extractBaikeText(htmlText) : "";
+      }catch(e){ return ""; }
+    })(),
+    (async function(){
+      try{
+        const htmlText = await fetchViaProxy("https://baike.sogou.com/s?keyword=" + raw, 8000);
+        if(!htmlText) return "";
+        const doc = new DOMParser().parseFromString(htmlText, "text/html");
+        doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+        const el = doc.querySelector(".str_info, .fz-mid, .vrwrap, p");
+        return el ? cleanText(el) : "";
+      }catch(e){ return ""; }
+    })(),
+    (async function(){
+      try{
+        const htmlText = await fetchViaProxy("https://baike.so.com/doc/search?key=" + raw, 8000);
+        if(!htmlText) return "";
+        const doc = new DOMParser().parseFromString(htmlText, "text/html");
+        doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+        const el = doc.querySelector(".abstract, .res-desc, p");
+        return el ? cleanText(el) : "";
+      }catch(e){ return ""; }
+    })()
+  ]);
+
+  /* 投票聚合容器: cat -> {w:权重, srcs:来源列表} */
+  const votes = {};
+  function addVote(cat, weight, srcName){
+    votes[cat] = votes[cat] || { w:0, srcs:[] };
+    votes[cat].w += weight;
+    votes[cat].srcs.push(srcName);
+  }
+
+  /* 百科定义句投票 */
+  for(let i=0; i<baikeResults.length; i++){
+    if(baikeResults[i]){
+      const inferred = inferCatSmart(baikeResults[i]);
+      if(inferred){
+        const weight = inferred.confidence >= 0.9 ? 8 : (inferred.confidence >= 0.68 ? 5 : 2);
+        addVote(inferred.cat, weight, inferred.source);
       }
     }
-  }catch(e){}
+  }
+  /* 单一百科定义句高置信 → 直接定类 */
+  {
+    const strong = Object.entries(votes).filter(function(p){ return p[1].w >= 8; });
+    if(strong.length === 1) return cacheAndReturn({ cat:strong[0][0], confidence:0.9, source:strong[0][1].srcs[0] });
+  }
 
-  /* 源2: 搜索摘要并行 (百度 + 必应 + 搜狗, 多引擎提高覆盖) */
-  try{
-    const engines = [
-      "https://www.baidu.com/s?wd=" + raw,
-      "https://www.bing.com/search?q=" + raw,
-      "https://www.sogou.com/web?query=" + raw
-    ];
-    const results = await Promise.all(engines.map(function(u){ return fetchSearchSnippetsFrom(u, raw, 4); }));
-    const allSnippets = [];
-    for(let i=0; i<results.length; i++){
-      for(let j=0; j<results[i].length; j++){
-        if(allSnippets.length < 8) allSnippets.push(results[i][j]);
-      }
-    }
-    if(allSnippets.length > 0){
-      const inferred = inferCatSmart(allSnippets.join(" "));
-      if(inferred) return cacheAndReturn(inferred);
-    }
-  }catch(e){}
+  /* 强垂直单命中: 高权重 */
+  for(let i=0; i<strongHits.length; i++){
+    addVote(strongHits[i].cat, 7, "垂直·" + strongHits[i].source);
+  }
+  /* 弱垂直命中(豆瓣类,易误报) 低权重 */
+  for(let i=0; i<verticalResults.length; i++){
+    const r = verticalResults[i];
+    if(r && r.found && r.weak) addVote(r.cat, 2, "垂直·" + r.source);
+  }
 
-  return null;
+  /* ===== 渠道3: 多引擎搜索摘要分析 (百度/必应/搜狗 并行) ===== */
+  const engines = [
+    "https://www.baidu.com/s?wd=" + raw,
+    "https://www.bing.com/search?q=" + raw,
+    "https://www.sogou.com/web?query=" + raw
+  ];
+  const engineSnippets = await Promise.all(engines.map(function(u){ return fetchSearchSnippetsFrom(u, raw, 4); }));
+  const allSnippets = [];
+  for(let i=0; i<engineSnippets.length; i++){
+    for(let j=0; j<engineSnippets[i].length; j++){
+      if(allSnippets.length < 8) allSnippets.push(engineSnippets[i][j]);
+    }
+  }
+  if(allSnippets.length > 0){
+    const inferred = inferCatSmart(allSnippets.join(" "));
+    if(inferred){
+      const weight = inferred.confidence >= 0.8 ? 6 : (inferred.confidence >= 0.68 ? 4 : 2);
+      addVote(inferred.cat, weight, inferred.source + "·" + allSnippets.length + "条摘要");
+    }
+  }
+
+  /* ===== 最终裁决: 加权投票 ===== */
+  const ranked = Object.entries(votes).sort(function(a,b){ return b[1].w - a[1].w; });
+  if(ranked.length === 0) return null;
+  const top = ranked[0];
+  const second = ranked[1];
+  /* 第一名需显著领先 (权重差 ≥ 3) */
+  if(second && top[1].w - second[1].w < 3) return null;
+  /* 总权重太低不采纳 */
+  if(top[1].w < 6) return null;
+
+  const conf = top[1].w >= 14 ? 0.9 : (top[1].w >= 10 ? 0.82 : 0.7);
+  return cacheAndReturn({ cat:top[0], confidence:conf, source:"联网·多源投票(" + top[1].srcs.length + "源)" });
 }
 
 /* 综合分类: 联网智能识别为主,本地启发式为兜底 */
@@ -1870,7 +2056,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], filter: "all", search: "", composerCategory: null };
+const state = { items: [], pendingReview: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {} };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -1999,12 +2185,14 @@ function doLogout(){
 /* 登录后初始化数据 */
 function afterLogin(){
   state.items = [];
+  state.pendingReview = [];
   loadState();
   migrateItems();
   render();
   renderComposerCats();
   updatePredict();
   updateNavUser();
+  updatePendingBtn();
   if(state.items.length === 0){
     setTimeout(function(){ toast("点击「载入示例」可速览其效"); }, 600);
   }
@@ -2017,11 +2205,138 @@ function loadState(){
       const arr = JSON.parse(raw);
       if(Array.isArray(arr)) state.items = arr;
     }
+    const praw = localStorage.getItem(STORAGE_KEY + "_pending");
+    if(praw){
+      const parr = JSON.parse(praw);
+      if(Array.isArray(parr)) state.pendingReview = parr;
+    }
   }catch(e){ console.warn("load failed", e); }
 }
 function saveState(){
-  try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items)); }
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state.items));
+    localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
+  }
   catch(e){ console.warn("save failed", e); }
+}
+
+/* ===== 识别列表 (待人工确认的低置信条目) ===== */
+const PENDING_KEY = "shuyingshidan_pending";
+function addPendingReview(name, category, confidence, source){
+  if(!name || !name.trim()) return;
+  /* 去重 */
+  const low = name.trim().toLowerCase();
+  if((state.pendingReview||[]).some(function(p){ return p.name.trim().toLowerCase() === low; })) return;
+  state.pendingReview = state.pendingReview || [];
+  state.pendingReview.push({
+    id: uid(),
+    name: name.trim(),
+    category: category || FALLBACK_CAT,
+    confidence: confidence || 0,
+    source: source || "",
+    addedAt: new Date().toISOString()
+  });
+  saveState();
+  updatePendingBtn();
+}
+function updatePendingBtn(){
+  const btn = document.getElementById("pendingBtn");
+  if(!btn) return;
+  const n = (state.pendingReview || []).length;
+  btn.style.display = n > 0 ? "" : "none";
+  btn.textContent = "识别列表 · " + n;
+}
+function openPendingModal(){
+  const modal = document.getElementById("pendingModal");
+  if(!modal) return;
+  renderPendingList();
+  modal.classList.add("show");
+}
+function renderPendingList(){
+  const list = document.getElementById("pendingList");
+  const cnt = document.getElementById("pendingCount");
+  if(!list) return;
+  const pend = state.pendingReview || [];
+  if(cnt) cnt.textContent = pend.length > 0 ? "共 " + pend.length + " 条待确认" : "";
+  if(pend.length === 0){
+    list.innerHTML = '<div class="batch-empty">识别列表已清空 —— 新的低置信条目会自动进入此列表</div>';
+    return;
+  }
+  let html = "";
+  for(let i=0; i<pend.length; i++){
+    const p = pend[i];
+    const c = CATEGORIES[p.category] || CATEGORIES[FALLBACK_CAT];
+    let opts = "";
+    for(const key in CATEGORIES){
+      opts += '<option value="' + key + '"' + (key===p.category?' selected':'') + '>' + CATEGORIES[key].name + '</option>';
+    }
+    const confPct = Math.round((p.confidence||0) * 100);
+    html += '<div class="batch-row" data-pidx="' + i + '" style="--cat-color:' + c.color + '">';
+    html += '<div class="batch-row-top">';
+    html += '<input class="batch-row-name" value="' + escapeHtml(p.name) + '" data-pidx="' + i + '" readonly style="background:transparent" />';
+    html += '<select class="batch-row-cat" data-pidx="' + i + '">' + opts + '</select>';
+    html += '<span class="batch-row-tag">置信 ' + confPct + '% · ' + escapeHtml(p.source || "未能识别") + '</span>';
+    html += '<button class="pending-fix-btn modal-btn primary" data-pidx="' + i + '">确认</button>';
+    html += '<button class="batch-row-del" data-pidx="' + i + '" title="移除">×</button>';
+    html += '</div>';
+    html += '</div>';
+  }
+  list.innerHTML = html;
+
+  /* 门类切换 */
+  const cats = list.querySelectorAll(".batch-row-cat");
+  for(let i=0; i<cats.length; i++){
+    cats[i].onchange = function(){
+      const idx = parseInt(this.dataset.pidx, 10);
+      state.pendingReview[idx].category = this.value;
+      saveState();
+      renderPendingList();
+    };
+  }
+  /* 确认按钮: 修正册中条目门类并移出列表 */
+  const fixes = list.querySelectorAll(".pending-fix-btn");
+  for(let i=0; i<fixes.length; i++){
+    fixes[i].onclick = function(){
+      const idx = parseInt(this.dataset.pidx, 10);
+      const p = state.pendingReview[idx];
+      if(!p) return;
+      /* 修正册中同名条目 */
+      const target = state.items.find(function(it){
+        return it.name.trim().toLowerCase() === p.name.trim().toLowerCase();
+      });
+      if(target){
+        /* 避免与目标门类已有同名重复 */
+        const dup = state.items.some(function(it){
+          return it !== target && it.name.trim().toLowerCase() === p.name.trim().toLowerCase() && it.category === p.category;
+        });
+        if(!dup){
+          target.category = p.category;
+          target.manualOverride = true;
+          target.autoConfidence = 1;
+          target.autoSource = "人工确认";
+        }
+      }
+      state.pendingReview.splice(idx, 1);
+      saveState();
+      render();
+      renderPendingList();
+      updatePendingBtn();
+      toast("已确认「" + p.name + "」");
+    };
+  }
+  /* 移除按钮 */
+  const dels = list.querySelectorAll(".batch-row-del");
+  for(let i=0; i<dels.length; i++){
+    dels[i].onclick = function(){
+      const idx = parseInt(this.dataset.pidx, 10);
+      const p = state.pendingReview[idx];
+      state.pendingReview.splice(idx, 1);
+      saveState();
+      renderPendingList();
+      updatePendingBtn();
+      if(p) toast("已移出识别列表");
+    };
+  }
 }
 function uid(){
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
@@ -2057,33 +2372,133 @@ function addItem(name, manualCategory, options){
   state.items.unshift(item);
   saveState();
   render();
-  /* 后台联网智能识别: 无手动指定时,用百科真实内容修正分类 */
+  /* 后台联网智能识别: 无手动指定时,用多源投票修正分类 */
   if(!manualCategory){
     refineCategoryOnline(item);
+  } else if(manualCategory === "dish" && !item.description){
+    /* 手动指定菜品且无描述 → 自动获取菜谱 */
+    autoFetchRecipe(item);
   }
   /* 小说/电影/文学:后台联网查询概要 */
   autoFetchMeta(item);
   return item;
 }
 
-/* 后台联网智能修正分类: 查百科定义句,比本地启发式更准 */
+/* ============================================================
+   菜品菜谱自动获取 —— 下厨房 / 美食杰 / 百度百科
+   识别为菜品后,自动联网抓取菜谱(食材+步骤),填入编订(描述)
+   ============================================================ */
+async function autoFetchRecipe(item){
+  if(!item || item.category !== "dish") return;
+  /* 已有描述(用户手写心得)则不覆盖 */
+  if(item.description && item.description.trim()) return;
+  try{
+    const recipe = await fetchRecipe(item.name);
+    if(recipe){
+      item.description = recipe;
+      saveState();
+      render();
+      toast("「" + item.name + "」菜谱已自动编订");
+    }
+  }catch(e){ /* 菜谱获取失败静默 */ }
+}
+
+/* 从多源抓取菜谱: 下厨房 → 美食杰 → 百度百科做法章节 */
+async function fetchRecipe(name){
+  const title = (name || "").trim();
+  if(!title) return null;
+
+  /* 源1: 下厨房搜索页 (菜谱列表含用料摘要) */
+  try{
+    const htmlText = await fetchViaProxy("https://www.xiachufang.com/search/?keyword=" + title, 8000);
+    if(htmlText){
+      const doc = new DOMParser().parseFromString(htmlText, "text/html");
+      doc.querySelectorAll("script, style, nav, header, footer").forEach(function(e){ e.remove(); });
+      /* 菜谱名 + 用料 */
+      const recipes = doc.querySelectorAll(".recipe, .normal-recipe-list li, li");
+      for(let i=0; i<recipes.length && i<15; i++){
+        const nameEl = recipes[i].querySelector("a, .name, .normal-recipe-name");
+        const ingEl = recipes[i].querySelector(".ing, .ingredients, .sub");
+        const n = nameEl ? cleanText(nameEl) : "";
+        if(n && n.indexOf(title) >= 0){
+          const ing = ingEl ? cleanText(ingEl) : "";
+          if(ing && ing.length > 5){
+            return "【菜谱 · 下厨房】\n" + n + "\n用料: " + ing.substring(0, 300);
+          }
+        }
+      }
+    }
+  }catch(e){}
+
+  /* 源2: 百度百科「原材料/制作/做法」章节 */
+  try{
+    const htmlText = await fetchViaProxy("https://baike.baidu.com/item/" + title, 8000);
+    if(htmlText){
+      const doc = new DOMParser().parseFromString(htmlText, "text/html");
+      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+      const sections = parseBaikeSections(doc);
+      const recipeKws = ["制作方法","制作步骤","做法","烹饪方法","制作","食材原料","原材料","所需食材","调料"];
+      let parts = [];
+      for(let i=0; i<sections.length; i++){
+        for(let k=0; k<recipeKws.length; k++){
+          if(sections[i].title.indexOf(recipeKws[k]) >= 0){
+            const c = sections[i].content.trim();
+            if(c.length > 10 && c.length < 800) parts.push("【" + sections[i].title + "】\n" + c.substring(0, 350));
+            break;
+          }
+        }
+        if(parts.length >= 2) break;
+      }
+      if(parts.length > 0){
+        return "【菜谱 · 百度百科】" + title + "\n" + parts.join("\n\n");
+      }
+    }
+  }catch(e){}
+
+  /* 源3: 美食杰搜索 */
+  try{
+    const htmlText = await fetchViaProxy("https://www.meishij.net/china/caipu/search.php?kw=" + title, 7000);
+    if(htmlText){
+      const doc = new DOMParser().parseFromString(htmlText, "text/html");
+      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+      const items = doc.querySelectorAll(".list_s li a, .recipe a, a");
+      for(let i=0; i<items.length && i<30; i++){
+        const t = cleanText(items[i]);
+        if(t && t.indexOf(title) >= 0 && t.length > title.length && t.length < 60){
+          return "【菜谱 · 美食杰】\n" + t;
+        }
+      }
+    }
+  }catch(e){}
+
+  return null;
+}
+
+/* 后台联网智能修正分类: 多源投票,比本地启发式更准 */
 async function refineCategoryOnline(item){
   try{
     const online = await classifyOnline(item.name);
-    if(online && online.confidence >= 0.68 && online.cat !== item.category){
-      /* 联网置信度足够高且与当前分类不同 → 修正 */
-      const exists = state.items.some(function(i){
-        return i.id !== item.id && i.name.trim().toLowerCase() === item.name.trim().toLowerCase() && i.category === online.cat;
-      });
-      if(exists) return; /* 避免改成重复 */
-      item.category = online.cat;
+    if(online && online.confidence >= 0.68){
+      /* 联网置信度足够高 → 采用联网结果(无论与本地是否一致) */
+      if(online.cat !== item.category){
+        const exists = state.items.some(function(i){
+          return i.id !== item.id && i.name.trim().toLowerCase() === item.name.trim().toLowerCase() && i.category === online.cat;
+        });
+        if(exists) return; /* 避免改成重复 */
+        item.category = online.cat;
+        const c = CATEGORIES[online.cat] || CATEGORIES[FALLBACK_CAT];
+        toast("「" + item.name + "」经联网识别归入「" + c.name + "」");
+      }
       item.autoCategory = online.cat;
       item.autoConfidence = online.confidence;
       item.autoSource = online.source;
       saveState();
       render();
-      const c = CATEGORIES[online.cat] || CATEGORIES[FALLBACK_CAT];
-      toast("「" + item.name + "」经联网识别归入「" + c.name + "」");
+      /* 菜品:自动联网获取菜谱,填入编订(描述) */
+      if(online.cat === "dish") autoFetchRecipe(item);
+    } else if((item.autoConfidence || 0) < 0.5){
+      /* 联网也未能可靠识别 → 进入识别列表待人工确认 */
+      addPendingReview(item.name, item.category, item.autoConfidence || 0, item.autoSource || "联网亦未识别");
     }
   }catch(e){ /* 联网失败保持原分类 */ }
 }
@@ -3398,6 +3813,50 @@ async function fetchWebSnippets(title, category){
 
 /* ===== 拓展查询源 ===== */
 
+/* 网文平台梗概: 起点中文网/晋江文学城 搜索页简介 (小说门类专属) */
+async function fetchWebNovelSynopsis(title){
+  const result = { summary:"", source:"网文平台" };
+  /* 源1: 起点搜索页 */
+  try{
+    const htmlText = await fetchViaProxy("https://www.qidian.com/soushu/" + encodeURIComponent(title) + ".html", 8000);
+    if(htmlText){
+      const doc = new DOMParser().parseFromString(htmlText, "text/html");
+      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+      /* 起点搜索结果: 书名 + 简介 */
+      const books = doc.querySelectorAll(".book-mid-info, .res-book-list li, li");
+      for(let i=0; i<books.length && i<10; i++){
+        const nameEl = books[i].querySelector("h4 a, a");
+        const introEl = books[i].querySelector(".intro, p");
+        const n = nameEl ? cleanText(nameEl) : "";
+        if(n && n.indexOf(title) >= 0){
+          const intro = introEl ? cleanText(introEl) : "";
+          if(intro && intro.length > 20){
+            result.summary = intro.substring(0, 500);
+            return result;
+          }
+        }
+      }
+    }
+  }catch(e){}
+  /* 源2: 晋江搜索页 */
+  try{
+    const htmlText = await fetchViaProxy("https://www.jjwxc.net/search.php?kw=" + encodeURIComponent(title), 8000);
+    if(htmlText){
+      const doc = new DOMParser().parseFromString(htmlText, "text/html");
+      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
+      const rows = doc.querySelectorAll("tr, .novel-item");
+      for(let i=0; i<rows.length && i<15; i++){
+        const t = cleanText(rows[i]);
+        if(t && t.indexOf(title) >= 0 && t.length > title.length + 20){
+          result.summary = t.substring(0, 500);
+          return result;
+        }
+      }
+    }
+  }catch(e){}
+  return result;
+}
+
 /* 维基百科 REST API (官方支持 CORS 直连,国内一般可访问,无需代理) */
 async function fetchWikiMeta(title){
   const result = { summary:"", description:"", source:"维基百科" };
@@ -3499,19 +3958,29 @@ async function fetchItemMeta(item){
     fetchedAt: new Date().toISOString()
   };
 
-  /* ---- 多源并行查询: 百度百科 + 豆瓣 + 网络报道 + 维基百科 ---- */
+  /* ---- 多源并行查询: 按门类选择查询源 (梗概匹配当前门类) ---- */
   /* 注意: title 不预先 encodeURIComponent, 因为 fetchViaProxy 内部会 encodeURIComponent 整个 URL,
      若此处先编码会导致双重编码 (%25E4 而非 %E4) */
   const pageUrl = "https://baike.baidu.com/item/" + title;
   const cat = item.category || "";
 
-  /* 并行发起: 百科页面 + 豆瓣 + 网络搜索摘要 + 维基百科 */
-  const [htmlText, doubanResult, webResult, wikiResult] = await Promise.all([
+  /* 并行发起: 百科页面 + 豆瓣(按门类选子站) + 网络搜索摘要 + 维基百科 + 网文梗概(小说门类) */
+  const [htmlText, doubanResult, webResult, wikiResult, novelResult] = await Promise.all([
     fetchViaProxy(pageUrl, 9000),
     fetchDoubanMeta(title, cat),
     fetchWebSnippets(title, cat),
-    fetchWikiMeta(title)
+    fetchWikiMeta(title),
+    cat === "novel" ? fetchWebNovelSynopsis(title) : Promise.resolve(null)
   ]);
+
+  /* ---- 合并网文平台梗概 (小说门类: 起点中文网/晋江文学城简介) ---- */
+  if(novelResult && novelResult.summary){
+    if(!result.summary){
+      result.summary = novelResult.summary;
+    }
+    if(!result.plot) result.plot = novelResult.summary;
+    result.source.push("网文平台");
+  }
 
   /* ---- 合并维基百科数据 (百度百科缺失时的有力补充, 尤其海外作品) ---- */
   if(wikiResult && wikiResult.summary){
@@ -4055,14 +4524,21 @@ function renderGallery(){
       ratingHtml = '<div class="card-rating">' + stars + '</div>';
     }
 
+    /* 批量删除模式: 卡片加复选框 */
+    const inBulk = state.bulkMode === true;
+    const checked = inBulk && state.bulkSelected && state.bulkSelected[it.id];
+
     // 描述显示
     const desc = (it.description || "").trim();
     const descHtml = desc ? '<div class="card-desc">' + escapeHtml(desc) + '</div>' : "";
 
-    // 论文专属:查看全文按钮
+    // 论文专属:查看全文按钮 + 知网搜索按钮
     const isPaper = it.category === "paper" && it.fullText;
     const paperBtnHtml = isPaper ?
       '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">§ 查看全文</button>' : "";
+    const isPaperCat = it.category === "paper";
+    const cnkiBtnHtml = isPaperCat ?
+      '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">⌕ 知网搜索</button>' : "";
 
     // 小说/电影/文学专属:联网查询概要按钮
     const canMeta = (it.category === "novel" || it.category === "movie" || it.category === "literature");
@@ -4070,7 +4546,10 @@ function renderGallery(){
     const metaBtnHtml = canMeta ?
       '<button class="card-meta-btn' + (metaReady ? ' ready' : '') + '" data-id="' + it.id + '" title="联网查询百度百科 · 情节 · 转折 · 人物 · 关系">❦ 概要</button>' : "";
 
-    html += '<article class="card" style="--cat-color:' + c.color + '; animation-delay:' + Math.min(idx*0.03, 0.4) + 's">';
+    html += '<article class="card' + (inBulk ? ' bulk-mode' : '') + (checked ? ' bulk-selected' : '') + '" style="--cat-color:' + c.color + '; animation-delay:' + Math.min(idx*0.03, 0.4) + 's">';
+    if(inBulk){
+      html += '<input type="checkbox" class="card-check" data-id="' + it.id + '"' + (checked ? ' checked' : '') + ' title="勾选以批量删除" />';
+    }
     html += '<div class="card-head">';
     html += '<div class="card-cat"><span class="dot"></span>' + catIcon(it.category, 16) + ' ' + c.name.toUpperCase() + '</div>';
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
@@ -4080,7 +4559,7 @@ function renderGallery(){
     html += ratingHtml;
     html += descHtml;
     html += note;
-    html += '<div class="card-btns">' + metaBtnHtml + paperBtnHtml + '</div>';
+    html += '<div class="card-btns">' + metaBtnHtml + paperBtnHtml + cnkiBtnHtml + '</div>';
     html += '<div class="card-meta"><span>' + dateStr + '</span><span>置信 ' + conf + '</span></div>';
     html += '</article>';
   }
@@ -4105,12 +4584,61 @@ function renderGallery(){
       openPaperReader(this.dataset.id);
     };
   }
+  /* 知网搜索按钮: 打开知网检索该论文 */
+  const cnkiBtnsInCard = el.querySelectorAll(".card-cnki-btn");
+  for(let i=0; i<cnkiBtnsInCard.length; i++){
+    (function(btn){
+      btn.onclick = function(){
+        const target = state.items.find(function(x){ return x.id === btn.dataset.id; });
+        if(target && target.name){
+          window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(target.name) + "&korder=TI", "_blank");
+          toast("正在知网检索「" + target.name + "」");
+        }
+      };
+    })(cnkiBtnsInCard[i]);
+  }
   const metaBtnsInCard = el.querySelectorAll(".card-meta-btn");
   for(let i=0; i<metaBtnsInCard.length; i++){
     metaBtnsInCard[i].onclick = function(){
       openMetaModal(this.dataset.id);
     };
   }
+  /* 批量模式: 复选框勾选/取消 */
+  const checks = el.querySelectorAll(".card-check");
+  for(let i=0; i<checks.length; i++){
+    checks[i].onchange = function(){
+      state.bulkSelected = state.bulkSelected || {};
+      if(this.checked) state.bulkSelected[this.dataset.id] = true;
+      else delete state.bulkSelected[this.dataset.id];
+      const card = this.closest(".card");
+      if(card) card.classList.toggle("bulk-selected", this.checked);
+      updateBulkCount();
+    };
+    /* 阻止点击冒泡触发卡片其他行为 */
+    checks[i].onclick = function(e){ e.stopPropagation(); };
+  }
+}
+
+/* ===== 批量删除模式 ===== */
+function updateBulkCount(){
+  const bar = document.getElementById("bulkBar");
+  const cnt = document.getElementById("bulkCount");
+  const n = state.bulkSelected ? Object.keys(state.bulkSelected).length : 0;
+  if(cnt) cnt.textContent = "已选 " + n + " 项";
+  if(bar) bar.classList.toggle("show", state.bulkMode === true);
+}
+function enterBulkMode(){
+  state.bulkMode = true;
+  state.bulkSelected = {};
+  render();
+  updateBulkCount();
+  toast("批量删除模式 —— 勾选卡片后点「删除所选」");
+}
+function exitBulkMode(){
+  state.bulkMode = false;
+  state.bulkSelected = {};
+  render();
+  updateBulkCount();
 }
 
 function escapeHtml(s){
@@ -4226,6 +4754,67 @@ if(searchInput){
   searchInput.addEventListener("input", function(e){
     state.search = e.target.value;
     renderGallery();
+  });
+}
+
+/* ===== 批量删除按钮 ===== */
+const batchSelectBtn = document.getElementById("batchSelectBtn");
+if(batchSelectBtn){
+  batchSelectBtn.onclick = function(){
+    if(state.bulkMode){ exitBulkMode(); }
+    else {
+      if(state.items.length === 0){ toast("暂无志录可删"); return; }
+      enterBulkMode();
+    }
+  };
+}
+const bulkAllBtn = document.getElementById("bulkAll");
+if(bulkAllBtn){
+  bulkAllBtn.onclick = function(){
+    /* 全选当前筛选/检索下的可见条目 */
+    state.bulkSelected = {};
+    let items = state.items;
+    if(state.filter !== "all") items = items.filter(function(i){ return i.category === state.filter; });
+    const q = (state.search||"").trim().toLowerCase();
+    if(q) items = items.filter(function(i){ return i.name.toLowerCase().indexOf(q) >= 0; });
+    for(let i=0; i<items.length; i++) state.bulkSelected[items[i].id] = true;
+    renderGallery();
+    updateBulkCount();
+    toast("已全选 " + items.length + " 项");
+  };
+}
+const bulkDeleteBtn = document.getElementById("bulkDelete");
+if(bulkDeleteBtn){
+  bulkDeleteBtn.onclick = function(){
+    const ids = state.bulkSelected ? Object.keys(state.bulkSelected) : [];
+    if(ids.length === 0){ toast("请先勾选要删除的条目"); return; }
+    if(!confirm("确定删除所选 " + ids.length + " 条志录?此操作不可撤销。")) return;
+    state.items = state.items.filter(function(i){ return !state.bulkSelected[i.id]; });
+    state.bulkSelected = {};
+    saveState();
+    render();
+    updateBulkCount();
+    toast("已删除 " + ids.length + " 条");
+  };
+}
+const bulkCancelBtn = document.getElementById("bulkCancel");
+if(bulkCancelBtn){
+  bulkCancelBtn.onclick = exitBulkMode;
+}
+
+/* ===== 识别列表按钮 ===== */
+const pendingBtnEl = document.getElementById("pendingBtn");
+if(pendingBtnEl){
+  pendingBtnEl.onclick = openPendingModal;
+}
+const pendingModalEl = document.getElementById("pendingModal");
+const pendingCloseBtn = document.getElementById("pendingClose");
+if(pendingCloseBtn){
+  pendingCloseBtn.onclick = function(){ pendingModalEl.classList.remove("show"); };
+}
+if(pendingModalEl){
+  pendingModalEl.addEventListener("click", function(e){
+    if(e.target === pendingModalEl) pendingModalEl.classList.remove("show");
   });
 }
 
@@ -4470,11 +5059,12 @@ function renderBatchList(){
       starsHtml += '<span class="star' + (s<=it.rating?' on':'') + '" data-v="' + s + '">★</span>';
     }
     const confPct = Math.round((it.autoConfidence||0) * 100);
+    const needReview = confPct < 50;
     const tagText = dup
       ? '已存于「' + c.name + '」,将跳过'
-      : '置信 ' + confPct + '% · ' + escapeHtml(it.autoSource || "");
+      : (needReview ? '⟳ 待识别 · 置信 ' + confPct + '% · 将入识别列表' : '置信 ' + confPct + '% · ' + escapeHtml(it.autoSource || ""));
 
-    html += '<div class="batch-row' + (dup?' dup':'') + '" data-idx="' + i + '" style="--cat-color:' + c.color + '">';
+    html += '<div class="batch-row' + (dup?' dup':'') + (needReview?' need-review':'') + '" data-idx="' + i + '" style="--cat-color:' + c.color + '">';
     html += '<div class="batch-row-top">';
     html += '<input class="batch-row-name" value="' + escapeHtml(it.name) + '" data-idx="' + i + '" />';
     html += '<select class="batch-row-cat" data-idx="' + i + '">' + catOpts + '</select>';
@@ -4665,10 +5255,12 @@ function updateBatchRowTag(i, confOverride, textOverride){
   if(!tag) return;
   const dup = it.isDup;
   const confPct = Math.round((confOverride != null ? confOverride : (it.autoConfidence||0)) * 100);
+  const needReview = confPct < 50;
   tag.textContent = dup
     ? '已存于「' + c.name + '」,将跳过'
-    : (textOverride || ('置信 ' + confPct + '% · ' + (it.autoSource || "")));
+    : (textOverride || (needReview ? '⟳ 待识别 · 置信 ' + confPct + '% · 将入识别列表' : '置信 ' + confPct + '% · ' + (it.autoSource || "")));
   tag.classList.toggle('dup-tag', dup);
+  row.classList.toggle('need-review', needReview && !dup);
 }
 
 function openBatchModal(){
@@ -4722,7 +5314,7 @@ const batchCommitBtn = document.getElementById("batchCommit");
 if(batchCommitBtn){
   batchCommitBtn.onclick = function(){
     if(batchItems.length === 0){ toast("无可入册之项"); return; }
-    let added = 0, skipped = 0;
+    let added = 0, skipped = 0, pending = 0;
     for(let i=0; i<batchItems.length; i++){
       const it = batchItems[i];
       // 重算重复(可能用户改名了)
@@ -4730,10 +5322,17 @@ if(batchCommitBtn){
       if(it.isDup){ skipped++; continue; }
       const r = addItem(it.name, it.category, { rating: it.rating, description: it.description });
       if(r && r.error === "duplicate"){ skipped++; }
-      else { added++; }
+      else {
+        added++;
+        /* 联网后仍低置信 → 进识别列表待人工确认 */
+        if((it.autoConfidence || 0) < 0.5){
+          addPendingReview(it.name, it.category, it.autoConfidence || 0, it.autoSource || "联网亦未识别");
+          pending++;
+        }
+      }
     }
     batchModal.classList.remove("show");
-    toast("已入册 " + added + " 项" + (skipped>0 ? " · 跳过 " + skipped + " 项已存" : ""));
+    toast("已入册 " + added + " 项" + (skipped>0 ? " · 跳过 " + skipped + " 项已存" : "") + (pending>0 ? " · " + pending + " 项入识别列表" : ""));
     const archive = document.getElementById("archive");
     if(archive) archive.scrollIntoView({behavior:"smooth"});
   };
