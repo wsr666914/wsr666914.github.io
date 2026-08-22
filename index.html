@@ -887,6 +887,26 @@
     margin:0 0 13px; text-indent:2em; color:var(--ink-soft); white-space:normal;
   }
   .pp-refs-h{ margin-top:32px; }
+
+  /* ===== PDF图片区(论文插图) ===== */
+  .pp-images{ margin:28px 0 8px; }
+  .pp-images-h{ margin-bottom:14px; }
+  .pp-images-grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+    gap:16px; padding:0;
+  }
+  .pp-fig{
+    margin:0; padding:0; text-align:center;
+    border:1px solid var(--line); border-radius:10px;
+    overflow:hidden; background:var(--paper);
+    transition:all .2s;
+  }
+  .pp-fig:hover{ border-color:var(--accent); box-shadow:0 4px 12px rgba(181,101,29,.12); }
+  .pp-fig img{ width:100%; height:auto; display:block; max-height:280px; object-fit:contain; background:#faf8f3; }
+  .pp-fig figcaption{
+    font-size:11px; color:var(--ink-mute); padding:6px 8px;
+    font-family:"Cormorant Garamond",serif; font-weight:600; letter-spacing:.05em;
+  }
   .pp-refs{ margin:0; padding:0; list-style:none; }
   .pp-ref{
     font-size:12px; line-height:1.8; color:var(--secondary-ink, var(--ink-soft));
@@ -1561,7 +1581,6 @@
           <button class="pr-hl-fmt" id="prCheckRed" title="AI检查可删除内容:标红乱码/冗余,再次点击取消标红">🔍 检查</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
-        <button class="pr-reformat-btn" id="prReformat" title="一键重新排版:合并断行/去空行/保留段落结构">◫ 一键排版</button>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
@@ -3407,7 +3426,8 @@ function reformatPdfText(rawText){
 function extractPdfTextEnhanced(pdf, onPageDone){
   const numPages = pdf.numPages;
   /* 并行提取: 6路worker并发处理各页(原串行逐页,大PDF提速数倍);页序按页码索引保持 */
-  const pageData = new Array(numPages);   /* 每页: {lines:[], first:"", last:""} */
+  const pageData = new Array(numPages);   /* 每页: {lines:[], first:"", last:"", images:[]} */
+  const allImages = [];                    /* 全文图片: {page, dataUrl, y, x, w, h} */
   const CONC = Math.max(1, Math.min(6, numPages));
   let next = 0;
   let doneCount = 0;
@@ -3417,17 +3437,74 @@ function extractPdfTextEnhanced(pdf, onPageDone){
   }
   function extractOne(p){
     return pdf.getPage(p).then(function(page){
-      return page.getTextContent().then(function(tc){
-        const viewport = page.getViewport({ scale: 1 });
-        const pageW = viewport.width;
+      const viewport = page.getViewport({ scale: 1 });
+      const pageW = viewport.width;
+      const pageH = viewport.height;
+
+      /* 并行获取文本 + 图片 */
+      const textPromise = page.getTextContent();
+      const imgPromise = page.getOperatorList().then(function(ops){
+        const imgs = [];
+        const OPS = pdfjsLib.OPS;
+        const imgKeys = {};
+        for(let k in OPS){ if(OPS[k] === 85 || OPS[k] === 86 || OPS[k] === 87 || OPS[k] === 93 || OPS[k] === 84) imgKeys[OPS[k]] = k; }
+        /* 遍历操作列表,查找图片绘制操作(paintImageXObject / paintImageXObjectRepeat / paintJpegXObject) */
+        for(let i=0; i<ops.fnArray.length; i++){
+          const fn = ops.fnArray[i];
+          if(fn === 85 || fn === 86 || fn === 87 || fn === 93 || fn === 84){
+            /* paintImage/Repeat/Jpeg → 提取图片资源 */
+            const args = ops.argsArray[i];
+            if(args && args[0] && args[0].width >= 60 && args[0].height >= 60){
+              const w = args[0].width, h = args[0].height;
+              let imgData = null;
+              if(args[0].data){
+                imgData = args[0];
+              }
+              if(imgData){
+                try{
+                  /* 转为canvas → dataURL(缩小到≤800px宽节省空间) */
+                  const cv = document.createElement("canvas");
+                  const scale = Math.min(1, 800 / w);
+                  cv.width = Math.round(w * scale);
+                  cv.height = Math.round(h * scale);
+                  const ctx = cv.getContext("2d");
+                  const ua = new Uint8ClampedArray(imgData.data);
+                  if(ua.length >= cv.width * cv.height * 4){
+                    const imgDataObj = ctx.createImageData(cv.width, cv.height);
+                    /* 缩小采样 */
+                    for(let y=0; y<cv.height; y++){
+                      for(let x=0; x<cv.width; x++){
+                        const sy = Math.floor(y / scale);
+                        const sx = Math.floor(x / scale);
+                        const si = (sy * w + sx) * 4;
+                        const di = (y * cv.width + x) * 4;
+                        imgDataObj.data[di] = ua[si];
+                        imgDataObj.data[di+1] = ua[si+1];
+                        imgDataObj.data[di+2] = ua[si+2];
+                        imgDataObj.data[di+3] = ua[si+3] || 255;
+                      }
+                    }
+                    ctx.putImageData(imgDataObj, 0, 0);
+                    imgs.push({ dataUrl: cv.toDataURL("image/jpeg", 0.72), w: cv.width, h: cv.height });
+                  }
+                }catch(e){ /* 图片提取失败静默 */ }
+              }
+            }
+          }
+        }
+        return imgs;
+      }).catch(function(){ return []; });
+
+      return Promise.all([textPromise, imgPromise]).then(function(results){
+        const tc = results[0];
+        const pageImages = results[1] || [];
         /* --- 收集文本项(x/y坐标) --- */
         const items = [];
         for(let i=0; i<tc.items.length; i++){
           const it = tc.items[i];
           if(!it.str || !it.str.trim()) continue;
-          items.push({ x: it.transform[4], y: it.transform[5], str: it.str });
+          items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0 });
         }
-        if(items.length === 0){ pageData[p-1] = { lines: [], first: "", last: "" }; pageDone(); return; }
 
         /* --- 按行分组(y容差4,自上而下) --- */
         const sorted = items.slice().sort(function(a, b){ return b.y - a.y; });
@@ -3440,23 +3517,67 @@ function extractPdfTextEnhanced(pdf, onPageDone){
         }
         rows.forEach(function(r){ r.items.sort(function(a, b){ return a.x - b.x; }); });
 
-        /* --- 双栏检测: x轴最大间隙显著且位于页面中部 --- */
+        /* --- 多级双栏检测(知网/期刊常见双栏+跨栏标题) --- */
+        /* 策略: 统计x坐标分布,找最大间隙;同时用行首x坐标聚类验证双栏 */
         let splitX = -1;
-        const xs = items.map(function(i){ return i.x; }).sort(function(a, b){ return a - b; });
-        if(xs.length >= 20){
+        if(items.length >= 20){
+          const xs = items.map(function(i){ return i.x; }).sort(function(a, b){ return a - b; });
+          /* 间隙直方图法: 找x坐标最大间隙 */
           let maxGap = 0, gapAt = -1;
           for(let i=1; i<xs.length; i++){
             const gap = xs[i] - xs[i-1];
             if(gap > maxGap){ maxGap = gap; gapAt = (xs[i] + xs[i-1]) / 2; }
           }
-          if(maxGap > pageW * 0.14 && gapAt > pageW * 0.28 && gapAt < pageW * 0.72){
+          if(maxGap > pageW * 0.12 && gapAt > pageW * 0.25 && gapAt < pageW * 0.75){
             splitX = gapAt;
+          }
+          /* 补充: 行首x坐标聚类(两组明显分离 → 双栏) */
+          if(splitX < 0 && rows.length >= 8){
+            const firstXs = rows.map(function(r){ return r.items[0].x; }).sort(function(a, b){ return a - b; });
+            /* 找行首x坐标的最大间隙 */
+            let maxFG = 0, fGapAt = -1;
+            for(let i=1; i<firstXs.length; i++){
+              const gap = firstXs[i] - firstXs[i-1];
+              if(gap > maxFG){ maxFG = gap; fGapAt = (firstXs[i] + firstXs[i-1]) / 2; }
+            }
+            if(maxFG > pageW * 0.15 && fGapAt > pageW * 0.25 && fGapAt < pageW * 0.75){
+              splitX = fGapAt;
+            }
           }
         }
 
-        /* --- 行序: 双栏先左栏后右栏,单栏自上而下 --- */
-        let orderedRows;
+        /* --- 按y坐标分割行(跨栏标题在页面顶部,正文双栏) ---
+           知网格式: 标题/作者/摘要跨栏(单栏),正文双栏
+           策略: 找到第一个同时有左右栏行的y坐标 → 该y以下按双栏,以上按单栏 */
+        let dualStartY = pageH; /* 双栏开始y(默认全部单栏) */
         if(splitX > 0){
+          const leftRows = rows.filter(function(r){ return r.items[0].x < splitX; });
+          const rightRows = rows.filter(function(r){ return r.items[0].x >= splitX; });
+          if(leftRows.length >= 3 && rightRows.length >= 3){
+            /* 找最早(最大y)的右栏行 → 双栏开始位置 */
+            const minRightY = Math.min.apply(null, rightRows.map(function(r){ return r.y; }));
+            const minLeftY = Math.min.apply(null, leftRows.map(function(r){ return r.y; }));
+            /* 如果右栏行最早出现在页面中部以下 → 上部单栏,下部双栏 */
+            if(minRightY < pageH * 0.85 && minRightY < minLeftY + pageH * 0.3){
+              dualStartY = Math.max(minRightY, minLeftY) - 10;
+            }else{
+              dualStartY = pageH; /* 全页双栏 */
+            }
+          }
+        }
+
+        /* --- 行序: 按y排序;双栏区域先左后右 --- */
+        let orderedRows;
+        if(splitX > 0 && dualStartY < pageH){
+          /* 上部(跨栏标题区): 按y自上而下 */
+          const topRows = rows.filter(function(r){ return r.y > dualStartY; });
+          /* 下部(双栏正文区): 左栏按y + 右栏按y */
+          const bottomRows = rows.filter(function(r){ return r.y <= dualStartY; });
+          const leftBottom = bottomRows.filter(function(r){ return r.items[0].x < splitX; });
+          const rightBottom = bottomRows.filter(function(r){ return r.items[0].x >= splitX; });
+          orderedRows = topRows.concat(leftBottom).concat(rightBottom);
+        }else if(splitX > 0){
+          /* 全页双栏 */
           const left = rows.filter(function(r){ return r.items[0].x < splitX; });
           const right = rows.filter(function(r){ return r.items[0].x >= splitX; });
           orderedRows = left.concat(right);
@@ -3478,12 +3599,23 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           line = line.replace(/\s{2,}/g, " ").trim();
           if(line) lines.push(line);
         }
+
+        /* --- 图片收集 --- */
+        const imageMarkers = [];
+        for(let i=0; i<pageImages.length; i++){
+          const img = pageImages[i];
+          allImages.push({ page: p, dataUrl: img.dataUrl, w: img.w, h: img.h });
+          imageMarkers.push({ dataUrl: img.dataUrl, w: img.w, h: img.h });
+        }
+
         pageData[p-1] = {
           lines: lines,
           first: lines[0] || "",
-          last: lines[lines.length - 1] || ""
+          last: lines[lines.length - 1] || "",
+          images: imageMarkers
         };
         pageDone();
+      });
       });
     });
   }
@@ -3520,7 +3652,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
       pageTexts.push(lines.join("\n"));
     }
     const rawText = pageTexts.join("\n\n");
-    return { text: reformatPdfText(rawText), pages: numPages };
+    return { text: reformatPdfText(rawText), pages: numPages, images: allImages };
   });
 }
 
@@ -4141,8 +4273,9 @@ function openPaperReader(itemId){
 
   /* 一键重新排版: AI排版优先,本地兜底 (不重置快照,排版算更改) */
   const prReformat = document.getElementById("prReformat");
+  /* 一键排版按钮已移除;如残留元素则绑定AI配置入口 */
   if(prReformat){
-    prReformat.onclick = function(){ aiReformatPaper(prReformat); };
+    prReformat.onclick = function(){ openAiCfgModal(); };
   }
 
   /* 高亮颜色选择 */
@@ -4513,6 +4646,22 @@ function renderStructuredPaper(item, prText){
       const p = sec.paras[j];
       if(p && p.trim()) h += '<p class="pp-para">' + escapeHtml(p.trim()) + '</p>';
     }
+  }
+
+  /* --- PDF图片(导入时提取的论文插图) --- */
+  if(item.images && item.images.length){
+    h += '<section class="pp-images">';
+    h += '<h3 class="pp-h1 pp-images-h">图表</h3>';
+    h += '<div class="pp-images-grid">';
+    for(let i=0; i<item.images.length; i++){
+      const img = item.images[i];
+      h += '<figure class="pp-fig">';
+      h += '<img src="' + escapeHtml(img.dataUrl) + '" alt="图' + (i+1) + '" loading="lazy" />';
+      h += '<figcaption>图 ' + (i+1) + '</figcaption>';
+      h += '</figure>';
+    }
+    h += '</div>';
+    h += '</section>';
   }
 
   /* --- 参考文献(每条带学术网站检索链接) --- */
@@ -5709,68 +5858,9 @@ async function runAiRead(){
 }
 
 /* ============================================================
-   AI 一键排版 —— 通读全文→排除无关内容→归纳标准学术结构
-   (标题/摘要/关键词/章节/参考文献)→联网核对原文→美观渲染
+   AI 排版函数已移除(一键排版按钮已删除)
+   排版功能在导入/录入入口自动执行,不再在阅读器内触发
    ============================================================ */
-async function aiReformatPaper(btn){
-  const cur = state.items.find(function(x){ return x.id === prState.itemId; });
-  if(!cur || !cur.fullText){ toast("当前无全文可排版"); return; }
-  const cfg = getAiConfig();
-  const before = cur.fullText;
-
-  if(btn){
-    btn.classList.add("busy");
-    btn.innerHTML = cfg && cfg.key ? "◫ AI 排版中…" : "◫ 排版中…";
-  }
-  const bodyEl = document.getElementById("prText");
-  if(bodyEl) bodyEl.style.opacity = ".55";
-  ppProgressShow(cfg && cfg.key ? "AI 正在通读全文并排版…" : "正在排版并排除无关内容…");
-  try{
-    /* AI分块排版(进度回调) / 本地结构解析兜底 / 联网核对原文 */
-    const result = await aiStructuredReformat(before, function(i, n){
-      ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
-      if(btn) btn.innerHTML = "◫ AI 排版 " + i + "/" + n;
-    }, function(stage){
-      if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
-    });
-    ppProgressUpdate(94, "正在渲染标准结构…");
-    const st = result.st;
-    const after = structuredToText(st);
-
-    pushTextHistory(cur);
-    cur.structured = st;
-    cur.fullText = after;
-    cur.outline = generateOutline(after);
-    cur.analysis = analyzePaper(after);
-    cur.description = "全文 " + after.length + " 字 · " + after.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
-    saveState();
-    markDirty();
-    applyHighlightsToDom(cur);
-
-    ppProgressUpdate(100, "排版完成");
-    ppProgressHide(900);
-    if(result.usedAI){
-      const bits = [];
-      if(st.title) bits.push("标题");
-      if(st.abstract) bits.push("摘要");
-      if(st.keywords && st.keywords.length) bits.push("关键词");
-      if(st.sections && st.sections.length) bits.push(st.sections.length + "个章节");
-      if(st.references && st.references.length) bits.push(st.references.length + "条文献");
-      toast("AI 排版完成 · 无关内容已清除:" + bits.join(" · ") + (st.sourceUrl ? " · 已联网找到原文链接" : ""));
-    }else if(result.noKey){
-      toast("本地排版完成 · 接入 AI 可智能排除无关内容并精准归纳结构");
-      openAiCfgModal();
-    }else{
-      toast("AI 暂不可用,已完成本地排版");
-    }
-  }catch(e){
-    ppProgressHide(0);
-    toast("排版失败: " + (e.message || "未知错误"));
-  }finally{
-    if(btn){ btn.classList.remove("busy"); btn.innerHTML = "◫ 一键排版"; }
-    if(bodyEl) bodyEl.style.opacity = "";
-  }
-}
 
 /* ============================================================
    翻译选中文字 —— AI翻译,译文插入选区后;再次点击取消译文
@@ -7446,11 +7536,12 @@ function renderGallery(){
                   target.fullText = structuredToText(result.st);
                   target.analysis = analyzePaper(target.fullText);
                   target.outline = generateOutline(target.fullText);
+                  if(res.images && res.images.length) target.images = res.images;
                   saveState();
                   render();
                   ppProgressUpdate(100, "排版完成");
                   ppProgressHide(900);
-                  toast("「" + target.name + "」PDF已转为可编辑文本(与原文一致),可点「查看全文」阅读标注");
+                  toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
                 });
               }).catch(function(e){
                 ppProgressHide(0);
@@ -8276,6 +8367,7 @@ function openPaperEntryModal(){
   if(paperTitleInput) paperTitleInput.value = "";
   if(paperFullTextInput) paperFullTextInput.value = "";
   paperEntryFromPdf = false;
+  paperEntryImages = null;
   updatePaperEntryStats();
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
@@ -8313,6 +8405,7 @@ if(paperFullTextInput){
   paperFullTextInput.addEventListener("input", updatePaperEntryStats);
 }
 let paperEntryFromPdf = false; /* 全文是否来自PDF导入(决定保真/AI排版路径) */
+let paperEntryImages = null;  /* PDF导入提取的图片 */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = async function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
@@ -8408,6 +8501,13 @@ if(paperEntrySubmit){
       toast("论文内容为空");
       return;
     }
+    /* PDF导入的图片保存到条目 */
+    if(result && paperEntryImages && paperEntryImages.length){
+      result.images = paperEntryImages;
+      saveState();
+      render();
+    }
+    paperEntryImages = null;
     closePaperEntryModal();
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
     const archive = document.getElementById("archive");
@@ -8450,11 +8550,12 @@ if(paperPdfBtn){
             updatePaperEntryStats();
           }
           paperEntryFromPdf = true; /* 标记:全文来自PDF提取,整理入册时走保真排版(与PDF一致,AI不干预) */
+          paperEntryImages = (res.images && res.images.length) ? res.images : null;
           /* 标题留空时自动取PDF文件名(去扩展名) */
           if(paperTitleInput && !paperTitleInput.value.trim()){
             paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
           }
-          toast("PDF已解析(" + res.pages + "页) · 点「整理入册」将自动转为可编辑文本(与原文一致)");
+          toast("PDF已解析(" + res.pages + "页)" + (res.images && res.images.length ? " · 含" + res.images.length + "张图表" : "") + " · 点「整理入册」将自动转为可编辑文本");
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入PDF";
