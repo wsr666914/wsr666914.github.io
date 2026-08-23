@@ -861,6 +861,43 @@
   .trash-restore-btn:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
   .trash-forever-btn{ border:1px solid rgba(176,67,44,.35); background:transparent; color:#B0432C; }
   .trash-forever-btn:hover{ background:#B0432C; color:#fff; border-color:#B0432C; }
+  /* ===== 身份码(多设备同步) ===== */
+  .login-sync-tip{
+    margin-top:12px; padding:9px 12px; border-radius:8px;
+    background:rgba(47,93,98,.06); border:1px dashed rgba(47,93,98,.3);
+    font-size:11px; color:var(--ink-mute); line-height:1.8;
+  }
+  .login-sync-tip b{ color:var(--teal); font-weight:700; }
+  .login-sync-tip a{ color:var(--teal); font-weight:600; text-decoration:none; }
+  .login-sync-tip a:hover{ text-decoration:underline; }
+  .sync-modal{ width:min(560px, 92vw); }
+  .sync-tip{
+    padding:9px 12px; margin-bottom:12px; border-radius:8px;
+    background:rgba(47,93,98,.06); border:1px solid rgba(47,93,98,.18);
+    font-size:12px; color:var(--ink-soft); line-height:1.8;
+  }
+  .sync-tip b{ color:var(--teal); }
+  .sync-code-box{
+    display:flex; align-items:center; gap:10px; padding:14px 16px; margin-bottom:12px;
+    border:1px solid rgba(60,72,88,.18); border-radius:10px; background:rgba(60,72,88,.03);
+  }
+  .sync-code-value{
+    flex:1; font-family:"JetBrains Mono","Noto Serif SC",monospace; font-size:15px;
+    font-weight:600; color:var(--teal); letter-spacing:.04em; word-break:break-all;
+  }
+  .sync-copy-btn{
+    padding:6px 18px; border:1px solid rgba(47,93,98,.4); border-radius:8px;
+    background:transparent; color:var(--teal); font-size:12.5px; font-weight:700;
+    font-family:"Noto Serif SC",serif; cursor:pointer; transition:all .18s; white-space:nowrap;
+  }
+  .sync-copy-btn:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .sync-note{ font-size:11px; color:var(--ink-mute); line-height:2; margin-bottom:14px; }
+  .nav-code-btn{
+    color:var(--teal); font-weight:600; text-decoration:none;
+    border:1px solid rgba(47,93,98,.28); border-radius:7px; padding:1px 9px;
+    font-size:11.5px; transition:all .18s;
+  }
+  .nav-code-btn:hover{ background:rgba(47,93,98,.1); border-color:var(--teal); }
   .pr-text-wrap{
     flex:1; overflow-y:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
@@ -1481,6 +1518,10 @@
         <input type="password" id="loginPass" placeholder="密语" />
       </div>
       <button class="login-submit" id="loginSubmit">入册 · LOGIN</button>
+      <div class="login-sync-tip">
+        <span>换设备?名号栏输入<b>身份码</b>+暗语即可同步云端数据</span>
+        <a href="#" id="loginViewCode">查看我的身份码 →</a>
+      </div>
     </div>
     <!-- 注册表单 -->
     <div class="login-form" id="registerForm" style="display:none;">
@@ -1499,7 +1540,7 @@
       <button class="login-submit" id="registerSubmit">立册 · REGISTER</button>
     </div>
     <div class="login-hint" id="loginHint"></div>
-    <div class="login-note">每位访客的志录各自独立储存,各不相扰。暗语仅存于本机,无后端。</div>
+    <div class="login-note">每位访客的志录各自独立储存。注册即生成<b>身份码</b>:任意设备凭身份码+暗语登录,云端同步全部志录。</div>
   </div>
 </div>
 
@@ -1517,6 +1558,7 @@
       <a href="#" id="importBtn" title="导入JSON备份文件恢复数据">导入</a>
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <a href="#" id="navTrash" title="回收站:删除的记录保留7天,可恢复或彻底删除">🗑 回收站<span class="trash-badge" id="trashBadge"></span></a>
+      <a href="#" id="navSyncCode" class="nav-code-btn" title="查看身份码:其他设备登录时输入身份码+暗语即可同步本账号数据">⌁ 身份码</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -1711,6 +1753,7 @@
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
+          <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色/加粗/划线/备注">✕ 取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
         <div class="pr-margin-ctl">
@@ -1765,6 +1808,26 @@
     <div class="modal-row">
       <button class="btn-ghost" id="trashEmptyBtn">彻底清空回收站</button>
       <button class="modal-btn" id="trashCloseBtn">关闭</button>
+    </div>
+  </div>
+</div>
+
+<!-- 身份码弹窗(多设备同步凭证) -->
+<div class="modal-bg" id="syncCodeModal">
+  <div class="modal sync-modal">
+    <h3>⌁ 我的身份码</h3>
+    <div class="sync-tip">身份码是该账号的云端同步凭证。在<b>任意设备</b>的登录页名号栏输入身份码+暗语,即可同步该账号全部志录(含论文全文、标注、回收站)。</div>
+    <div class="sync-code-box">
+      <code id="syncCodeValue" class="sync-code-value">—</code>
+      <button class="sync-copy-btn" id="syncCopyBtn">复制</button>
+    </div>
+    <div class="sync-note">
+      · 请将身份码妥善保存(记在备忘录/密码管理器),丢失后无法在其他设备恢复<br>
+      · 身份码与暗语同等重要,请勿泄露给他人<br>
+      · 数据经云端KV暂存(每日自动同步),本机存储仍为主数据
+    </div>
+    <div class="modal-row">
+      <button class="modal-btn" id="syncCodeCloseBtn">我已保存,关闭</button>
     </div>
   </div>
 </div>
@@ -2796,7 +2859,9 @@ function doRegister(){
   const users = getUsers();
   if(users[u]){ hint.textContent = "此名号已被取用,请换一名"; return; }
   const isFirstUser = (Object.keys(users).length === 0);
-  users[u] = { pass: hashPass(p), createdAt: Date.now() };
+  /* 生成身份码(多设备同步凭证,云端存储key) */
+  const syncCode = genSyncCode();
+  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode };
   saveUsers(users);
   hint.textContent = "";
   // 注册成功直接登录
@@ -2813,6 +2878,9 @@ function doRegister(){
   hideLoginScreen();
   afterLogin();
   toast("立册成功 · 欢迎," + u);
+  /* 异步首推云端 + 展示身份码弹窗 */
+  syncPushNow();
+  setTimeout(function(){ showSyncCodeModal(); }, 900);
 }
 
 function doLogin(){
@@ -2820,12 +2888,49 @@ function doLogin(){
   const p = document.getElementById("loginPass").value || "";
   const hint = document.getElementById("loginHint");
   if(!hint) return;
-  if(u.length < 1){ hint.textContent = "请输入名号"; return; }
+  if(u.length < 1){ hint.textContent = "请输入名号(或身份码)"; return; }
   if(p.length < 1){ hint.textContent = "请输入暗语"; return; }
+  /* 身份码登录: 新设备凭身份码+暗语从云端拉取账号数据 */
+  if(isSyncCode(u)){
+    hint.textContent = "身份码识别中,正在连接云端…";
+    syncPull(u).then(function(r){
+      if(!r.ok){
+        hint.textContent = r.reason || "身份码登录失败";
+        return;
+      }
+      const d = r.data;
+      if(d.ph !== hashPass(p)){
+        hint.textContent = "暗语有误(与身份码绑定的暗语不一致)";
+        return;
+      }
+      /* 落地账号(本地没有则建立,含身份码) */
+      const users = getUsers();
+      if(!users[d.u]){
+        users[d.u] = { pass: d.ph, createdAt: Date.now(), code: u };
+      }else if(!users[d.u].code){
+        users[d.u].code = u;
+      }
+      saveUsers(users);
+      setSession(d.u);
+      /* 云端数据落地本地 */
+      if(Array.isArray(d.items)){
+        state.items = d.items;
+        state.pendingReview = d.pendingReview || [];
+        state.trash = d.trash || [];
+        try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(d.ts || 0)); }catch(e){}
+        saveState();
+      }
+      hint.textContent = "";
+      hideLoginScreen();
+      afterLogin();
+      toast("云端登录成功 · " + d.u + "(已同步 " + (d.items ? d.items.length : 0) + " 条志录)");
+    });
+    return;
+  }
   const users = getUsers();
   if(!users[u]){
     const host = location.host;
-    hint.textContent = "无此名号,请先注册(注意:" + host + " 与其他地址的数据各自独立,本地localhost与线上网站的账号不互通)";
+    hint.textContent = "无此名号,请先注册(注意:" + host + " 与其他地址的数据各自独立;若已在他处注册,可用身份码登录同步)";
     return;
   }
   if(users[u].pass !== hashPass(p)){ hint.textContent = "暗语有误"; return; }
@@ -2834,6 +2939,168 @@ function doLogin(){
   hideLoginScreen();
   afterLogin();
   toast("欢迎归来 · " + u);
+  /* 云端检查: 其他设备有更新则拉取(多设备联通) */
+  syncCheckOnLogin();
+}
+
+/* ============================================================
+   身份码 · 多设备同步 (textdb.online 云端KV,CORS开放国内可达)
+   身份码 = SY-XXXX24位随机,同时是云端存储key
+   云端数据: {v,u(名号),ph(暗语哈希),ts(时间戳),items,pendingReview,trash}
+   写入限流: 每IP每日500次 → 防抖6秒合并推送
+   ============================================================ */
+const SYNC_BASE = "https://textdb.online";
+
+/* 生成身份码: SY- + 24位随机[0-9a-zA-Z] */
+function genSyncCode(){
+  const chars = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for(let i=0; i<24; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
+  return "SY-" + s;
+}
+/* 身份码格式校验 */
+function isSyncCode(s){
+  return /^SY-[0-9a-zA-Z]{16,40}$/.test((s || "").trim());
+}
+
+/* 推送当前账号全部数据到云端(防抖合并)
+   传输方式: POST + key/value全在URL query(实测textdb仅query参数真实生效,body方式假成功)
+   大数据分块: 每块2800字符写 key_pN,主key最后写 {chunked,n,ts} 原子标记 */
+let _syncPushTimer = null;
+const SYNC_CHUNK = 2800;
+function scheduleSyncPush(){
+  if(!currentUser || !getMySyncCode()) return;
+  if(_syncPushTimer) clearTimeout(_syncPushTimer);
+  _syncPushTimer = setTimeout(syncPushNow, 10000);
+}
+/* 单条写(textdb): POST + query参数 */
+async function syncWriteOne(key, valueStr){
+  const res = await fetch(SYNC_BASE + "/update/?key=" + encodeURIComponent(key) + "&value=" + encodeURIComponent(valueStr), { method: "POST" });
+  const j = await res.json().catch(function(){ return null; });
+  return !!(j && j.status === 1);
+}
+async function syncPushNow(){
+  if(!currentUser) return;
+  const code = getMySyncCode();
+  if(!code) return;
+  const users = getUsers();
+  const acc = users[currentUser];
+  if(!acc) return;
+  const payload = {
+    v: 1,
+    u: currentUser,
+    ph: acc.pass,
+    ts: Date.now(),
+    items: state.items,
+    pendingReview: state.pendingReview || [],
+    trash: state.trash || []
+  };
+  let bodyStr = "";
+  try{ bodyStr = JSON.stringify(payload); }catch(e){ return; }
+  if(bodyStr.length > 195000){
+    toast("数据总量超云端单条上限(20万字符),本次未同步", 5000);
+    return;
+  }
+  try{
+    if(bodyStr.length <= SYNC_CHUNK){
+      /* 小数据: 单条直写 */
+      const ok = await syncWriteOne(code, bodyStr);
+      if(ok){
+        try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
+      }else{
+        toast("云端同步失败(服务波动),稍后自动重试", 4000);
+      }
+    }else{
+      /* 大数据: 分块写 key_p1..pn,主key最后写原子标记 */
+      const n = Math.ceil(bodyStr.length / SYNC_CHUNK);
+      for(let i=0; i<n; i++){
+        const ok = await syncWriteOne(code + "_p" + (i+1), bodyStr.slice(i*SYNC_CHUNK, (i+1)*SYNC_CHUNK));
+        if(!ok){ toast("云端同步中断(第" + (i+1) + "/" + n + "块),稍后重试", 4000); return; }
+        if(i < n-1) await new Promise(function(r){ setTimeout(r, 350); }); /* 块间间隔防限流 */
+      }
+      /* 主key原子标记(最后写,读方以此为准) */
+      const ok = await syncWriteOne(code, JSON.stringify({ chunked: true, n: n, ts: payload.ts }));
+      if(ok){
+        try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
+      }
+    }
+  }catch(e){
+    /* 网络失败静默,下次操作再推 */
+  }
+}
+
+/* 拉取云端数据: 返回 {ok, data, reason}
+   分块协议: 主key为 {chunked,n,ts} 时逐块读 key_p1..n 拼接 */
+async function syncPull(code){
+  try{
+    const res = await fetch(SYNC_BASE + "/" + encodeURIComponent(code), { cache: "no-store" });
+    const txt = await res.text();
+    if(!txt || !txt.trim()) return { ok: false, reason: "云端无此身份码的数据" };
+    let main;
+    try{ main = JSON.parse(txt); }catch(e){ return { ok: false, reason: "身份码数据格式异常" }; }
+    /* 分块模式: 逐块拉取拼接 */
+    if(main && main.chunked && main.n > 0){
+      let full = "";
+      for(let i=0; i<main.n; i++){
+        const r2 = await fetch(SYNC_BASE + "/" + encodeURIComponent(code + "_p" + (i+1)), { cache: "no-store" });
+        const piece = await r2.text();
+        if(!piece){ return { ok: false, reason: "云端数据块缺失(同步中,请稍后重试)" }; }
+        full += piece;
+      }
+      let j;
+      try{ j = JSON.parse(full); }catch(e){ return { ok: false, reason: "云端数据不完整(同步中,请稍后重试)" }; }
+      return { ok: true, data: j };
+    }
+    /* 单条模式 */
+    if(!main || !main.u || !main.ph) return { ok: false, reason: "身份码数据格式异常" };
+    return { ok: true, data: main };
+  }catch(e){
+    return { ok: false, reason: "云端连接失败,请检查网络" };
+  }
+}
+
+/* 当前账号的身份码 */
+function getMySyncCode(){
+  if(!currentUser) return null;
+  const users = getUsers();
+  return (users[currentUser] && users[currentUser].code) || null;
+}
+
+/* 登录时云端检查: 有身份码的账号,若云端数据更新(ts更大)则拉取覆盖本地 */
+async function syncCheckOnLogin(){
+  const code = getMySyncCode();
+  if(!code) return;
+  const r = await syncPull(code);
+  if(!r.ok || !r.data) return;
+  /* 暗语校验: 云端ph与本地不一致说明改过密码,以本地为准不拉 */
+  const users = getUsers();
+  if(!users[currentUser] || users[currentUser].pass !== r.data.ph) return;
+  let localTs = 0;
+  try{ localTs = parseInt(localStorage.getItem(STORAGE_KEY + "_syncts") || "0", 10) || 0; }catch(e){}
+  if((r.data.ts || 0) > localTs && Array.isArray(r.data.items)){
+    state.items = r.data.items;
+    state.pendingReview = r.data.pendingReview || [];
+    state.trash = r.data.trash || [];
+    saveState();
+    render();
+    updateTrashBtn();
+    toast("已从云端同步最新数据(" + r.data.items.length + " 条志录)", 4500);
+  }
+}
+
+/* 身份码展示弹窗(查看/复制) */
+function showSyncCodeModal(){
+  const code = getMySyncCode();
+  const modal = document.getElementById("syncCodeModal");
+  const codeEl = document.getElementById("syncCodeValue");
+  if(!modal || !codeEl) return;
+  if(!code){
+    codeEl.textContent = "当前账号尚未生成身份码(注册于早期版本)";
+    toast("该账号无身份码:重新注册可获取");
+    return;
+  }
+  codeEl.textContent = code;
+  modal.classList.add("show");
 }
 
 function doLogout(){
@@ -2841,8 +3108,7 @@ function doLogout(){
   state.items = [];
   render();
   updateNavUser();
-  showLoginScreen();
-  // 清空表单
+  showLoginScreen();  // 清空表单
   const lu = document.getElementById("loginUser");
   const lp = document.getElementById("loginPass");
   const ru = document.getElementById("regUser");
@@ -2947,6 +3213,8 @@ function saveState(){
     console.warn("save failed", e);
     toast("保存失败:浏览器存储空间不足,请尽快「导出数据」备份", 5000);
   }
+  /* 云端同步(防抖6秒合并推送,身份码账号生效) */
+  scheduleSyncPush();
 }
 
 /* ===== 回收站: 删除内容保留7天后自动清空 ===== */
@@ -5248,6 +5516,35 @@ function openPaperReader(itemId){
     };
   }
 
+  /* ===== 取消标记按钮: 选中已标注文字 → 清除该处全部标注(颜色/加粗/划线/备注) ===== */
+  const prUnmarkBtn = document.getElementById("prUnmarkBtn");
+  if(prUnmarkBtn){
+    prUnmarkBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    prUnmarkBtn.onclick = function(){
+      const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+      if(!cur || !cur.highlights || !cur.highlights.length){ toast("当前无任何标注"); return; }
+      const live = prGetLiveSelection();
+      if(!live){ toast("请先选中要取消标记的文字"); return; }
+      const selText = live.text;
+      /* 删除与选中文字有重叠的标注: 完全包含或互相包含 */
+      const removed = cur.highlights.filter(function(h){
+        return selText.indexOf(h.text) >= 0 || h.text.indexOf(selText) >= 0;
+      });
+      if(removed.length === 0){ toast("选中文字上没有标注"); return; }
+      if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+      rebuildFromDom(cur);
+      cur.highlights = cur.highlights.filter(function(h){
+        return selText.indexOf(h.text) < 0 && h.text.indexOf(selText) < 0;
+      });
+      pushHlHistory();
+      saveState();
+      markDirty();
+      applyHighlightsToDom(cur);
+      live.sel.removeAllRanges();
+      toast("已取消选中文字上的 " + removed.length + " 处标记");
+    };
+  }
+
   /* ===== 页边距调整(Word式): 窄/适中/宽/超宽,记忆到本地 ===== */
   const prMarginBtn = document.getElementById("prMarginBtn");
   const prMarginPop = document.getElementById("prMarginPop");
@@ -5508,7 +5805,7 @@ function savePaperHighlights(){
 
 /* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
 /* 标题行识别正则: 编号标题/章节词/Abstract 等,且行长较短 */
-const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|[（(][一二三四五六七八九十]+[）)]|[（(]\d{1,2}[）)]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
+const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、，．,;；\s]+|【?\[?\d{1,2}[】\]]\s*[、.．]?\s*|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|[（(][一二三四五六七八九十]+[）)]|[（(]\d{1,2}[）)]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
 
 /* 参考文献条目起始识别: [1] / [1,2] / [1-3] / 1. / 1、 / 1) 等格式 */
 const PR_REF_LINE_RE = /^\[?\d{1,3}(?:[-,，]\d{1,3})*[\]、.．)]\s*\S/;
@@ -6006,12 +6303,14 @@ function rebuildFromDom(item){
     if(item.structured && (item.structured.sections || item.structured.abstract)){
       const doc = prText.querySelector(".pp-doc");
       if(doc){
+        const prev = item.structured || {};
         const st = { title: "", abstract: "", keywords: [], sections: [], references: [] };
         const titleEl = doc.querySelector(".pp-title");
-        st.title = titleEl ? titleEl.textContent.replace(/\u00A0/g, " ").trim() : (st.title || "");
+        /* 提取失败(卡片未渲染/被删) → 回退旧值,防止摘要等元数据莫名消失 */
+        st.title = titleEl ? titleEl.textContent.replace(/\u00A0/g, " ").trim() : (prev.title || "");
         const absEl = doc.querySelector(".pp-abs-body");
-        st.abstract = absEl ? absEl.textContent.replace(/\u00A0/g, " ").trim() : "";
-        st.keywords = [];
+        st.abstract = absEl ? absEl.textContent.replace(/\u00A0/g, " ").trim() : (prev.abstract || "");
+        st.keywords = (prev.keywords || []).slice();
         const chips = doc.querySelectorAll(".pp-kw-chip");
         for(let i=0; i<chips.length; i++){
           const t = chips[i].textContent.trim();
@@ -6058,9 +6357,12 @@ function rebuildFromDom(item){
         item.fullText = structuredToText(st);
         /* 摘要/关键词在卡片壳内被编辑的情况: 壳内文本已提取,壳外高亮正常 */
       }else{
-        /* 结构化容器被删坏 → 退化为纯文本提取 */
+        /* 结构化容器被删坏 → 退化为纯文本提取,但保留旧摘要/关键词元数据
+           (直接 structured=null 会导致摘要永久消失) */
+        const prevSt = item.structured || {};
         item.fullText = domToPlainText(prText);
-        item.structured = null;
+        item.structured = (prevSt.abstract || prevSt.keywords || prevSt.title) ?
+          { title: prevSt.title || "", abstract: prevSt.abstract || "", keywords: (prevSt.keywords || []).slice(), sections: [], references: (prevSt.references || []).slice() } : null;
       }
     }else{
       item.fullText = domToPlainText(prText);
@@ -6351,7 +6653,7 @@ function parsePaperStructure(rawText, faithful, boldLines, sizeHeads){
   const REF_EN_RE = /^[A-Z][a-zA-Z.\-']+(,\s|[，]\s|\s+[&]\s+)/;
   /* 目录行: 纯数字+点+页码(如 1.1 ... 23 / 第一章 引言 ... 5) */
   const TOC_RE = /^(\d+(?:\.\d+)*)\s+.*?\.{2,}\s*\d{1,4}\s*$/;
-  const NUM_RE   = /^(\d+(?:\.\d+)*)\s*[.、)）]?\s+(\S.*)$/;
+  const NUM_RE   = /^(\d+(?:\.\d+)*)\s*[.、)），．;；]?\s+(\S.*)$/;
   const CHAP_RE  = /^第[一二三四五六七八九十百\d]+[章节部篇]\s*(.*)$/;
   const CN_NUM_RE = /^([一二三四五六七八九十]+)\s*[、．.]\s*(.+)$/;
   const KNOWN_HEAD = /^(摘\s*要|Abstract|引\s*言|前\s*言|绪\s*论|相关工作|文献综述|研究背景|背景|方\s*法|方法论|研究方法|研究设计|模型|算\s*法|实\s*验|实验设置|实验结果|实验与分析|结果与分析|结\s*果|分\s*析|讨\s*论|结\s*论|总\s*结|展\s*望|致\s*谢|附\s*录|数据来源|研究假设|研究意义)(\s*[:：])?$/;
@@ -6384,6 +6686,8 @@ function parsePaperStructure(rawText, faithful, boldLines, sizeHeads){
     if(CN_NUM_RE.test(p)) return 1;
     if(/^[（(][一二三四五六七八九十]+[）)]\s*\S/.test(p)) return 2; /* （一）→二级 */
     if(/^[（(]\d{1,2}[）)]\s*\S/.test(p)) return 3; /* （1）→三级(隶属（一）之下) */
+    if(/^[【\[]\d{1,2}[】\]]\s*\S/.test(p)) return 3; /* 【1】/[1]编号小标题→三级 */
+    if(/^[【\[]([一二三四五六七八九十]+)[】\]]\s*\S/.test(p)) return 2; /* 【一】→二级 */
     /* 英文章节: Introduction/Methods/Results/Conclusion/Part I/Section 3/Chapter 2 等 */
     if(/^(Part|Section|Chapter|Appendix)\s+[IVX\d]+/i.test(p)) return 1;
     if(KNOWN_HEAD.test(p.replace(/\s+/g,""))) return 1;
@@ -10435,6 +10739,42 @@ function toast(msg, duration){
     updateTrashBtn();
     openTrashModal();
     toast("回收站已清空");
+  };
+  // 身份码(多设备同步)入口与弹窗
+  const navSyncCodeBtn = document.getElementById("navSyncCode");
+  if(navSyncCodeBtn) navSyncCodeBtn.onclick = function(e){ e.preventDefault(); showSyncCodeModal(); };
+  const syncCloseBtn = document.getElementById("syncCodeCloseBtn");
+  if(syncCloseBtn) syncCloseBtn.onclick = function(){
+    const m = document.getElementById("syncCodeModal");
+    if(m) m.classList.remove("show");
+  };
+  const syncCopyBtn = document.getElementById("syncCopyBtn");
+  if(syncCopyBtn) syncCopyBtn.onclick = function(){
+    const code = (document.getElementById("syncCodeValue").textContent || "").trim();
+    if(!code || code === "—" || code.indexOf("尚未") >= 0){ toast("无身份码可复制"); return; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(function(){ toast("身份码已复制"); });
+    }else{
+      try{
+        const ta = document.createElement("textarea");
+        ta.value = code; document.body.appendChild(ta);
+        ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
+        toast("身份码已复制");
+      }catch(e){ toast("复制失败,请手动选中复制"); }
+    }
+  };
+  const loginViewCodeLink = document.getElementById("loginViewCode");
+  if(loginViewCodeLink) loginViewCodeLink.onclick = function(e){
+    e.preventDefault();
+    /* 未登录:找本机任一有身份码的账号展示 */
+    const users = getUsers();
+    const names = Object.keys(users);
+    let code = null;
+    for(let i=0; i<names.length; i++){ if(users[names[i]].code){ code = users[names[i]].code; break; } }
+    if(!code){ toast("本机无含身份码的账号,登录后可在顶栏「⌁ 身份码」查看"); return; }
+    const modal = document.getElementById("syncCodeModal");
+    const codeEl = document.getElementById("syncCodeValue");
+    if(modal && codeEl){ codeEl.textContent = code; modal.classList.add("show"); }
   };
   updateNavAiState();
 })();
