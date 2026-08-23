@@ -1580,6 +1580,7 @@
     <div class="composer-extras">
       <button class="btn-link" id="batchBtn" title="粘贴一段文字,自识其中各目">⇶ 粘贴识别</button>
       <button class="btn-link" id="paperBtn" title="粘贴一整篇论文,自动整理归册">§ 录入论文</button>
+      <button class="btn-link" id="essayBtn" title="粘贴一篇随笔,整理归册,可查看编辑标注">✎ 录入随笔</button>
     </div>
   </div>
 </section>
@@ -1880,14 +1881,12 @@
    ============================================================ */
 
 const CATEGORIES = {
-  novel: {
-    name:"小说", color:"#B0432C", icon:"❦",
-    svg:'<path d="M3 5.5C5 4.5 8 4.5 12 6c4-1.5 7-1.5 9-.5v13c-2-1-5-1-9 .5-4-1.5-7-1.5-9-.5v-13z"/><path d="M12 6v13"/>',
-    /* 网络小说为主: 网文流派/平台/连载词 */
-    keywords:["小说","novel","fiction","网络小说","网文","连载","起点","晋江","番茄小说","纵横","17k","飞卢",
-      "玄幻","修真","修仙","仙侠","武侠","都市","穿越","重生","系统","金手指","升级","爽文","脑洞",
-      "无限流","克苏鲁","御兽","种田","宫斗","宅斗","宅斗","种田文","女频","男频","大主宰","斗破"],
-    patterns:[/第[一二三四五六七八九十百千]+[章节回]/, /卷[一二三四五六七八九十]+/]
+  essay: {
+    name:"随笔", color:"#5B4B8B", icon:"✎",
+    svg:'<path d="M3 17l10-10 4 4-10 10H3v-4z"/><path d="M13 7l4 4"/>',
+    /* 随笔/散文/杂文: 个人书写, 粘贴长文入册, 可查看编辑 */
+    keywords:["随笔","散文","杂文","笔记","札记","手记","随想","杂感","小品","随笔集","essay","essays","琐记","闲话","散记","心情","日记","杂记","笔谈","抒情","记叙","议论","见闻","感悟","思考","品味","风物","乡愁","旧事","往事","回忆","行记","游记","闲情","偶记","漫记","随感"],
+    patterns:[]
   },
   movie: {
     name:"电影", color:"#9B7B33", icon:"✦",
@@ -2024,28 +2023,28 @@ const CATEGORIES = {
 };
 
 /* 兜底分类 (无 misc 时使用,根据文本特征回落) */
-const FALLBACK_CAT = "novel";
+const FALLBACK_CAT = "literature";
 
 /* 知名作品 / 餐饮 知识库 —— 命中即归类 (无重复键) */
 const KNOWN = {
   /* ===== 小说 ===== */
-  "三体":"novel", "球状闪电":"novel", "超新星纪元":"novel", "流浪地球":"novel",
-  "活着":"novel", "许三观卖血记":"novel", "兄弟":"novel", "在细雨中呼喊":"novel", "第七天":"novel",
-  "百年孤独":"novel", "霍乱时期的爱情":"novel", "族长的秋天":"novel",
-  "红楼梦":"novel", "西游记":"novel", "水浒传":"novel", "三国演义":"novel", "金瓶梅":"novel",
-  "围城":"novel", "呐喊":"novel", "彷徨":"novel", "骆驼祥子":"novel", "边城":"novel", "寒夜":"novel",
-  "平凡的世界":"novel", "白鹿原":"novel", "浮躁":"novel", "废都":"novel", "秦腔":"novel",
-  "挪威的森林":"novel", "海边的卡夫卡":"novel", "1q84":"novel", "寻羊冒险记":"novel", "世界尽头与冷酷仙境":"novel",
-  "雪国":"novel", "古都":"novel", "千只鹤":"novel", "伊豆的舞女":"novel",
-  "追忆似水年华":"novel", "尤利西斯":"novel", "变形记":"novel", "城堡":"novel", "审判":"novel",
-  "一九八四":"novel", "1984":"novel", "美丽新世界":"novel", "动物农场":"novel",
-  "罪与罚":"novel", "卡拉马佐夫兄弟":"novel", "白痴":"novel", "群魔":"novel",
-  "战争与和平":"novel", "安娜卡列尼娜":"novel", "复活":"novel",
-  "傲慢与偏见":"novel", "理智与情感":"novel", "简爱":"novel", "呼啸山庄":"novel",
-  "了不起的盖茨比":"novel", "麦田里的守望者":"novel", "老人与海":"novel", "丧钟为谁而鸣":"novel", "太阳照常升起":"novel",
-  "基地":"novel", "银河帝国":"novel", "沙丘":"novel", "海伯利安":"novel", "神经漫游者":"novel", "仿生人会梦见电子羊吗":"novel", "黑暗的左手":"novel", "一无所有":"novel",
-  "追风筝的人":"novel", "灿烂千阳":"novel", "群山回唱":"novel",
-  "倾城之恋":"novel", "金锁记":"novel", "半生缘":"novel", "红玫瑰与白玫瑰":"novel",
+  "三体":"literature", "球状闪电":"literature", "超新星纪元":"literature", "流浪地球":"literature",
+  "活着":"literature", "许三观卖血记":"literature", "兄弟":"literature", "在细雨中呼喊":"literature", "第七天":"literature",
+  "百年孤独":"literature", "霍乱时期的爱情":"literature", "族长的秋天":"literature",
+  "红楼梦":"literature", "西游记":"literature", "水浒传":"literature", "三国演义":"literature", "金瓶梅":"literature",
+  "围城":"literature", "呐喊":"literature", "彷徨":"literature", "骆驼祥子":"literature", "边城":"literature", "寒夜":"literature",
+  "平凡的世界":"literature", "白鹿原":"literature", "浮躁":"literature", "废都":"literature", "秦腔":"literature",
+  "挪威的森林":"literature", "海边的卡夫卡":"literature", "1q84":"literature", "寻羊冒险记":"literature", "世界尽头与冷酷仙境":"literature",
+  "雪国":"literature", "古都":"literature", "千只鹤":"literature", "伊豆的舞女":"literature",
+  "追忆似水年华":"literature", "尤利西斯":"literature", "变形记":"literature", "城堡":"literature", "审判":"literature",
+  "一九八四":"literature", "1984":"literature", "美丽新世界":"literature", "动物农场":"literature",
+  "罪与罚":"literature", "卡拉马佐夫兄弟":"literature", "白痴":"literature", "群魔":"literature",
+  "战争与和平":"literature", "安娜卡列尼娜":"literature", "复活":"literature",
+  "傲慢与偏见":"literature", "理智与情感":"literature", "简爱":"literature", "呼啸山庄":"literature",
+  "了不起的盖茨比":"literature", "麦田里的守望者":"literature", "老人与海":"literature", "丧钟为谁而鸣":"literature", "太阳照常升起":"literature",
+  "基地":"literature", "银河帝国":"literature", "沙丘":"literature", "海伯利安":"literature", "神经漫游者":"literature", "仿生人会梦见电子羊吗":"literature", "黑暗的左手":"literature", "一无所有":"literature",
+  "追风筝的人":"literature", "灿烂千阳":"literature", "群山回唱":"literature",
+  "倾城之恋":"literature", "金锁记":"literature", "半生缘":"literature", "红玫瑰与白玫瑰":"literature",
 
   /* ===== 电影 ===== */
   "银翼杀手":"movie", "银翼杀手2049":"movie",
@@ -2176,33 +2175,33 @@ const KNOWN = {
   "肌研极润":"skincare", "曼秀雷敦润唇膏":"skincare", "凡士林经典修护":"skincare",
 
   /* ===== 扩充·小说 ===== */
-  "三体二":"novel","三体iii":"novel","黑暗森林":"novel","死神永生":"novel",
-  "解忧杂货店":"novel","白夜行":"novel","嫌疑人x的献身":"novel","恶意":"novel","秘密":"novel","时生":"novel",
-  "活着活着":"novel","文城":"novel","十个词汇里的中国":"novel",
-  "芳华":"novel","陆犯焉识":"novel","小姨多鹤":"novel","金陵十三钗":"novel","天浴":"novel","床畔":"novel",
-  "繁花":"novel","-zero":"novel","回响":"novel","马桥词典":"novel",
-  "茶人三部曲":"novel","茶经":"novel",
-  "长恨歌":"novel","上海宝贝":"novel","一句顶一万句":"novel","我不是潘金莲":"novel","温故一九四二":"novel",
-  "应物兄":"novel","繁花":"novel","北流":"novel",
-  "基督山伯爵":"novel","三个火枪手":"novel","茶花女":"novel","悲惨世界":"novel","巴黎圣母院":"novel","红与黑":"novel","包法利夫人":"novel","苔丝":"novel","大卫科波菲尔":"novel","雾都孤儿":"novel","远大前程":"novel","双城记":"novel",
-  "飘":"novel","汤姆叔叔的小屋":"novel","小妇人":"novel","绿野仙踪":"novel","爱丽丝梦游仙境":"novel","彼得潘":"novel","小王子":"novel","秘密花园":"novel",
-  "蝇王":"novel","苏菲的世界":"novel","不能承受的生命之轻":"novel","生命中不能承受之轻":"novel","玩笑":"novel","生活在别处":"novel",
-  "钢炼":"novel","钢铁是怎样炼成的":"novel","童年":"novel","在人间":"novel","我的大学":"novel","静静的顿河":"novel","日瓦戈医生":"novel",
-  "情人":"novel","抵挡太平洋的堤坝":"novel","直布罗陀水手":"novel",
-  "追风筝的人":"novel","灿烂千阳":"novel","群山回唱":"novel",
-  "岛":"novel","线":"novel","返回":"novel",
-  "香水":"novel","朗读者":"novel","一个陌生女人的来信":"novel","人类群星闪耀时":"novel","异端的权利":"novel",
-  "天使游戏":"novel","风之影":"novel","天堂游戏":"novel","灵魂迷宫":"novel",
-  "冰与火之歌":"novel","权力的游戏":"novel","列王纪":"novel","魔龙的狂舞":"novel","群鸦的盛宴":"novel",
-  "时间旅行者的妻子":"novel","失落的秘符":"novel","达芬奇密码":"novel","天使与魔鬼":"novel","数字城堡":"novel","本源":"novel","地狱":"novel",
-  "火星救援":"novel","月球城市":"novel","羊毛战记":"novel","移动火星":"novel","计算中的上帝":"novel","神经漫游者":"novel","零伯爵":"novel"," Mona Lisa Overdrive":"novel",
-  "安德的游戏":"novel","死者代言人":"novel","安德的影子":"novel"," Ender's Game":"novel",
-  "银河系搭车客指南":"novel","宇宙尽头的餐馆":"novel","生命、宇宙及一切":"novel",
-  "微纪元":"novel","乡村教师":"novel","朝闻道":"novel","诗云":"novel","地火":"novel","山":"novel",
-  "盗墓笔记":"novel","鬼吹灯":"novel","藏海花":"novel","沙海":"novel","老九门":"novel",
-  "明朝那些事儿":"novel","哑舍":"novel","浮生物语":"novel","仙逆":"novel","凡人修仙传":"novel","诛仙":"novel","斗破苍穹":"novel","庆余年":"novel","择天记":"novel","间客":"novel","将夜":"novel","雪中悍刀行":"novel",
-  "全职高手":"novel","诡秘之主":"novel","第一序列":"novel","深海余烬":"novel","道诡异仙":"novel",
-  "大江大河":"novel","大江东去":"novel","艰难的制造":"novel",
+  "三体二":"literature","三体iii":"literature","黑暗森林":"literature","死神永生":"literature",
+  "解忧杂货店":"literature","白夜行":"literature","嫌疑人x的献身":"literature","恶意":"literature","秘密":"literature","时生":"literature",
+  "活着活着":"literature","文城":"literature","十个词汇里的中国":"literature",
+  "芳华":"literature","陆犯焉识":"literature","小姨多鹤":"literature","金陵十三钗":"literature","天浴":"literature","床畔":"literature",
+  "繁花":"literature","-zero":"literature","回响":"literature","马桥词典":"literature",
+  "茶人三部曲":"literature","茶经":"literature",
+  "长恨歌":"literature","上海宝贝":"literature","一句顶一万句":"literature","我不是潘金莲":"literature","温故一九四二":"literature",
+  "应物兄":"literature","繁花":"literature","北流":"literature",
+  "基督山伯爵":"literature","三个火枪手":"literature","茶花女":"literature","悲惨世界":"literature","巴黎圣母院":"literature","红与黑":"literature","包法利夫人":"literature","苔丝":"literature","大卫科波菲尔":"literature","雾都孤儿":"literature","远大前程":"literature","双城记":"literature",
+  "飘":"literature","汤姆叔叔的小屋":"literature","小妇人":"literature","绿野仙踪":"literature","爱丽丝梦游仙境":"literature","彼得潘":"literature","小王子":"literature","秘密花园":"literature",
+  "蝇王":"literature","苏菲的世界":"literature","不能承受的生命之轻":"literature","生命中不能承受之轻":"literature","玩笑":"literature","生活在别处":"literature",
+  "钢炼":"literature","钢铁是怎样炼成的":"literature","童年":"literature","在人间":"literature","我的大学":"literature","静静的顿河":"literature","日瓦戈医生":"literature",
+  "情人":"literature","抵挡太平洋的堤坝":"literature","直布罗陀水手":"literature",
+  "追风筝的人":"literature","灿烂千阳":"literature","群山回唱":"literature",
+  "岛":"literature","线":"literature","返回":"literature",
+  "香水":"literature","朗读者":"literature","一个陌生女人的来信":"literature","人类群星闪耀时":"literature","异端的权利":"literature",
+  "天使游戏":"literature","风之影":"literature","天堂游戏":"literature","灵魂迷宫":"literature",
+  "冰与火之歌":"literature","权力的游戏":"literature","列王纪":"literature","魔龙的狂舞":"literature","群鸦的盛宴":"literature",
+  "时间旅行者的妻子":"literature","失落的秘符":"literature","达芬奇密码":"literature","天使与魔鬼":"literature","数字城堡":"literature","本源":"literature","地狱":"literature",
+  "火星救援":"literature","月球城市":"literature","羊毛战记":"literature","移动火星":"literature","计算中的上帝":"literature","神经漫游者":"literature","零伯爵":"literature"," Mona Lisa Overdrive":"literature",
+  "安德的游戏":"literature","死者代言人":"literature","安德的影子":"literature"," Ender's Game":"literature",
+  "银河系搭车客指南":"literature","宇宙尽头的餐馆":"literature","生命、宇宙及一切":"literature",
+  "微纪元":"literature","乡村教师":"literature","朝闻道":"literature","诗云":"literature","地火":"literature","山":"literature",
+  "盗墓笔记":"literature","鬼吹灯":"literature","藏海花":"literature","沙海":"literature","老九门":"literature",
+  "明朝那些事儿":"literature","哑舍":"literature","浮生物语":"literature","仙逆":"literature","凡人修仙传":"literature","诛仙":"literature","斗破苍穹":"literature","庆余年":"literature","择天记":"literature","间客":"literature","将夜":"literature","雪中悍刀行":"literature",
+  "全职高手":"literature","诡秘之主":"literature","第一序列":"literature","深海余烬":"literature","道诡异仙":"literature",
+  "大江大河":"literature","大江东去":"literature","艰难的制造":"literature",
 
   /* ===== 扩充·电影 ===== */
   "美丽人生":"movie","美丽心灵的永恒阳光":"movie","心灵捕手":"movie","心灵奇旅":"movie",
@@ -2426,7 +2425,7 @@ function classify(name){
   }
   // 长中文 (≥4字) 且不含食材 → 小说
   if(isMostlyChinese && chineseCount >= 4 && foodHit === 0){
-    return { cat:"novel", confidence:0.3, source:"启发式·长中文" };
+    return { cat:"literature", confidence:0.3, source:"启发式·长中文" };
   }
   // 英文 + 含学术后缀 → 论文
   if(isMostlyEnglish && /\b\w+(tion|ing|ed|ic|ical|ism|ist|ity|ment|ness|or|er|ism|ics|ology)\b/i.test(low)){
@@ -2476,11 +2475,11 @@ loadOnlineCache();
 /* 垂直平台检查配置: 若标题在平台搜索有结果 → 强烈指向该门类 */
 const VERTICAL_SOURCES = [
   /* 网文平台 → 小说 (小说模块以网络小说为主) */
-  { cat:"novel", name:"起点中文网", url:function(t){ return "https://www.qidian.com/soushu/" + encodeURIComponent(t) + ".html"; },
+  { cat:"literature", name:"起点中文网", url:function(t){ return "https://www.qidian.com/soushu/" + encodeURIComponent(t) + ".html"; },
     selectors:[".book-mid-info h4 a", ".book-img-text a", "h4 a", "a"], minLen:2 },
-  { cat:"novel", name:"晋江文学城", url:function(t){ return "https://www.jjwxc.net/search.php?kw=" + encodeURIComponent(t); },
+  { cat:"literature", name:"晋江文学城", url:function(t){ return "https://www.jjwxc.net/search.php?kw=" + encodeURIComponent(t); },
     selectors:[".novel-title", "td a", "a"], minLen:2 },
-  { cat:"novel", name:"番茄小说", url:function(t){ return "https://fanqienovel.com/search/" + encodeURIComponent(t); },
+  { cat:"literature", name:"番茄小说", url:function(t){ return "https://fanqienovel.com/search/" + encodeURIComponent(t); },
     selectors:[".book-name", "a"], minLen:2 },
   /* 菜谱平台 → 菜品 */
   { cat:"dish", name:"下厨房", url:function(t){ return "https://www.xiachufang.com/search/?keyword=" + encodeURIComponent(t); },
@@ -2488,7 +2487,7 @@ const VERTICAL_SOURCES = [
   { cat:"dish", name:"美食杰", url:function(t){ return "https://www.meishij.net/china/caipu/search.php?kw=" + encodeURIComponent(t); },
     selectors:[".list_s li a", "a"], minLen:2 },
   /* 读书/电影平台 (JS渲染,结果可能拿不到,弱信号) */
-  { cat:"novel", name:"豆瓣读书", url:function(t){ return "https://book.douban.com/subject_search?search_text=" + encodeURIComponent(t); },
+  { cat:"literature", name:"豆瓣读书", url:function(t){ return "https://book.douban.com/subject_search?search_text=" + encodeURIComponent(t); },
     selectors:["a"], minLen:2, weak:true },
   { cat:"movie", name:"豆瓣电影", url:function(t){ return "https://movie.douban.com/subject_search?search_text=" + encodeURIComponent(t); },
     selectors:["a"], minLen:2, weak:true }
@@ -2518,7 +2517,7 @@ async function checkVerticalSource(src, title){
 
 /* 定义句模式库: 百科词条开头通常为「X是……」的定性描述 */
 const CAT_DEF_PATTERNS = [
-  { cat:"novel",     re:/(是|为)[^。]{0,30}(长篇|中篇|短篇|科幻|武侠|言情|悬疑|推理|网络小说|小说作品|奇幻|仙侠|玄幻|都市小说)|(作者|作家|网文作者)[^。]{0,8}(著|创作|撰写|所著|连载于)|出版[^。]{0,10}(小说|图书|单行本)/ },
+  { cat:"literature",     re:/(是|为)[^。]{0,30}(长篇|中篇|短篇|科幻|武侠|言情|悬疑|推理|网络小说|小说作品|奇幻|仙侠|玄幻|都市小说)|(作者|作家|网文作者)[^。]{0,8}(著|创作|撰写|所著|连载于)|出版[^。]{0,10}(小说|图书|单行本)/ },
   { cat:"movie",     re:/(是|为)[^。]{0,30}(电影|影片|纪录片|动画片|电视剧|剧集|微电影)|(执导|导演)[^。]{0,15}(电影|影片)|主演[^。]{0,30}饰演|票房收入|影院上映/ },
   { cat:"literature",re:/(是|为)[^。]{0,30}(散文集|诗集|散文|诗歌|随笔集|杂文集|文集|文学经典|代表诗作|文学作品)|现代诗|朦胧诗派|(鲁迅|老舍|茅盾|巴金|朱自清|冰心|沈从文)[^。]{0,10}(散文|杂文|诗作|文集)/ },
   { cat:"paper",     re:/(是|为)[^。]{0,30}(论文|学位论文|期刊论文|学术论文|综述论文)|摘要[:：]|关键词[:：]|参考文献格式|学报[刊版]/ },
@@ -2531,7 +2530,7 @@ const CAT_DEF_PATTERNS = [
 
 /* 特征词加权库: 用于定义句不明确时的全文打分 */
 const CAT_FEATURE_WORDS = [
-  { cat:"novel",     words:{ "小说":5, "长篇小说":6, "网络小说":5, "科幻小说":6, "武侠小说":6, "玄幻":4, "仙侠":4, "修仙":4, "连载":4, "起点":4, "晋江":4, "番茄小说":5, "网文":4, "作者":2, "出版":2, "小说家":4, "章节":2, "番外":3 } },
+  { cat:"literature",     words:{ "小说":5, "长篇小说":6, "网络小说":5, "科幻小说":6, "武侠小说":6, "玄幻":4, "仙侠":4, "修仙":4, "连载":4, "起点":4, "晋江":4, "番茄小说":5, "网文":4, "作者":2, "出版":2, "小说家":4, "章节":2, "番外":3 } },
   { cat:"movie",     words:{ "电影":5, "导演":3, "主演":3, "票房":4, "影片":4, "饰演":3, "上映":3, "片长":4, "剧情片":6, "电视剧":4, "动画电影":6, "影院":3 } },
   { cat:"literature",words:{ "散文":5, "诗歌":5, "诗集":6, "散文集":6, "随笔":4, "杂文":4, "文集":4, "诗人":4, "诗作":5, "文学流派":4, "鲁迅":3, "朱自清":3, "海子":3, "老舍":2 } },
   { cat:"paper",     words:{ "论文":6, "学术":3, "研究方法":4, "实验结果":4, "摘要":3, "关键词":4, "参考文献":4, "学报":5, "期刊":4, "学位":3, "arxiv":4, "doi":5 } },
@@ -5215,8 +5214,10 @@ function cleanPaperText(text){
   return { text:cleaned, removed:det.removed, details:det.details };
 }
 
-/* 录入论文 */
-function addPaper(title, fullText, analysis, structured){
+/* 录入论文 / 随笔 (随笔复用同一套查看编辑界面) */
+function addPaper(title, fullText, analysis, structured, category){
+  category = category || "paper";
+  const isEssay = category === "essay";
   const trimmedText = fullText.trim();
   if(!trimmedText) return { error:"empty" };
   /* 提取标题:用户指定 > 首个"真实标题行"(跳过作者名/学校/文献编号等噪声行) > 前40字
@@ -5242,7 +5243,7 @@ function addPaper(title, fullText, analysis, structured){
   /* 同分类同名去重 */
   const low = paperTitle.toLowerCase();
   const dup = state.items.find(function(i){
-    return i.name.trim().toLowerCase() === low && i.category === "paper";
+    return i.name.trim().toLowerCase() === low && i.category === category;
   });
   if(dup) return { error:"duplicate", existing:dup };
 
@@ -5254,10 +5255,10 @@ function addPaper(title, fullText, analysis, structured){
   const item = {
     id: uid(),
     name: paperTitle,
-    category: "paper",
-    autoCategory: "paper",
+    category: category,
+    autoCategory: category,
     autoConfidence: 1.0,
-    autoSource: "论文录入",
+    autoSource: isEssay ? "随笔录入" : "论文录入",
     manualOverride: false,
     rating: 0,
     description: "全文 " + charCount + " 字 · " + paraCount + " 段",
@@ -6130,7 +6131,9 @@ function redoLastAction(){
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 function closePaperReader(){
   if(prState.dirty){
-    const choice = confirm("论文有未保存的更改(标注/排版/删除等)。\n\n【确定】保存更改后退出\n【取消】放弃更改,恢复打开时的原文");
+    const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
+    const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
+    const choice = confirm(noun + "有未保存的更改(标注/排版/删除等)。\n\n【确定】保存更改后退出\n【取消】放弃更改,恢复打开时的原文");
     if(choice){
       savePaperHighlights();
     } else {
@@ -9280,10 +9283,10 @@ function renderGallery(){
     const desc = (it.description || "").trim();
     const descHtml = desc ? '<div class="card-desc">' + escapeHtml(desc) + '</div>' : "";
 
-    // 论文专属:查看全文按钮 + 知网搜索按钮
-    const isPaper = it.category === "paper" && it.fullText;
+    // 论文/随笔专属:查看全文按钮 (随笔复用同一套阅读编辑器)
+    const isPaper = (it.category === "paper" || it.category === "essay") && it.fullText;
     const paperBtnHtml = isPaper ?
-      '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">§ 查看全文</button>' : "";
+      '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">' + (it.category === "essay" ? "✎" : "§") + ' 查看全文</button>' : "";
     const isPaperCat = it.category === "paper";
     const cnkiBtnHtml = isPaperCat ?
       '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">⌕ 知网搜索</button>' : "";
@@ -10276,13 +10279,38 @@ const paperEntryStats = document.getElementById("paperEntryStats");
 const paperEntrySubmit = document.getElementById("paperEntrySubmit");
 const paperEntryCancel = document.getElementById("paperEntryCancel");
 
-function openPaperEntryModal(){
+let paperEntryCategory = "paper"; /* 当前录入目标分类: paper(论文) / essay(随笔) */
+function openPaperEntryModal(category){
+  paperEntryCategory = category || "paper";
+  const isEssay = paperEntryCategory === "essay";
   if(paperTitleInput) paperTitleInput.value = "";
-  if(paperFullTextInput) paperFullTextInput.value = "";
+  if(paperFullTextInput){
+    paperFullTextInput.value = "";
+    paperFullTextInput.placeholder = isEssay
+      ? "粘贴随笔全文于此……\n\n支持任意文字: 散文、杂感、日记、笔记、札记, 可随时点击「查看全文」阅读并标注。"
+      : "粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……\n\n支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。";
+  }
   paperEntryFromPdf = false;
   paperEntryImages = null;
   paperEntryStructured = null;
   updatePaperEntryStats();
+  /* 随笔: 仅文字粘贴,隐藏 PDF 导入按钮与转换提示; 论文: 还原显示 */
+  const pdfBtn = document.getElementById("paperPdfBtn");
+  if(pdfBtn) pdfBtn.style.display = isEssay ? "none" : "";
+  const convertTip = paperEntryModal ? paperEntryModal.querySelector(".pp-convert-tip") : null;
+  if(convertTip) convertTip.style.display = isEssay ? "none" : "";
+  /* 标题/说明/字段文案随分类切换 */
+  if(paperEntryModal){
+    const h3 = paperEntryModal.querySelector("h3");
+    if(h3) h3.innerHTML = isEssay ? '录入随笔 <span class="sub">ESSAY ENTRY</span>' : '录入论文 <span class="sub">PAPER ENTRY</span>';
+    const intro = paperEntryModal.querySelector("p");
+    if(intro) intro.textContent = isEssay
+      ? "粘贴一篇随笔 —— 系统将整理归册,可随时点击「查看全文」阅读并标注。"
+      : "粘贴一整篇论文 —— 系统将自动整理归册,生成解读分析,可随时点击查看全文并进行颜色标注。";
+    const labels = paperEntryModal.querySelectorAll(".modal-field label");
+    if(labels[0] && labels[0].firstChild) labels[0].firstChild.nodeValue = isEssay ? "随笔标题" : "论文标题";
+    if(labels[1] && labels[1].firstChild) labels[1].firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
+  }
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
 }
@@ -10308,7 +10336,9 @@ function updatePaperEntryStats(){
     '<span><b>' + lines + '</b> 行</span>' +
     '<span><b>' + sections + '</b> 节</span>';
 }
-if(paperBtn) paperBtn.onclick = openPaperEntryModal;
+if(paperBtn) paperBtn.onclick = function(){ openPaperEntryModal("paper"); };
+const essayBtn = document.getElementById("essayBtn");
+if(essayBtn) essayBtn.onclick = function(){ openPaperEntryModal("essay"); };
 if(paperEntryCancel) paperEntryCancel.onclick = closePaperEntryModal;
 if(paperEntryModal){
   paperEntryModal.addEventListener("click", function(e){
@@ -10326,7 +10356,7 @@ if(paperEntrySubmit){
     const title = paperTitleInput ? paperTitleInput.value : "";
     const fullText = paperFullTextInput ? paperFullTextInput.value : "";
     if(!fullText.trim()){
-      toast("请粘贴论文全文");
+      toast("请粘贴" + (paperEntryCategory === "essay" ? "随笔" : "论文") + "全文");
       return;
     }
     /* PDF导入: 原文直接入册,不经过任何AI排版/改写
@@ -10337,13 +10367,15 @@ if(paperEntrySubmit){
       structured = paperEntryStructured;
       paperEntryStructured = null;
     }
-    const result = addPaper(title, fullText, null, structured);
+    const isEssay = paperEntryCategory === "essay";
+    const noun = isEssay ? "随笔" : "论文";
+    const result = addPaper(title, fullText, null, structured, paperEntryCategory);
     if(result && result.error === "duplicate"){
-      toast("此论文已在册中");
+      toast("此" + noun + "已在册中");
       return;
     }
     if(result && result.error === "empty"){
-      toast("论文内容为空");
+      toast(noun + "内容为空");
       return;
     }
     /* PDF导入的图片保存到条目 */
@@ -10355,7 +10387,7 @@ if(paperEntrySubmit){
     paperEntryImages = null;
     paperEntryFromPdf = false;
     closePaperEntryModal();
-    toast("论文已入册 · 可点击「查看全文」阅读并标注");
+    toast(noun + "已入册 · 可点击「查看全文」阅读并标注");
     const archive = document.getElementById("archive");
     if(archive) archive.scrollIntoView({behavior:"smooth"});
   };
