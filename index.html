@@ -228,6 +228,16 @@
   .bb-chip.drop-after{ box-shadow: 3px 0 0 0 var(--cat-color, var(--accent)), 0 4px 12px rgba(60,40,20,.10); }
   .bb-chip .bb-del{ margin-left:6px; opacity:.5; font-size:11px; }
   .bb-chip .bb-del:hover{ opacity:1; }
+  .bb-add{
+    border-style:dashed; color:var(--cat-color, var(--accent)); border-color:color-mix(in srgb, var(--cat-color, var(--accent)) 45%, transparent);
+    background:transparent; font-size:13px; padding:5px 12px;
+  }
+  .bb-add:hover{ background:color-mix(in srgb, var(--cat-color, var(--accent)) 10%, transparent); border-style:solid; }
+  .bb-add-input{
+    padding:5px 10px; border:1px solid var(--cat-color, var(--accent)); border-radius:999px;
+    background:var(--paper); color:var(--ink); font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
+    outline:none; min-width:120px; box-shadow:0 0 0 3px rgba(60,40,20,.08);
+  }
   .predict-tag{
     display:inline-flex; align-items:center; gap:6px;
     padding:3px 10px; border-radius:999px;
@@ -9771,6 +9781,43 @@ function renderSubcatBar(){
       render();
     };
   }
+  /* 末尾「＋新增」按钮: 点击变内联输入, 回车加入新小门类 */
+  const addBtn = document.createElement("button");
+  addBtn.className = "bb-chip bb-add";
+  addBtn.type = "button";
+  addBtn.textContent = "＋ 新增" + subLbl;
+  addBtn.title = "新建一个" + subLbl + "小门类";
+  chips.appendChild(addBtn);
+  addBtn.onclick = function(){
+    const inp = document.createElement("input");
+    inp.type = "text";
+    inp.className = "bb-add-input";
+    inp.placeholder = "输入新" + subLbl + "名, 回车加入";
+    inp.autocomplete = "off";
+    addBtn.replaceWith(inp);
+    inp.focus();
+    let done = false;
+    const finish = function(commit){
+      if(done) return; done = true;
+      if(commit){
+        const n = inp.value.trim();
+        if(n){
+          const added = addSubcatItem(cat, n);
+          if(!added){ toast(subLbl + "「" + n + "」已存在"); }
+          render();
+        } else {
+          render();
+        }
+      } else {
+        render();
+      }
+    };
+    inp.addEventListener("keydown", function(ev){
+      if(ev.key === "Enter"){ ev.preventDefault(); finish(true); }
+      else if(ev.key === "Escape"){ ev.preventDefault(); finish(false); }
+    });
+    inp.addEventListener("blur", function(){ finish(false); });
+  };
   initSubcatDnD(); /* 启用小门类拖拽重排 */
 }
 
