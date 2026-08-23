@@ -1070,6 +1070,9 @@
     position:absolute; white-space:pre; line-height:1.32; color:#111;
     transform-origin:top left; user-select:text; letter-spacing:-0.01em;
   }
+  /* Word流式版面保真: 富文本段落(字号/缩进/对齐/加粗内联style,分栏用column-count) */
+  .pr-text .pr-docflow{ column-gap:28px; }
+  .pr-text .pr-docflow-p{ margin:0 0 0.55em; break-inside:avoid; }
   .pr-text > p, .pr-text > div{
     margin:0 0 14px; text-indent:0;
   }
@@ -4797,16 +4800,40 @@ function squeezeCjkSpaces(s){
   return s;
 }
 
-/* 解析docx为版面保真layout块: 用JSZip直读word/document.xml,提取每段主导字号(w:sz半磅→pt)/
-   加粗(w:b)/首行缩进(w:ind firstLine twips→pt)/左缩进/分栏(w:sectPr cols num),
-   按行切分(中文字宽≈字号,英文词宽≈0.5*字数*字号,标点≈0.5*字号)构造绝对定位块,
-   走与PDF相同的renderLayoutPaper渲染路径,还原Word原文档字号大小关系/缩进/双栏版面。
-   docx无像素级坐标(Word是流式文档),故坐标按段落流估算,非1:1照片,但字号/缩进/分栏保真。 */
+/* 解析docx为流式版面保真HTML: JSZip直读word/document.xml+styles.xml,
+   提取每段字号(run内联w:sz > rStyle字符样式 > pStyle段落样式 > 默认10.5)/加粗/
+   首行缩进(w:ind firstLine twips→pt)/左缩进/对齐(w:jc)/分栏(w:sectPr cols),
+   生成带样式的流式富文本HTML(浏览器自动排版换行,最接近Word原版面),
+   走renderPaperText的item.html分支渲染,标注/编辑/保存复用通用逻辑。
+   docx无像素级坐标(Word是流式文档),故用流式CSS还原版面,非绝对定位照片。 */
 function parseDocxToLayout(arrayBuffer){
   return JSZip.loadAsync(arrayBuffer).then(function(zip){
-    const f = zip.file("word/document.xml");
-    if(!f) return null;
-    return f.async("string").then(function(xml){
+    const docF = zip.file("word/document.xml");
+    if(!docF) return null;
+    const styleF = zip.file("word/styles.xml");
+    const docP = docF.async("string");
+    const styleP = styleF ? styleF.async("string") : Promise.resolve("");
+    return Promise.all([docP, styleP]).then(function(arr){
+      const xml = arr[0], styleXml = arr[1];
+      /* 建立样式ID→{sz,b}映射(解析styles.xml,支持字号样式继承) */
+      const styleMap = {};
+      if(styleXml){
+        const sdoc = new DOMParser().parseFromString(styleXml, "application/xml");
+        const styles = sdoc.getElementsByTagName("w:style");
+        for(let i=0;i<styles.length;i++){
+          const st = styles[i];
+          const sid = st.getAttribute("w:styleId");
+          if(!sid) continue;
+          const rPr = st.getElementsByTagName("w:rPr")[0];
+          let sz=0, b=false;
+          if(rPr){
+            const szEl = rPr.getElementsByTagName("w:sz")[0];
+            if(szEl) sz = parseInt(szEl.getAttribute("w:val")||"0",10)/2;
+            if(rPr.getElementsByTagName("w:b").length) b=true;
+          }
+          styleMap[sid] = {sz:sz, b:b};
+        }
+      }
       const doc = new DOMParser().parseFromString(xml, "application/xml");
       /* 分栏: 取所有sectPr里cols最大值(文档级分栏) */
       let cols = 1;
@@ -4815,13 +4842,11 @@ function parseDocxToLayout(arrayBuffer){
         const c = sectPrs[i].getElementsByTagName("w:cols")[0];
         if(c){ const n = parseInt(c.getAttribute("w:num")||"1",10); if(n>cols) cols=n; }
       }
-      const PAGE_W=595, MARGIN=72, CONTENT_W=PAGE_W-MARGIN*2, GAP=14;
-      const colW = cols>1 ? (CONTENT_W-(cols-1)*GAP)/cols : CONTENT_W;
       const paras = doc.getElementsByTagName("w:p");
       const paraList = [];
       for(let i=0;i<paras.length;i++){
         const p = paras[i];
-        let firstLine=0, left=0;
+        let firstLine=0, left=0, pStyleId="", jc="";
         const pPr = p.getElementsByTagName("w:pPr")[0];
         if(pPr){
           const ind = pPr.getElementsByTagName("w:ind")[0];
@@ -4829,19 +4854,33 @@ function parseDocxToLayout(arrayBuffer){
             firstLine = parseInt(ind.getAttribute("w:firstLine")||"0",10)/20;
             left = parseInt(ind.getAttribute("w:left")||ind.getAttribute("w:start")||"0",10)/20;
           }
+          const pStyleEl = pPr.getElementsByTagName("w:pStyle")[0];
+          if(pStyleEl) pStyleId = pStyleEl.getAttribute("w:val")||"";
+          const jcEl = pPr.getElementsByTagName("w:jc")[0];
+          if(jcEl) jc = jcEl.getAttribute("w:val")||"";
         }
+        const pStyleSz = (pStyleId && styleMap[pStyleId]) ? styleMap[pStyleId].sz : 0;
+        const pStyleB = (pStyleId && styleMap[pStyleId]) ? styleMap[pStyleId].b : false;
         let text="";
         const sizeCnt={}; let anyBold=false;
         const runs = p.getElementsByTagName("w:r");
         for(let r=0;r<runs.length;r++){
           const run = runs[r];
           const rPr = run.getElementsByTagName("w:rPr")[0];
-          let sz=0, b=false;
+          let sz=0, b=false, rStyleId="";
           if(rPr){
             const szEl = rPr.getElementsByTagName("w:sz")[0];
             if(szEl) sz = parseInt(szEl.getAttribute("w:val")||"0",10)/2;
             if(rPr.getElementsByTagName("w:b").length) b=true;
+            const rStyleEl = rPr.getElementsByTagName("w:rStyle")[0];
+            if(rStyleEl) rStyleId = rStyleEl.getAttribute("w:val")||"";
           }
+          /* 字号优先级: run内联 > run字符样式(rStyle) > 段落样式(pStyle) > 默认10.5 */
+          if(!sz && rStyleId && styleMap[rStyleId]) sz = styleMap[rStyleId].sz;
+          if(!sz) sz = pStyleSz;
+          if(!sz) sz = 10.5;
+          if(!b && rStyleId && styleMap[rStyleId] && styleMap[rStyleId].b) b=true;
+          if(!b) b = pStyleB;
           const ts = run.getElementsByTagName("w:t");
           let rt="";
           for(let t=0;t<ts.length;t++) rt += ts[t].textContent||"";
@@ -4855,56 +4894,24 @@ function parseDocxToLayout(arrayBuffer){
         if(!text) continue;
         let mainSz=0, maxLen=0;
         for(const k in sizeCnt){ if(sizeCnt[k]>maxLen){ maxLen=sizeCnt[k]; mainSz=parseFloat(k); } }
-        if(!mainSz) mainSz=10.5;
-        paraList.push({text:text, sz:mainSz, bold:anyBold, firstLine:firstLine, left:left});
+        if(!mainSz) mainSz = pStyleSz || 10.5;
+        paraList.push({text:text, sz:mainSz, bold:anyBold, firstLine:firstLine, left:left, jc:jc});
       }
-      const layout=[];
-      const perCol = Math.ceil(paraList.length/cols);
-      let maxCursor = MARGIN;
-      for(let ci=0; ci<cols; ci++){
-        let cursor = MARGIN;
-        const colX = MARGIN + ci*(colW+GAP);
-        const start=ci*perCol, end=Math.min(paraList.length, start+perCol);
-        for(let i=start;i<end;i++){
-          const pa = paraList[i];
-          const sz = pa.sz, lineH = sz*1.32;
-          const tokens = pa.text.match(/[\u4e00-\u9fff\u3400-\u4dbf]|[A-Za-z0-9]+|\s+|[^\s]/g) || [pa.text];
-          let line="", lineW=0, isFirst=true;
-          const flushLine = function(){
-            if(!line) return;
-            const x = colX + pa.left + (isFirst?pa.firstLine:0);
-            /* _top=行顶部距页顶(cursor),排完按pageH统一翻转为PDF底部坐标系 */
-            layout.push({x:x, _top:cursor, str:line.replace(/\s+$/,""), w:lineW, bold:pa.bold, size:sz, col:ci});
-            cursor += lineH;
-            line=""; lineW=0; isFirst=false;
-          };
-          for(let k=0;k<tokens.length;k++){
-            const tok=tokens[k];
-            let tw=0;
-            if(/^[\u4e00-\u9fff\u3400-\u4dbf]$/.test(tok)) tw=sz;
-            else if(/^\s+$/.test(tok)) tw=sz*0.28;
-            else if(/^[A-Za-z0-9]+$/.test(tok)) tw=tok.length*sz*0.52;
-            else tw=sz*0.5;
-            const maxW = isFirst ? (colW-pa.firstLine) : (colW-pa.left);
-            if(lineW+tw>maxW && line){ flushLine(); }
-            if(/^\s+$/.test(tok) && !line) continue;
-            line+=tok; lineW+=tw;
-          }
-          flushLine();
-          cursor += sz*0.35; /* 段间距 */
-        }
-        if(cursor>maxCursor) maxCursor=cursor;
+      /* 生成流式富文本HTML(保留字号/缩进/对齐/加粗/分栏,浏览器自动换行最接近Word版面) */
+      const alignMap = {center:"center", right:"right", both:"justify", distribute:"justify"};
+      let html = '<div class="pr-docflow" style="column-count:'+cols+';">';
+      for(let i=0;i<paraList.length;i++){
+        const pa = paraList[i];
+        let st = 'font-size:'+pa.sz+'pt;line-height:1.6;';
+        if(pa.bold) st += 'font-weight:bold;';
+        if(pa.firstLine) st += 'text-indent:'+pa.firstLine+'pt;';
+        if(pa.left) st += 'margin-left:'+pa.left+'pt;';
+        if(alignMap[pa.jc]) st += 'text-align:'+alignMap[pa.jc]+';';
+        html += '<p class="pr-docflow-p" style="'+st+'">'+escapeHtml(pa.text)+'</p>';
       }
-      /* 单页长布局: pageH=各栏最大高度,所有块page=1;
-         y翻转为PDF底部坐标系(渲染时 top=pageH-y-size,即块顶部距页顶=_top) */
-      const pageH = maxCursor + MARGIN;
-      for(let i=0;i<layout.length;i++){
-        layout[i].y = pageH - layout[i]._top - layout[i].size;
-        layout[i].page = 1; layout[i].pageW = PAGE_W; layout[i].pageH = pageH;
-        delete layout[i]._top;
-      }
+      html += '</div>';
       const fullText = paraList.map(function(p){return p.text;}).join("\n");
-      return {layout:layout, text:fullText, pages:1};
+      return {html:html, text:fullText, pages:1};
     });
   });
 }
@@ -5748,7 +5755,7 @@ function cleanPaperText(text){
 }
 
 /* 录入论文 / 随笔 (随笔复用同一套查看编辑界面) */
-function addPaper(title, fullText, analysis, structured, category, writtenAt, layout){
+function addPaper(title, fullText, analysis, structured, category, writtenAt, layout, html){
   category = category || "paper";
   const isEssay = category === "essay";
   const trimmedText = fullText.trim();
@@ -5813,6 +5820,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
     analysis: paperAnalysis,
     structured: isEssay ? null : (structured || null),
     layout: isEssay ? null : (Array.isArray(layout) && layout.length ? layout : null), /* PDF文字块坐标字号(版面保真还原用),随笔不用 */
+    html: isEssay ? null : (html || null), /* Word流式版面保真HTML(字号/缩进/对齐/加粗/分栏),随笔不用 */
     highlights: [],
     addedAt: new Date().toISOString(),
     writtenAt: writtenAtIso || null
@@ -6410,7 +6418,7 @@ function renderLayoutPaper(item, prText){
       /* PDF坐标系原点在左下,向上为正; CSS原点在左上,向下为正 → 翻转y */
       const top = pg.pageH - b.y - b.size;
       const fw = b.bold ? 'bold' : 'normal';
-      html += '<span class="pr-layout-block" contenteditable="true" data-page="' + p + '" data-x="' + b.x + '" data-top="' + top + '" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(b.str) + '</span>';
+      html += '<span class="pr-layout-block" contenteditable="true" data-page="' + p + '" data-x="' + b.x + '" data-top="' + top + '" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(squeezeCjkSpaces(b.str)) + '</span>';
     }
     html += '</div>';
   }
@@ -6431,6 +6439,11 @@ function renderPaperText(item){
     return;
   }
   /* 版面保真: 有layout坐标字号时,绝对定位逐块1:1还原原PDF版面(字号/双栏/位置保真) */
+  /* Word流式版面保真: 有html(带字号/缩进/对齐/加粗/分栏的富文本)时直接渲染,浏览器自动排版换行 */
+  if(item.html){
+    prText.innerHTML = item.html;
+    return;
+  }
   if(Array.isArray(item.layout) && item.layout.length){
     if(renderLayoutPaper(item, prText)) return;
   }
@@ -6466,7 +6479,7 @@ function renderPaperText(item){
     }
     const raw = lines[i] || "";
     /* 不识别标题层级: 原样按段落呈现, 不把行改成h4(保持原文版式不动) */
-    const lineText = escapeHtml(raw);
+    const lineText = escapeHtml(squeezeCjkSpaces(raw));
     html += '<span class="pr-section-anchor" id="pr-line-' + i + '"></span>';
     html += '<p class="pr-para-line">' + (lineText || "&nbsp;") + '</p>';
   }
@@ -6970,6 +6983,26 @@ function rebuildFromDom(item){
         item.description = "全文 " + item.fullText.length + " 字 · " + lines.length + " 行";
         return;
       }
+    }
+    /* Word流式版面保真: 从DOM更新item.html(剥离标注元素保留文字),标注单独提取,fullText按段落重建 */
+    if(item.html && prText.querySelector(".pr-docflow")){
+      const clone = prText.cloneNode(true);
+      const annEls = clone.querySelectorAll("mark.hl, strong.pr-bold, u.pr-underline, u.pr-note");
+      for(let i=0;i<annEls.length;i++){
+        const el = annEls[i];
+        const txt = document.createTextNode(el.textContent || "");
+        el.parentNode.replaceChild(txt, el);
+      }
+      item.html = clone.innerHTML;
+      const ps = prText.querySelectorAll(".pr-docflow-p");
+      const ls = [];
+      for(let i=0;i<ps.length;i++) ls.push((ps[i].textContent||"").replace(/\u00A0/g," ").trim());
+      item.fullText = ls.join("\n");
+      item.highlights = extractHighlightsFromDom(prText);
+      item.outline = generateOutline(item.fullText);
+      item.analysis = analyzePaper(item.fullText);
+      item.description = "全文 " + item.fullText.length + " 字 · " + ls.length + " 段";
+      return;
     }
     if(item.structured && (item.structured.sections || item.structured.abstract)){
       const doc = prText.querySelector(".pp-doc");
@@ -11624,6 +11657,7 @@ function openPaperEntryModal(category){
   paperEntryFromPdf = false;
   paperEntryImages = null;
   paperEntryStructured = null;
+  paperEntryHtml = null; paperEntryLayout = null;
   updatePaperEntryStats();
   /* 随笔: 仅文字粘贴,隐藏 PDF 导入按钮与转换提示; 论文: 还原显示 */
   const pdfBtn = document.getElementById("paperPdfBtn");
@@ -11689,6 +11723,7 @@ let paperEntryFromPdf = false; /* 全文是否来自PDF导入 */
 let paperEntryImages = null;  /* PDF导入提取的图片 */
 let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:导入时已完成,直接入册 */
 let paperEntryLayout = null;  /* PDF导入的文字块坐标字号(版面保真还原用,渲染层启用后1:1还原版面) */
+let paperEntryHtml = null;   /* Word导入的流式版面保真HTML(字号/缩进/对齐/加粗/分栏) */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
@@ -11717,7 +11752,7 @@ if(paperEntrySubmit){
       paperEntryStructured = null;
     }
     const noun = isEssay ? "随笔" : "论文";
-    const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal, paperEntryLayout);
+    const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal, paperEntryLayout, paperEntryHtml);
     if(result && result.error === "duplicate"){
       toast("此" + noun + "已在册中");
       return;
@@ -11792,12 +11827,12 @@ if(paperPdfBtn){
           parseDocxToLayout(ab).then(function(res){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
-            if(res && res.layout && res.layout.length && res.text.trim().length >= 50){
+            if(res && res.html && res.text.trim().length >= 50){
               if(paperFullTextInput){ paperFullTextInput.value = res.text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null; paperEntryStructured = null;
-              paperEntryLayout = res.layout;
+              paperEntryHtml = res.html; paperEntryLayout = null;
               if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
-              toast("Word版面已还原(" + res.layout.length + "块)· 点「整理入册」");
+              toast("Word版面已还原(流式·字号/缩进/分栏保真)· 点「整理入册」");
             }else{
               mammothFallback();
             }
@@ -11984,6 +12019,7 @@ if(paperFullTextInput){
   paperFullTextInput.addEventListener("input", function(){
     paperEntryFromPdf = false;
     paperEntryStructured = null;
+    paperEntryHtml = null; paperEntryLayout = null;
   });
 }
 if(paperTitleInput){
