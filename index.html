@@ -1806,6 +1806,17 @@
         <button id="editSubcatAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">＋ 加入</button>
       </div>
     </div>
+    <div class="modal-field" id="editEssayDateField" style="display:none">
+      <label>随笔时间</label>
+      <div class="essay-date-input">
+        <input type="text" id="editEssayYear"  inputmode="numeric" maxlength="4" placeholder="年" autocomplete="off" title="填写年份(4位)" />
+        <span class="edi-unit">年</span>
+        <input type="text" id="editEssayMonth" inputmode="numeric" maxlength="2" placeholder="月" autocomplete="off" title="填写月份(1-12)" />
+        <span class="edi-unit">月</span>
+        <input type="text" id="editEssayDay"   inputmode="numeric" maxlength="2" placeholder="日" autocomplete="off" title="填写日期(1-31)" />
+        <span class="edi-unit">日</span>
+      </div>
+    </div>
     <div class="modal-field">
       <label>品评 · 一至五星</label>
       <div class="stars-input" id="editStars"></div>
@@ -9469,6 +9480,18 @@ function updateItem(id, patch){
     const hasSub = (it.category === "beverage" || it.category === "skincare");
     it.subCategory = hasSub ? String(patch.subCategory || "").trim() : "";
   }
+  if(Object.prototype.hasOwnProperty.call(patch, "writtenAt")){
+    /* 随笔写作时间: 存 ISO; 同时把标题同步为新日期,保证筛选/排序一致 */
+    if(it.category === "essay" && patch.writtenAt){
+      const wd = new Date(patch.writtenAt);
+      if(!isNaN(wd.getTime())){
+        it.writtenAt = wd.toISOString();
+        it.name = wd.getFullYear() + "年" + (wd.getMonth()+1) + "月" + wd.getDate() + "日";
+      }
+    } else if(patch.writtenAt === null){
+      it.writtenAt = null;
+    }
+  }
   saveState();
   render();
 }
@@ -10546,10 +10569,53 @@ const editSubcatLabel = document.getElementById("editSubcatLabel");
 const editSubcatSel = document.getElementById("editSubcatSel");
 const editSubcatNew = document.getElementById("editSubcatNew");
 const editSubcatAddBtn = document.getElementById("editSubcatAddBtn");
+const editEssayDateField = document.getElementById("editEssayDateField");
+const editEssayYearInput = document.getElementById("editEssayYear");
+const editEssayMonthInput = document.getElementById("editEssayMonth");
+const editEssayDayInput = document.getElementById("editEssayDay");
 let editCurrentId = null;
 let editSelectedCat = null;
 let editRating = 0;
 let editSubcat = ""; /* 编订中选中的小门类 */
+
+/* 编订弹窗随笔日期: 年/月/日分框, 与录入同款, 数字可删可改,「年月日」汉字固定 */
+function fillEditEssayDate(d){
+  d = d || new Date();
+  const pad = function(n){ return String(n).padStart(2,"0"); };
+  if(editEssayYearInput)  editEssayYearInput.value  = d.getFullYear();
+  if(editEssayMonthInput) editEssayMonthInput.value = pad(d.getMonth()+1);
+  if(editEssayDayInput)   editEssayDayInput.value   = pad(d.getDate());
+}
+function getEditEssayDateValue(){
+  const y = editEssayYearInput  ? editEssayYearInput.value.trim()  : "";
+  const m = editEssayMonthInput ? editEssayMonthInput.value.trim() : "";
+  const d = editEssayDayInput   ? editEssayDayInput.value.trim()   : "";
+  if(!y || !m || !d) return "";
+  const yi = parseInt(y,10), mi = parseInt(m,10), di = parseInt(d,10);
+  if(!yi || !mi || !di) return "";
+  if(mi < 1 || mi > 12 || di < 1 || di > 31) return "";
+  const dt = new Date(yi, mi-1, di, 12, 0, 0);
+  if(isNaN(dt.getTime())) return "";
+  return dt.toISOString();
+}
+function clearEditEssayDateInputs(){
+  if(editEssayYearInput)  editEssayYearInput.value = "";
+  if(editEssayMonthInput) editEssayMonthInput.value = "";
+  if(editEssayDayInput)   editEssayDayInput.value = "";
+}
+/* 显隐: 仅随笔显示日期字段 */
+function syncEditEssayDate(){
+  if(!editEssayDateField) return;
+  const show = (editSelectedCat === "essay");
+  editEssayDateField.style.display = show ? "" : "none";
+  if(!show) clearEditEssayDateInputs();
+}
+/* 自动跳格: 年填满4位→月, 月填满2位→日 */
+(function bindEditEssayDateAutoTab(){
+  const jump = function(cur, next){ if(cur && next && cur.value.length >= (cur.maxLength||2)){ next.focus(); next.select && next.select(); } };
+  if(editEssayYearInput)  editEssayYearInput.addEventListener("input", function(){ jump(editEssayYearInput, editEssayMonthInput); });
+  if(editEssayMonthInput) editEssayMonthInput.addEventListener("input", function(){ jump(editEssayMonthInput, editEssayDayInput); });
+})();
 
 /* 渲染编订弹窗的小门类下拉, 数据源依据 editSelectedCat */
 function renderEditSubcatSelect(){
@@ -10641,6 +10707,7 @@ function renderEditCats(){
       if(newCat !== editSelectedCat) editSubcat = "";
       editSelectedCat = newCat;
       syncEditSubcat();
+      syncEditEssayDate();
     };
   }
 }
@@ -10655,9 +10722,17 @@ function openEditModal(id){
   if(editNameInput) editNameInput.value = it.name;
   if(editDescInput) editDescInput.value = it.description || "";
   if(editSubcatNew) editSubcatNew.value = "";
+  /* 随笔: 用已有写作时间填入日期框, 没有则留空让用户填 */
+  if(it.category === "essay" && it.writtenAt){
+    const wd = new Date(it.writtenAt);
+    if(!isNaN(wd.getTime())) fillEditEssayDate(wd); else clearEditEssayDateInputs();
+  } else {
+    clearEditEssayDateInputs();
+  }
   renderEditCats();
   renderEditStars();
   syncEditSubcat();
+  syncEditEssayDate();
   editModal.classList.add("show");
   setTimeout(function(){ if(editNameInput) editNameInput.focus(); }, 50);
 }
@@ -10685,12 +10760,23 @@ if(modalSave){
     } else {
       sub = "";
     }
+    /* 随笔: 必须填写写作时间(年月日); 取值并存入 writtenAt(同时更新标题为该日期) */
+    let essayDateIso = null;
+    if(editSelectedCat === "essay"){
+      essayDateIso = getEditEssayDateValue();
+      if(!essayDateIso){
+        toast("请填写随笔时间(年/月/日)");
+        if(editEssayYearInput){ editEssayYearInput.focus(); editEssayYearInput.select(); }
+        return;
+      }
+    }
     updateItem(editCurrentId, {
       name: name,
       category: editSelectedCat,
       rating: editRating,
       description: desc,
-      subCategory: sub
+      subCategory: sub,
+      writtenAt: essayDateIso
     });
     toast("已存档编订");
     editModal.classList.remove("show");
