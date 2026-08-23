@@ -903,7 +903,7 @@
     scroll-behavior:smooth;
     transition:padding .25s ease;
   }
-  /* ===== 页边距调整(Word式) ===== */
+  /* ===== 双栏排版(Word式左右分栏) ===== */
   .pr-margin-ctl{ position:relative; }
   .pr-margin-btn{
     padding:3px 12px; border:1px solid rgba(60,72,88,.28); border-radius:8px;
@@ -913,28 +913,16 @@
   }
   .pr-margin-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
   .pr-margin-btn.on{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.12); }
-  .pr-margin-pop{
-    position:absolute; top:calc(100% + 8px); right:0; z-index:30;
-    min-width:168px; padding:8px; border-radius:12px;
-    background:#fff; border:1px solid rgba(60,72,88,.14);
-    box-shadow:0 12px 32px rgba(28,32,40,.16);
-    opacity:0; visibility:hidden; transform:translateY(-6px);
-    transition:all .18s ease;
+  /* 双栏正文: 内容流式左右分栏,中缝细线(还原Word双栏论文版式) */
+  #prText.pr-2col{
+    column-count:2; column-gap:2.4em;
+    column-rule:1px solid var(--line-soft);
+    max-width:100%;   /* 双栏时放宽单栏740px限制 */
   }
-  .pr-margin-pop.show{ opacity:1; visibility:visible; transform:translateY(0); }
-  .pr-margin-pop-h{
-    font-size:10.5px; color:var(--ink-mute); letter-spacing:.14em;
-    padding:2px 6px 6px; border-bottom:1px solid rgba(60,72,88,.08); margin-bottom:4px;
+  #prText.pr-2col h1, #prText.pr-2col h2, #prText.pr-2col h3,
+  #prText.pr-2col h4, #prText.pr-2col .pr-section-title{
+    column-span:all;   /* 标题跨栏(Word双栏文档大标题通栏惯例) */
   }
-  .pr-margin-opt{
-    display:flex; justify-content:space-between; align-items:baseline; width:100%;
-    padding:7px 10px; border:0; border-radius:8px; background:transparent;
-    color:var(--ink); font-family:"Noto Serif SC",serif; font-size:12.5px; cursor:pointer;
-    transition:background .15s;
-  }
-  .pr-margin-opt span{ font-size:10px; color:var(--ink-mute); font-family:inherit; }
-  .pr-margin-opt:hover{ background:rgba(47,93,98,.08); }
-  .pr-margin-opt.on{ background:rgba(47,93,98,.12); color:var(--teal); font-weight:700; }
   .pr-text{
     max-width:740px; margin:0 auto;
     font-family:"Newsreader","Noto Serif SC",Georgia,serif;
@@ -1757,14 +1745,7 @@
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
         <div class="pr-margin-ctl">
-          <button class="pr-margin-btn" id="prMarginBtn" title="调整正文页边距(类似Word)">▤ 边距</button>
-          <div class="pr-margin-pop" id="prMarginPop">
-            <div class="pr-margin-pop-h">页边距</div>
-            <button class="pr-margin-opt" data-m="narrow">窄 <span>17px / 32px</span></button>
-            <button class="pr-margin-opt" data-m="normal">适中 <span>36px / 56px</span></button>
-            <button class="pr-margin-opt" data-m="wide">宽 <span>64px / 96px</span></button>
-            <button class="pr-margin-opt" data-m="xwide">超宽 <span>96px / 140px</span></button>
-          </div>
+          <button class="pr-margin-btn" id="prColBtn" title="双栏排版(左右分栏,还原Word双栏论文版式)">◫ 双栏</button>
         </div>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
@@ -3131,6 +3112,19 @@ function afterLogin(){
   state.trash = [];
   loadState();
   migrateItems();
+  /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
+  try{
+    const users = getUsers();
+    if(currentUser && users[currentUser] && !users[currentUser].code){
+      users[currentUser].code = genSyncCode();
+      saveUsers(users);
+      setTimeout(function(){
+        syncPushNow();
+        showSyncCodeModal();
+        toast("已为该账号生成身份码(多设备同步已开通,请妥善保存)", 5000);
+      }, 1200);
+    }
+  }catch(e){ /* 静默 */ }
   purgeExpiredTrash();   /* 回收站7天自动清空 */
   updateTrashBtn();      /* 导航徽章 */
   render();
@@ -5545,46 +5539,26 @@ function openPaperReader(itemId){
     };
   }
 
-  /* ===== 页边距调整(Word式): 窄/适中/宽/超宽,记忆到本地 ===== */
-  const prMarginBtn = document.getElementById("prMarginBtn");
-  const prMarginPop = document.getElementById("prMarginPop");
-  if(prMarginBtn && prMarginPop){
-    const MARGINS = {
-      narrow: { tb: 17, lr: 32 },
-      normal: { tb: 36, lr: 56 },
-      wide:   { tb: 64, lr: 96 },
-      xwide:  { tb: 96, lr: 140 }
-    };
-    function applyMargin(m){
-      const conf = MARGINS[m] || MARGINS.normal;
-      const wrap = document.getElementById("prTextWrap");
-      if(wrap) wrap.style.padding = conf.tb + "px " + conf.lr + "px 80px";
-      try{ localStorage.setItem(STORAGE_KEY + "_margin", m); }catch(e){}
-      const opts = prMarginPop.querySelectorAll(".pr-margin-opt");
-      for(let j=0; j<opts.length; j++) opts[j].classList.toggle("on", opts[j].dataset.m === m);
+  /* ===== 双栏排版切换(Word式左右分栏): 记忆偏好 ===== */
+  const prColBtn = document.getElementById("prColBtn");
+  if(prColBtn){
+    function applyCols(on){
+      const pt = document.getElementById("prText");
+      if(!pt) return;
+      pt.classList.toggle("pr-2col", !!on);
+      prColBtn.classList.toggle("on", !!on);
+      try{ localStorage.setItem(STORAGE_KEY + "_cols", on ? "1" : "0"); }catch(e){}
     }
-    /* 恢复上次边距 */
-    let savedM = "normal";
-    try{ savedM = localStorage.getItem(STORAGE_KEY + "_margin") || "normal"; }catch(e){}
-    applyMargin(savedM);
-    prMarginBtn.onclick = function(e){
-      e.stopPropagation();
-      prMarginPop.classList.toggle("show");
+    /* 恢复上次偏好 */
+    let savedCols = "0";
+    try{ savedCols = localStorage.getItem(STORAGE_KEY + "_cols") || "0"; }catch(e){}
+    applyCols(savedCols === "1");
+    prColBtn.onclick = function(){
+      const pt = document.getElementById("prText");
+      const nowOn = !(pt && pt.classList.contains("pr-2col"));
+      applyCols(nowOn);
+      toast(nowOn ? "已切换双栏排版(标题通栏)" : "已切换单栏排版");
     };
-    const mOpts = prMarginPop.querySelectorAll(".pr-margin-opt");
-    for(let j=0; j<mOpts.length; j++){
-      mOpts[j].onclick = function(){
-        applyMargin(this.dataset.m);
-        prMarginPop.classList.remove("show");
-        toast("页边距已调整为「" + this.textContent.replace(/\s+/g, " ").trim().split(" ")[0] + "」");
-      };
-    }
-    /* 点击面板外关闭 */
-    document.addEventListener("click", function(e){
-      if(prMarginPop.classList.contains("show") && !e.target.closest(".pr-margin-ctl")){
-        prMarginPop.classList.remove("show");
-      }
-    });
   }
 
   /* 撤销最近一次操作(删除/排版/标注) */
