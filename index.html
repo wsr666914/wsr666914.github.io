@@ -1688,13 +1688,13 @@
       <div class="cc-chips" id="composerCats"></div>
     </div>
     <div class="composer-brand" id="composerBeverageBrand" style="display:none">
-      <span class="cb-label">饮品品牌 <span class="cb-sub">小门类 · 可自建</span></span>
+      <span class="cb-label" id="cbLabelText">小门类 <span class="cb-sub">可自建</span></span>
       <div class="cb-row">
-        <select id="beverageBrandSel" title="选择已有品牌小门类"></select>
-        <input id="beverageBrandNew" class="cb-new-input" type="text" placeholder="或输入新品牌名" autocomplete="off" />
-        <button id="beverageBrandAddBtn" type="button" class="cb-add-btn" title="把左侧输入的品牌加入小门类">＋ 加入</button>
+        <select id="beverageBrandSel" title="选择已有小门类"></select>
+        <input id="beverageBrandNew" class="cb-new-input" type="text" placeholder="或输入新名称" autocomplete="off" />
+        <button id="beverageBrandAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">＋ 加入</button>
       </div>
-      <span class="cb-hint">录入饮品时请选择其品牌;同一品牌下的饮品会归到该小门类下</span>
+      <span class="cb-hint" id="cbHintText">请选择或新建小门类</span>
     </div>
     <div class="composer-extras">
       <button class="btn-link" id="batchBtn" title="粘贴一段文字,自识其中各目">⇶ 粘贴识别</button>
@@ -2919,7 +2919,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayYearFilter: null, essayMonthFilter: null, beverageBrandFilter: null };
+const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayYearFilter: null, essayMonthFilter: null, subcatFilter: null };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -3259,6 +3259,7 @@ function afterLogin(){
   state.trash = [];
   loadState();
   loadBeverageBrands();
+  loadSkincareFuncs();
   migrateItems();
   /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
   try{
@@ -3557,17 +3558,80 @@ function removeBeverageBrand(name){
   saveBeverageBrands();
 }
 
+/* ============================================================
+   护肤功效小门类 —— 按功能分类(美白/补水/抗皱…), 可自建
+   录入护肤品时选择功效, 存入 item.subCategory; 护肤门类下可按功效筛选
+   ============================================================ */
+const SKIN_FUNC_KEY = "wsr_skin_funcs_v1";
+const DEFAULT_SKIN_FUNCS = [
+  "补水","保湿","滋润","修护","修复","舒缓","敏肌维稳","屏障修护",
+  "美白","提亮","匀肤","淡斑","祛痘","控油","收敛毛孔","去黑头","去角质",
+  "抗皱","抗老","初抗老","紧致","提拉","抗氧化","抗糖化","抗蓝光",
+  "防晒","隔离","眼部护理","唇部护理","身体护理","颈纹","清洁","卸妆"
+];
+let skincareFuncs = [];
+function loadSkincareFuncs(){
+  let saved = [];
+  try{
+    const s = JSON.parse(localStorage.getItem(SKIN_FUNC_KEY) || "[]");
+    if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
+  }catch(e){}
+  const set = new Set(saved);
+  for(let i=0; i<DEFAULT_SKIN_FUNCS.length; i++) set.add(DEFAULT_SKIN_FUNCS[i]);
+  skincareFuncs = Array.from(set);
+}
+function saveSkincareFuncs(){
+  try{ localStorage.setItem(SKIN_FUNC_KEY, JSON.stringify(skincareFuncs)); }catch(e){}
+}
+function addSkincareFunc(name){
+  const n = (name || "").trim();
+  if(!n) return false;
+  const exists = skincareFuncs.some(function(b){ return b.toLowerCase() === n.toLowerCase(); });
+  if(exists) return false;
+  skincareFuncs.push(n);
+  saveSkincareFuncs();
+  return true;
+}
+function removeSkincareFunc(name){
+  const n = (name || "").trim();
+  if(!n) return;
+  skincareFuncs = skincareFuncs.filter(function(b){ return b !== n; });
+  saveSkincareFuncs();
+}
+/* 通用访问: 根据门类取小门类列表/增删 */
+function getSubcatList(cat){
+  if(cat === "beverage") return beverageBrands;
+  if(cat === "skincare") return skincareFuncs;
+  return [];
+}
+function addSubcatItem(cat, name){
+  if(cat === "beverage") return addBeverageBrand(name);
+  if(cat === "skincare") return addSkincareFunc(name);
+  return false;
+}
+function removeSubcatItem(cat, name){
+  if(cat === "beverage") return removeBeverageBrand(name);
+  if(cat === "skincare") return removeSkincareFunc(name);
+}
+/* 小门类显示名: beverage→品牌, skincare→功效 */
+function subcatLabel(cat){
+  if(cat === "beverage") return "品牌";
+  if(cat === "skincare") return "功效";
+  return "小门类";
+}
+
 function addItem(name, manualCategory, options){
   options = options || {};
   const result = classify(name);
   const finalCategory = manualCategory || result.cat;
   const trimmed = name.trim();
 
-  // 同分类同名去重 (饮品: 同品牌下同名才算重复; 跨品牌允许同名)
+  // 同分类同名去重 (饮品/护肤: 同小门类下同名才算重复; 跨小门类允许同名)
+  const hasSub = (finalCategory === "beverage" || finalCategory === "skincare");
   const low = trimmed.toLowerCase();
   const dup = state.items.find(function(i){
     if(i.name.trim().toLowerCase() !== low || i.category !== finalCategory) return false;
-    if(finalCategory === "beverage") return (i.subCategory || "") === (options.subCategory || "");
+    if(hasSub) return (i.subCategory || "") === (options.subCategory || "");
     return true;
   });
   if(dup){
@@ -3584,7 +3648,7 @@ function addItem(name, manualCategory, options){
     manualOverride: !!manualCategory && manualCategory !== result.cat,
     rating: Math.max(0, Math.min(5, parseInt(options.rating, 10) || 0)),  // 0 = 未评
     description: (options.description || "").trim(),
-    subCategory: (finalCategory === "beverage" && options.subCategory) ? options.subCategory.trim() : "",
+    subCategory: (hasSub && options.subCategory) ? options.subCategory.trim() : "",
     addedAt: new Date().toISOString()
   };
   state.items.unshift(item);
@@ -9394,7 +9458,7 @@ function render(){
   renderStats();
   renderFilters();
   renderEssayMonthBar();
-  renderBeverageBrandBar();
+  renderSubcatBar();
   renderGallery();
 }
 
@@ -9534,9 +9598,9 @@ function renderFilters(){
   for(let i=0; i<chips.length; i++){
     chips[i].onclick = function(){
       state.filter = this.dataset.filter;
-      /* 切离随笔/饮品时清空其专属筛选, 避免残留 */
+      /* 切离随笔/饮品/护肤时清空其专属筛选, 避免残留 */
       if(state.filter !== "essay"){ state.essayYearFilter = null; state.essayMonthFilter = null; }
-      if(state.filter !== "beverage"){ state.beverageBrandFilter = null; }
+      if(state.filter !== "beverage" && state.filter !== "skincare"){ state.subcatFilter = null; }
       state.galleryLimit = 120; /* 切换分类从头显示 */
       render();
     };
@@ -9625,55 +9689,58 @@ function renderEssayMonthBar(){
   }
 }
 
-/* 饮品品牌筛选条: 仅饮品门类显示; 显示「全部品牌」+ 各品牌(含已用品牌),可删自定义品牌 */
-function renderBeverageBrandBar(){
+/* 小门类筛选条: 饮品(品牌)/护肤(功效) 门类下显示; 「全部」+ 各小门类(带计数), 可删自定义项 */
+function renderSubcatBar(){
   const bar = document.getElementById("beverageBrandBar");
   const chips = document.getElementById("beverageBrandChips");
+  const lblEl = bar ? bar.querySelector(".label") : null;
   if(!bar || !chips) return;
-  if(state.filter !== "beverage"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  const cat = state.filter;
+  if(cat !== "beverage" && cat !== "skincare"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
   bar.style.display = "";
-  const bevCat = CATEGORIES.beverage;
-  if(bevCat) bar.style.setProperty("--cat-color", bevCat.color);
-  /* 收集已被饮品条目使用的品牌 */
-  const usedBrands = new Set();
+  const cObj = CATEGORIES[cat];
+  if(cObj) bar.style.setProperty("--cat-color", cObj.color);
+  const subLbl = subcatLabel(cat); /* 品牌/功效 */
+  if(lblEl) lblEl.textContent = subLbl;
+  /* 收集已被该门类条目使用的小门类 */
+  const used = new Set();
   state.items.forEach(function(it){
-    if(it.category === "beverage" && it.subCategory) usedBrands.add(it.subCategory);
+    if(it.category === cat && it.subCategory) used.add(it.subCategory);
   });
-  /* 合并: 用户品牌列表(beverageBrands) ∪ 已用品牌, 保持 beverageBrands 顺序 */
-  const allBrands = beverageBrands.slice();
-  usedBrands.forEach(function(b){ if(allBrands.indexOf(b) < 0) allBrands.push(b); });
-  /* 当前筛选品牌若已不在列表 → 回退全部 */
-  if(state.beverageBrandFilter && allBrands.indexOf(state.beverageBrandFilter) < 0) state.beverageBrandFilter = null;
-  let html = '<button class="bb-chip ' + (state.beverageBrandFilter === null ? 'active' : '') + '" data-brand="">全部品牌</button>';
-  for(let i=0; i<allBrands.length; i++){
-    const b = allBrands[i];
-    const isCustom = beverageBrands.indexOf(b) >= 0; /* 自定义品牌可删 */
-    const cnt = state.items.filter(function(it){ return it.category === "beverage" && it.subCategory === b; }).length;
-    html += '<button class="bb-chip ' + (state.beverageBrandFilter === b ? 'active' : '') + '" data-brand="' + escapeHtml(b) + '">' +
+  /* 合并: 用户列表 ∪ 已用, 保持用户列表顺序 */
+  const userList = getSubcatList(cat);
+  const all = userList.slice();
+  used.forEach(function(b){ if(all.indexOf(b) < 0) all.push(b); });
+  /* 当前筛选若已不在列表 → 回退全部 */
+  if(state.subcatFilter && all.indexOf(state.subcatFilter) < 0) state.subcatFilter = null;
+  let html = '<button class="bb-chip ' + (state.subcatFilter === null ? 'active' : '') + '" data-brand="">全部' + subLbl + '</button>';
+  for(let i=0; i<all.length; i++){
+    const b = all[i];
+    const isCustom = userList.indexOf(b) >= 0; /* 自定义项可删 */
+    const cnt = state.items.filter(function(it){ return it.category === cat && it.subCategory === b; }).length;
+    html += '<button class="bb-chip ' + (state.subcatFilter === b ? 'active' : '') + '" data-brand="' + escapeHtml(b) + '">' +
       escapeHtml(b) + (cnt ? '<span class="bb-count">' + cnt + '</span>' : '') +
-      (isCustom ? '<span class="bb-del" data-del="' + escapeHtml(b) + '" title="删除该品牌小门类">×</span>' : '') +
+      (isCustom ? '<span class="bb-del" data-del="' + escapeHtml(b) + '" title="删除该' + subLbl + '小门类">×</span>' : '') +
     '</button>';
   }
   chips.innerHTML = html;
   const btns = chips.querySelectorAll(".bb-chip");
   for(let i=0; i<btns.length; i++){
     btns[i].onclick = function(e){
-      /* 点删除按钮: 不切换筛选, 只删品牌 */
       const delEl = e.target && e.target.classList && e.target.classList.contains("bb-del") ? e.target : null;
       if(delEl){
         e.stopPropagation();
         const dn = delEl.dataset.del;
-        if(dn && confirm("删除品牌小门类「" + dn + "」?\n(该品牌下的饮品不会被删, 仅去掉品牌归类)")){
-          removeBeverageBrand(dn);
-          /* 该品牌下饮品的 subCategory 清空 */
-          state.items.forEach(function(it){ if(it.category === "beverage" && it.subCategory === dn) it.subCategory = ""; });
+        if(dn && confirm("删除" + subLbl + "小门类「" + dn + "」?\n(该" + subLbl + "下的" + cObj.name + "不会被删, 仅去掉" + subLbl + "归类)")){
+          removeSubcatItem(cat, dn);
+          state.items.forEach(function(it){ if(it.category === cat && it.subCategory === dn) it.subCategory = ""; });
           saveState();
-          if(state.beverageBrandFilter === dn) state.beverageBrandFilter = null;
+          if(state.subcatFilter === dn) state.subcatFilter = null;
           render();
         }
         return;
       }
-      state.beverageBrandFilter = this.dataset.brand || null;
+      state.subcatFilter = this.dataset.brand || null;
       state.galleryLimit = 120;
       render();
     };
@@ -9710,10 +9777,10 @@ function renderGallery(){
     });
   }
 
-  /* 饮品: 按品牌小门类筛选 */
-  if(state.filter === "beverage" && state.beverageBrandFilter){
+  /* 饮品/护肤: 按小门类(品牌/功效)筛选 */
+  if((state.filter === "beverage" || state.filter === "skincare") && state.subcatFilter){
     items = items.filter(function(i){
-      return i.category === "beverage" && (i.subCategory || "") === state.beverageBrandFilter;
+      return i.category === state.filter && (i.subCategory || "") === state.subcatFilter;
     });
   }
 
@@ -9790,9 +9857,9 @@ function renderGallery(){
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
     html += '</div>';
-    /* 饮品: 品牌小门类标签 */
-    if(it.category === "beverage" && it.subCategory){
-      html += '<div class="card-brand" title="品牌小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
+    /* 饮品(品牌)/护肤(功效): 小门类标签 */
+    if((it.category === "beverage" || it.category === "skincare") && it.subCategory){
+      html += '<div class="card-brand" title="' + subcatLabel(it.category) + '小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
     }
     /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
     let _dispTitle = it.name;
@@ -10038,18 +10105,22 @@ const beverageBrandSelEl = document.getElementById("beverageBrandSel");
 const beverageBrandNewEl = document.getElementById("beverageBrandNew");
 const beverageBrandAddBtnEl = document.getElementById("beverageBrandAddBtn");
 /* 当前录入选中的品牌(临时态,提交时用) */
-let composerBeverageBrand = "";
+let composerBeverageBrand = ""; /* 当前录入选中的小门类(品牌/功效) */
+let composerSubcatCat = null; /* 当前小门类对应的门类(beverage/skincare) */
 
+/* 渲染小门类下拉, 数据源依据 composerSubcatCat */
 function renderBeverageBrandSelect(){
   if(!beverageBrandSelEl) return;
-  let html = '<option value="">— 不分品牌 —</option>';
-  for(let i=0; i<beverageBrands.length; i++){
-    const b = beverageBrands[i];
+  const list = getSubcatList(composerSubcatCat);
+  const noneLabel = "— 不分" + subcatLabel(composerSubcatCat) + " —";
+  let html = '<option value="">' + noneLabel + '</option>';
+  for(let i=0; i<list.length; i++){
+    const b = list[i];
     html += '<option value="' + escapeHtml(b) + '"' + (composerBeverageBrand === b ? ' selected' : '') + '>' + escapeHtml(b) + '</option>';
   }
   beverageBrandSelEl.innerHTML = html;
 }
-/* 依据当前最终分类(手选或自动判定)决定品牌区显隐 */
+/* 依据当前最终分类(手选或自动判定)决定小门类区显隐 */
 function syncBeverageBrandComposer(){
   if(!composerBeverageBrandEl) return;
   const v = input ? input.value.trim() : "";
@@ -10058,15 +10129,23 @@ function syncBeverageBrandComposer(){
     const r = classify(v);
     if(r && r.cat) finalCat = r.cat;
   }
-  const show = (finalCat === "beverage");
+  const show = (finalCat === "beverage" || finalCat === "skincare");
   composerBeverageBrandEl.style.display = show ? "" : "none";
   if(show){
-    const bevCat = CATEGORIES.beverage;
-    if(bevCat) composerBeverageBrandEl.style.setProperty("--cat-color", bevCat.color);
+    composerSubcatCat = finalCat;
+    const cat = CATEGORIES[finalCat];
+    if(cat) composerBeverageBrandEl.style.setProperty("--cat-color", cat.color);
+    /* 文案随门类切换 */
+    const lbl = document.getElementById("cbLabelText");
+    if(lbl) lbl.innerHTML = cat.name + subcatLabel(finalCat) + ' <span class="cb-sub">小门类 · 可自建</span>';
+    const hint = document.getElementById("cbHintText");
+    if(hint) hint.textContent = "录入" + cat.name + "时请选择其" + subcatLabel(finalCat) + ";同一" + subcatLabel(finalCat) + "下的" + cat.name + "会归到该小门类下";
+    if(beverageBrandNewEl) beverageBrandNewEl.placeholder = "或输入新" + subcatLabel(finalCat) + "名";
     renderBeverageBrandSelect();
   } else {
-    /* 切离饮品时清掉临时选中 */
+    /* 切离该门类时清掉临时选中 */
     composerBeverageBrand = "";
+    composerSubcatCat = null;
     if(beverageBrandNewEl) beverageBrandNewEl.value = "";
   }
 }
@@ -10079,14 +10158,14 @@ if(beverageBrandSelEl){
 if(beverageBrandAddBtnEl){
   beverageBrandAddBtnEl.onclick = function(){
     const n = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
-    if(!n){ toast("请先输入新品牌名"); return; }
-    const added = addBeverageBrand(n);
-    if(!added){ toast("品牌「" + n + "」已存在"); }
-    else { toast("已加入品牌「" + n + "」"); }
-    composerBeverageBrand = n; /* 自动选中新建的品牌 */
+    if(!n){ toast("请先输入新" + subcatLabel(composerSubcatCat) + "名"); return; }
+    const added = addSubcatItem(composerSubcatCat, n);
+    if(!added){ toast(subcatLabel(composerSubcatCat) + "「" + n + "」已存在"); }
+    else { toast("已加入" + subcatLabel(composerSubcatCat) + "「" + n + "」"); }
+    composerBeverageBrand = n; /* 自动选中新建的小门类 */
     if(beverageBrandNewEl) beverageBrandNewEl.value = "";
     renderBeverageBrandSelect();
-    renderBeverageBrandBar();
+    renderSubcatBar();
   };
 }
 if(beverageBrandNewEl){
@@ -10139,18 +10218,19 @@ submitBtn.addEventListener("click", submit);
 function submit(){
   const v = input.value.trim();
   if(!v){ toast("请先键入名目"); return; }
-  /* 饮品: 若新建品牌输入框有内容,先加入品牌列表并选中 */
+  /* 饮品/护肤: 若新建小门类输入框有内容,先加入列表并选中 */
   const finalCat = state.composerCategory || (classify(v).cat);
+  const hasSub = (finalCat === "beverage" || finalCat === "skincare");
   let brand = composerBeverageBrand || "";
-  if(finalCat === "beverage"){
+  if(hasSub){
     const newName = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
     if(newName){
-      addBeverageBrand(newName);
+      addSubcatItem(finalCat, newName);
       brand = newName;
-      renderBeverageBrandBar();
+      renderSubcatBar();
     }
     if(!brand){
-      toast("请为该饮品选择或新建一个品牌");
+      toast("请为该" + (CATEGORIES[finalCat] ? CATEGORIES[finalCat].name : "项") + "选择或新建一个" + subcatLabel(finalCat));
       if(beverageBrandSelEl){ beverageBrandSelEl.focus(); }
       return;
     }
@@ -10158,14 +10238,14 @@ function submit(){
   const result = addItem(v, state.composerCategory, { subCategory: brand });
   if(result && result.error === "duplicate"){
     const ec = CATEGORIES[result.category] || CATEGORIES[FALLBACK_CAT];
-    const dupHint = (result.category === "beverage" && result.existing && result.existing.subCategory)
-      ? '(品牌「' + result.existing.subCategory + '」下)' : '';
+    const dupHint = (hasSub && result.existing && result.existing.subCategory)
+      ? '(' + subcatLabel(result.category) + '「' + result.existing.subCategory + '」下)' : '';
     toast('「' + v + '」已存在于「' + ec.name + '」' + dupHint + '分类,未重复入册');
     return;
   }
   const c = CATEGORIES[result.category] || CATEGORIES[FALLBACK_CAT];
   const tag = result.manualOverride ? '手订' : '已入';
-  const brandTag = (result.category === "beverage" && result.subCategory) ? ' · ' + result.subCategory : '';
+  const brandTag = (hasSub && result.subCategory) ? ' · ' + result.subCategory : '';
   toast(tag + '「' + c.name + '」' + brandTag + ' · ' + result.name);
   input.value = "";
   state.composerCategory = null;
