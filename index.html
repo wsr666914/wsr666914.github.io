@@ -1636,7 +1636,7 @@
         <div class="pr-ai-btns">
           <button class="pr-ai-btn" id="prAiRead" title="选中一段文字后点击,AI基于上下文深度解读">✦ 解读选中</button>
           <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">💬 AI 提问</button>
-          <button class="pr-ai-btn" id="prRelated" title="AI联想知网内与该论文研究内容相似的论文五篇">⇄ 联想论文</button>
+          <button class="pr-ai-btn" id="prRelated" title="联想知网内与该论文研究内容相似的论文五篇(真实学术数据源)">⇄ 联想论文</button>
           <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">❑ 参考文献</button>
         </div>
         <div class="pr-ai-result" id="prAiResult">
@@ -7062,15 +7062,15 @@ async function sendChatMessage(){
 }
 
 /* ============================================================
-   联想论文 —— 百度学术检索相似论文五篇,按引用数排名
-   点击跳转知网检索该论文
+   联想论文 —— 真实学术API检索相似论文五篇,按真实被引数排名
+   点击跳转知网检索该论文 (数据源: OpenAlex / Semantic Scholar,均为真实论文+真实被引,不做AI编造)
    ============================================================ */
 async function fetchRelatedPapers(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item) return;
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ AI 正在联想相似文献…</div>';
+  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ 正在检索真实相似文献…</div>';
 
   /* 构造检索词: 标题 + 关键词 */
   const a = item.analysis || {};
@@ -7080,7 +7080,7 @@ async function fetchRelatedPapers(){
   }
   kw = kw.trim() || "学术论文";
 
-  /* 渲染结果 */
+  /* 渲染结果: 真实论文 + 真实被引数,点击整条跳知网检索,带DOI可直达原文 */
   function renderList(papers, note){
     let h = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⇄</span> 相似文献 · 知网联想</div>';
     if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
@@ -7088,9 +7088,9 @@ async function fetchRelatedPapers(){
     for(let i=0; i<papers.length; i++){
       const p = papers[i];
       h += '<div class="rel-item" data-title="' + escapeHtml(p.title) + '">';
-      h += '<div class="rel-rank">#' + (i+1) + (p.cites ? ' · 被引 ' + escapeHtml(p.cites) : '') + '</div>';
+      h += '<div class="rel-rank">#' + (i+1) + (p.year ? " · " + escapeHtml(p.year) : "") + (p.cites !== "" ? ' · 被引 <b style="color:var(--accent);">' + escapeHtml(p.cites) + '</b>' : "") + '</div>';
       h += '<div class="rel-title">' + escapeHtml(p.title) + '</div>';
-      h += '<div class="rel-meta">点击在知网检索 →</div>';
+      h += '<div class="rel-meta">点击在知网检索 →' + (p.doi ? ' <a class="rel-doi" href="' + escapeHtml(p.doi) + '" target="_blank" rel="noopener">原文DOI ↗</a>' : '') + '</div>';
       h += '</div>';
     }
     h += '</div></div>';
@@ -7098,7 +7098,8 @@ async function fetchRelatedPapers(){
     /* 点击跳知网 */
     const items = resultEl.querySelectorAll(".rel-item");
     for(let i=0; i<items.length; i++){
-      items[i].onclick = function(){
+      items[i].onclick = function(e){
+        if(e.target && e.target.closest && e.target.closest(".rel-doi")) return; /* DOI链接自己处理,不触发知网跳转 */
         const t = this.dataset.title;
         window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(t) + "&korder=TI", "_blank");
         toast("正在知网检索「" + t.substring(0, 20) + "…」");
@@ -7106,79 +7107,96 @@ async function fetchRelatedPapers(){
     }
   }
 
-  /* AI 联想: 基于论文内容推荐真实存在的相似论文 */
-  const cfg = getAiConfig();
-  if(cfg && cfg.key){
-    try{
-      const paperCtx = (item.fullText || "").substring(0, 6000);
-      const messages = [
-        { role: "system", content: "你是学术文献专家。基于用户论文的研究主题,联想5篇与之研究内容最相似、真实存在且影响力大的学术论文(优先中文经典文献与高被引论文,按影响力/被引量从高到低排序)。输出严格的JSON数组,每项:{\"title\":\"论文标题\",\"authors\":\"作者\",\"year\":年份,\"cites\":\"大致被引次数(如 5000+)\"}。只输出JSON数组,不要其他文字。必须是真实存在的论文,不要编造。" },
-        { role: "user", content: "论文标题:" + item.name + "\n\n论文内容摘要:\n" + paperCtx }
-      ];
-      const r = await callAI(messages, 2000);
-      if(r.content){
-        let txt = r.content.trim();
-        const s = txt.indexOf("[");
-        const e = txt.lastIndexOf("]");
-        if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
-        const papers = JSON.parse(txt);
-        if(Array.isArray(papers) && papers.length > 0){
-          const valid = papers.filter(function(x){ return x && x.title; }).slice(0, 5);
-          if(valid.length > 0){
-            renderList(valid, "AI 联想 · 按被引量/影响力排序 · 点击跳转知网");
-            return;
-          }
-        }
-      }
-    }catch(e){ /* AI失败,走网络检索兜底 */ }
-  }
-
-  /* 本地兜底: 基于关键词组合生成检索建议 */
-  function localFallback(){
-    const kws = (a.keywords || []).slice(0, 4);
-    const suggestions = [];
-    if(item.name) suggestions.push({ title: item.name + " 相关研究综述", cites: "" });
-    for(let i=0; i<kws.length && suggestions.length < 5; i++){
-      suggestions.push({ title: kws[i] + " 研究进展", cites: "" });
-      if(suggestions.length < 5 && i+1 < kws.length) suggestions.push({ title: kws[i] + " " + kws[i+1] + " 方法研究", cites: "" });
-    }
-    while(suggestions.length < 5) suggestions.push({ title: kw.split(/\s+/)[0] + " 前沿研究", cites: "" });
-    renderList(suggestions.slice(0, 5), "网络检索不可达,以下为基于论文关键词的知网检索建议");
-  }
-
-  /* 抓取百度学术 */
-  try{
-    const htmlText = await fetchViaProxy("https://xueshu.baidu.com/s?wd=" + encodeURIComponent(kw), 10000);
-    if(!htmlText){ localFallback(); return; }
-    const doc = new DOMParser().parseFromString(htmlText, "text/html");
-    doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-    /* 解析结果: 标题 + 引用数 */
+  /* OpenAlex: 免费真实学术API(无密钥),返回真实论文+真实被引数
+     先按中文文献筛选(language:zh,更易在知网命中),再兜底全语言; 按真实被引数降序 */
+  async function fetchOpenAlexRelated(){
     const results = [];
-    const blocks = doc.querySelectorAll(".result, .sc_default_result, #page_dl .result");
-    for(let i=0; i<blocks.length && results.length < 12; i++){
-      const titleEl = blocks[i].querySelector(".sc_default_title, h3 a, .t a, a[data-click]");
-      if(!titleEl) continue;
-      const title = cleanText(titleEl);
-      if(!title || title.length < 6 || title.length > 120) continue;
-      /* 排除自身论文 */
-      if(item.name && title.indexOf(item.name.substring(0, 10)) >= 0 && title.length - item.name.length < 8) continue;
-      /* 引用数 */
-      let cites = "";
-      const blockText = cleanText(blocks[i]);
-      const cm = blockText.match(/被引[：:]?\s*([\d,，]+)/);
-      if(cm) cites = cm[1];
-      results.push({ title: title, cites: cites });
+    const seen = {};
+    const candidates = [];
+    candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(kw) + "&filter=language:zh&per-page=8&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi,type");
+    candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(kw) + "&per-page=8&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi,type");
+    for(let i=0; i<candidates.length && results.length < 5; i++){
+      try{
+        const txt = await ppFetchTimeout(candidates[i], 9000);
+        const j = JSON.parse(txt);
+        const list = (j.results) || [];
+        for(let k=0; k<list.length; k++){
+          const it = list[k];
+          if(!it || !it.display_name) continue;
+          const title = it.display_name;
+          /* 排除自身论文 */
+          if(item.name && ppTitleMatch(title, item.name)) continue;
+          const key = ppNormTitle(title);
+          if(!key || seen[key]) continue;
+          seen[key] = 1;
+          results.push({
+            title: title,
+            cites: (it.cited_by_count != null && it.cited_by_count > 0) ? it.cited_by_count : "",
+            year: it.publication_year || "",
+            doi: it.doi || ""
+          });
+        }
+      }catch(e){ /* 尝试下一个候选 */ }
     }
-    if(results.length === 0){ localFallback(); return; }
-    /* 按引用数降序 */
     results.sort(function(x, y){
-      const cx = parseInt((x.cites || "0").replace(/[^\d]/g, ""), 10) || 0;
-      const cy = parseInt((y.cites || "0").replace(/[^\d]/g, ""), 10) || 0;
+      const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
       return cy - cx;
     });
-    renderList(results.slice(0, 5), "来源: 百度学术 · 按被引量排序");
-  }catch(e){
-    localFallback();
+    return results.slice(0, 5);
+  }
+
+  /* Semantic Scholar 兜底: 真实论文+真实被引数 */
+  async function fetchS2Related(){
+    try{
+      const txt = await ppFetchTimeout("https://api.semanticscholar.org/graph/v1/paper/search?query=" + encodeURIComponent(kw) + "&limit=10&fields=title,year,citationCount,externalIds", 9000);
+      const j = JSON.parse(txt);
+      const list = (j.data) || [];
+      const results = [];
+      const seen = {};
+      for(let i=0; i<list.length; i++){
+        const it = list[i];
+        if(!it || !it.title) continue;
+        const key = ppNormTitle(it.title);
+        if(!key || seen[key]) continue;
+        seen[key] = 1;
+        results.push({
+          title: it.title,
+          cites: (it.citationCount != null && it.citationCount > 0) ? it.citationCount : "",
+          year: it.year || "",
+          doi: (it.externalIds && it.externalIds.DOI) ? ("https://doi.org/" + it.externalIds.DOI) : ""
+        });
+      }
+      results.sort(function(x, y){
+        const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
+        return cy - cx;
+      });
+      return results.slice(0, 5);
+    }catch(e){ return []; }
+  }
+
+  /* 主路径: OpenAlex 真实文献(优先中文,真实被引) */
+  const realPapers = await fetchOpenAlexRelated();
+  if(realPapers.length > 0){
+    renderList(realPapers, "来源: OpenAlex 学术索引 · 真实被引数 · 点击跳转知网");
+    return;
+  }
+
+  /* 次级: Semantic Scholar */
+  const s2Papers = await fetchS2Related();
+  if(s2Papers.length > 0){
+    renderList(s2Papers, "来源: Semantic Scholar · 真实被引数 · 点击跳转知网");
+    return;
+  }
+
+  /* 均无结果: 诚实提示,绝不编造论文 */
+  resultEl.innerHTML = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⇄</span> 相似文献</div>' +
+    '<div class="pa-mute">暂未检索到相似文献(网络不可达或无收录)。可点击下方按钮,在知网按主题词检索:</div>' +
+    '<div style="margin-top:10px;"><button class="pr-ai-btn" style="width:100%;" id="prRelatedKw">在知网检索「' + escapeHtml((kw || "主题").substring(0, 24)) + '」</button></div></div>';
+  const kwBtn = document.getElementById("prRelatedKw");
+  if(kwBtn){
+    kwBtn.onclick = function(){
+      window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(kw) + "&korder=TI", "_blank");
+    };
   }
 }
 
