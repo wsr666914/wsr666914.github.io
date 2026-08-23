@@ -230,6 +230,22 @@
   .chip .count{ font-family:"JetBrains Mono", monospace; font-size:11px; opacity:.7; }
   .chip .swatch{ width:8px; height:8px; border-radius:50%; }
 
+  /* ============ 门类动效 + 拖拽排序 ============ */
+  .chip{
+    transition: transform .18s cubic-bezier(.2,.7,.3,1), border-color .18s, color .18s, box-shadow .18s, opacity .2s;
+    animation: chipIn .42s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .chip:hover{ transform: translateY(-2px); box-shadow:0 4px 12px rgba(60,40,20,.10); }
+  .chip:active{ transform: scale(.96); }
+  .chip[data-filter]:not([data-filter="all"]){ cursor: grab; }
+  .chip[data-filter]:not([data-filter="all"]):active{ cursor: grabbing; }
+  .chip.dragging{ opacity:.4; transform: scale(1.06); box-shadow:0 6px 18px rgba(60,40,20,.18); }
+  .chip.drop-before{ box-shadow: -3px 0 0 0 var(--cat-color, var(--accent)), 0 4px 12px rgba(60,40,20,.10); }
+  .chip.drop-after{ box-shadow: 3px 0 0 0 var(--cat-color, var(--accent)), 0 4px 12px rgba(60,40,20,.10); }
+  @keyframes chipIn{ from{ opacity:0; transform: translateY(8px) scale(.94); } to{ opacity:1; transform:none; } }
+  .stat{ animation: statIn .45s cubic-bezier(.2,.7,.3,1) both; }
+  @keyframes statIn{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform:none; } }
+
   /* ============ 工具栏 ============ */
   .toolbar{
     max-width:var(--maxw); margin:0 auto; padding:0 28px 16px;
@@ -3288,8 +3304,10 @@ function renderPendingList(){
     const p = pend[i];
     const c = CATEGORIES[p.category] || CATEGORIES[FALLBACK_CAT];
     let opts = "";
-    for(const key in CATEGORIES){
-      opts += '<option value="' + key + '"' + (key===p.category?' selected':'') + '>' + CATEGORIES[key].name + '</option>';
+    { const _catOrder = getCatOrder();
+      for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
+        opts += '<option value="' + key + '"' + (key===p.category?' selected':'') + '>' + CATEGORIES[key].name + '</option>';
+      }
     }
     const confPct = Math.round((p.confidence||0) * 100);
     html += '<div class="batch-row" data-pidx="' + i + '" style="--cat-color:' + c.color + '">';
@@ -9151,6 +9169,66 @@ function render(){
   renderGallery();
 }
 
+/* ============ 门类顺序: 拖拽重排,持久化于 localStorage ============ */
+const CAT_ORDER_KEY = "wsr_cat_order_v1";
+function getCatOrder(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(CAT_ORDER_KEY) || "[]");
+    const ordered = Array.isArray(saved) ? saved.filter(function(k){ return CATEGORIES[k]; }) : [];
+    Object.keys(CATEGORIES).forEach(function(k){ if(ordered.indexOf(k) < 0) ordered.push(k); });
+    return ordered;
+  }catch(e){ return Object.keys(CATEGORIES); }
+}
+function saveCatOrder(arr){ try{ localStorage.setItem(CAT_ORDER_KEY, JSON.stringify(arr)); }catch(e){} }
+
+/* 拖拽重排「分类」筛选条门类顺序 */
+function initChipDnD(){
+  const root = document.getElementById("filters");
+  if(!root) return;
+  let dragKey = null;
+  const chips = root.querySelectorAll(".chip[data-filter]:not([data-filter='all'])");
+  const clearMarks = function(){ root.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("dragging","drop-before","drop-after"); }); };
+  for(let i=0;i<chips.length;i++){
+    const ch = chips[i];
+    ch.setAttribute("draggable","true");
+    ch.title = (ch.title ? ch.title + " · " : "") + "拖拽可调整门类顺序";
+    ch.addEventListener("dragstart", function(e){
+      dragKey = ch.dataset.filter;
+      ch.classList.add("dragging");
+      if(e.dataTransfer){ e.dataTransfer.effectAllowed = "move"; try{ e.dataTransfer.setData("text/plain", dragKey); }catch(_){} }
+    });
+    ch.addEventListener("dragend", function(){ clearMarks(); dragKey = null; });
+    ch.addEventListener("dragover", function(e){
+      if(!dragKey || dragKey === ch.dataset.filter) return;
+      e.preventDefault();
+      if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      const rect = ch.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width/2;
+      root.querySelectorAll(".chip").forEach(function(c){ c.classList.remove("drop-before","drop-after"); });
+      ch.classList.add(before ? "drop-before" : "drop-after");
+    });
+    ch.addEventListener("dragleave", function(){ ch.classList.remove("drop-before","drop-after"); });
+    ch.addEventListener("drop", function(e){
+      if(!dragKey || dragKey === ch.dataset.filter) return;
+      e.preventDefault();
+      const rect = ch.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width/2;
+      const order = getCatOrder();
+      const from = order.indexOf(dragKey);
+      if(from < 0) return;
+      order.splice(from, 1);
+      let to = order.indexOf(ch.dataset.filter);
+      if(to < 0) return;
+      if(!before) to += 1;
+      order.splice(to, 0, dragKey);
+      saveCatOrder(order);
+      clearMarks();
+      dragKey = null;
+      render();
+    });
+  }
+}
+
 function renderStats(){
   const total = state.items.length;
   const counts = {};
@@ -9165,7 +9243,8 @@ function renderStats(){
   const el = document.getElementById("stats");
   if(!el) return;
   let html = '<div class="stat stat-total"><div class="num">' + total + '<small>条</small></div><div class="lbl">志录总览</div><div class="bar"><span style="width:' + (total?100:0) + '%"></span></div></div>';
-  for(const key in CATEGORIES){
+  const _catOrder = getCatOrder();
+  for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
     const cnt = counts[key]||0;
     html += '<div class="stat" style="--cat-color:' + c.color + '">';
@@ -9216,7 +9295,8 @@ function renderFilters(){
 
   let html = '<span class="label">分类</span>';
   html += '<button class="chip ' + (state.filter==='all'?'active':'') + '" data-filter="all">全部<span class="count">' + total + '</span></button>';
-  for(const key in CATEGORIES){
+  const _catOrder = getCatOrder();
+  for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
     html += '<button class="chip ' + (state.filter===key?'active':'') + '" data-filter="' + key + '" style="--cat-color:' + c.color + '">' + catIcon(key, 14) + c.name + '<span class="count">' + (counts[key]||0) + '</span></button>';
   }
@@ -9229,6 +9309,7 @@ function renderFilters(){
       render();
     };
   }
+  initChipDnD(); /* 启用拖拽重排门类顺序 */
 }
 
 function renderGallery(){
@@ -9519,7 +9600,8 @@ const composerCatsEl = document.getElementById("composerCats");
 function renderComposerCats(){
   if(!composerCatsEl) return;
   let html = "";
-  for(const key in CATEGORIES){
+  const _catOrder = getCatOrder();
+  for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
     const active = state.composerCategory === key;
     html += '<button class="cc-chip ' + (active?'active':'') + '" data-cat="' + key + '" style="--cat-color:' + c.color + '">' +
@@ -9780,7 +9862,8 @@ function renderEditStars(){
 function renderEditCats(){
   if(!modalCats) return;
   let html = "";
-  for(const key in CATEGORIES){
+  const _catOrder = getCatOrder();
+  for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
     html += '<button class="modal-cat ' + (key===editSelectedCat?'active':'') + '" data-cat="' + key + '" style="--cat-color:' + c.color + '">' + catIcon(key, 16) + c.name + '</button>';
   }
@@ -9962,8 +10045,10 @@ function renderBatchList(){
     const dup = it.isDup;
     if(dup) dupCount++;
     let catOpts = "";
-    for(const key in CATEGORIES){
-      catOpts += '<option value="' + key + '"' + (key===it.category?' selected':'') + '>' + CATEGORIES[key].name + '</option>';
+    { const _catOrder = getCatOrder();
+      for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
+        catOpts += '<option value="' + key + '"' + (key===it.category?' selected':'') + '>' + CATEGORIES[key].name + '</option>';
+      }
     }
     let starsHtml = "";
     for(let s=1; s<=5; s++){
