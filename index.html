@@ -1061,7 +1061,7 @@
   /* 版面保真渲染: PDF文字块绝对定位1:1还原原版面(双栏天然/字号关系保真) */
   .pr-text .pr-layout-root{ padding:8px 0; text-align:center; overflow-x:auto; }
   .pr-text .pr-layout-root::before{
-    content:"版面保真·原PDF版式1:1还原(只读预览,编辑/标注适配中)";
+    content:"版面保真·原PDF版式1:1还原(可编辑·可标注;跨文字块标注暂不支持)";
     display:block; margin:0 0 12px; font-size:12px; color:#b58e2b; background:#fdf6e3;
     border:1px solid #ecd9a8; border-radius:6px; padding:6px 10px; text-align:center;
   }
@@ -6269,7 +6269,7 @@ function renderLayoutPaper(item, prText){
       /* PDF坐标系原点在左下,向上为正; CSS原点在左上,向下为正 → 翻转y */
       const top = pg.pageH - b.y - b.size;
       const fw = b.bold ? 'bold' : 'normal';
-      html += '<span class="pr-layout-block" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(b.str) + '</span>';
+      html += '<span class="pr-layout-block" contenteditable="true" data-page="' + p + '" data-x="' + b.x + '" data-top="' + top + '" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(b.str) + '</span>';
     }
     html += '</div>';
   }
@@ -6759,6 +6759,52 @@ function rebuildFromDom(item){
   const prText = document.getElementById("prText");
   if(!prText || !item) return;
   try{
+    /* 版面保真模式: 从绝对定位块按阅读顺序(页→上→左)重建fullText,保留layout坐标不变 */
+    const layoutRoot = prText.querySelector(".pr-layout-root");
+    if(layoutRoot){
+      const blks = Array.prototype.slice.call(layoutRoot.querySelectorAll(".pr-layout-block"));
+      if(blks.length){
+        /* 用户编辑块文字后写回item.layout(坐标不变,仅更新文字,使标注重建不丢编辑) */
+        if(Array.isArray(item.layout)){
+          for(let i=0;i<blks.length && i<item.layout.length;i++){
+            item.layout[i].str = (blks[i].textContent || "").replace(/\u00A0/g, " ");
+          }
+        }
+        const arr = blks.map(function(el){
+          return {
+            text: (el.textContent || "").replace(/\u00A0/g, " "),
+            page: parseInt(el.getAttribute("data-page") || "1", 10),
+            x: parseFloat(el.getAttribute("data-x") || "0"),
+            top: parseFloat(el.getAttribute("data-top") || "0")
+          };
+        });
+        /* 排序: 页升序 → top升序(靠上在前) → x升序; 同行(top相近)拼成一行 */
+        arr.sort(function(a,b){
+          if(a.page !== b.page) return a.page - b.page;
+          if(Math.abs(a.top - b.top) > 3) return a.top - b.top;
+          return a.x - b.x;
+        });
+        const lines = [];
+        let cur = null, curTop = null;
+        for(let i=0;i<arr.length;i++){
+          const b = arr[i];
+          if(!b.text.trim()) continue;
+          if(cur === null || Math.abs(b.top - curTop) > 3){
+            if(cur !== null) lines.push(cur);
+            cur = b.text; curTop = b.top;
+          }else{
+            cur += b.text;
+          }
+        }
+        if(cur !== null) lines.push(cur);
+        item.fullText = lines.join("\n");
+        item.highlights = extractHighlightsFromDom(prText);
+        item.outline = generateOutline(item.fullText);
+        item.analysis = analyzePaper(item.fullText);
+        item.description = "全文 " + item.fullText.length + " 字 · " + lines.length + " 行";
+        return;
+      }
+    }
     if(item.structured && (item.structured.sections || item.structured.abstract)){
       const doc = prText.querySelector(".pp-doc");
       if(doc){
