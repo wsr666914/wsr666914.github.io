@@ -4774,6 +4774,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
   /* 并行提取: 6路worker并发处理各页(原串行逐页,大PDF提速数倍);页序按页码索引保持 */
   const pageData = new Array(numPages);   /* 每页: {lines:[], first:"", last:"", images:[]} */
   const allImages = [];                    /* 全文图片: {page, dataUrl, y, x, w, h} */
+  const allBlocks = [];                    /* 全文文字块(版面保真还原用): {x,y,str,w,bold,size,page,pageW,pageH} */
   const CONC = Math.max(1, Math.min(6, numPages));
   let next = 0;
   let doneCount = 0;
@@ -4865,6 +4866,11 @@ function extractPdfTextEnhanced(pdf, onPageDone){
             fsize = Math.abs(it.transform[3]) || Math.abs(it.transform[0]) || 0;
           }catch(e){}
           items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0, bold: bold, size: fsize });
+        }
+        /* 同步收集本页文字块到全文(保留原始坐标/字号/页码,供查看器绝对定位1:1还原版面) */
+        for(let bi=0; bi<items.length; bi++){
+          const bk = items[bi];
+          allBlocks.push({ x: bk.x, y: bk.y, str: bk.str, w: bk.w||0, bold: bk.bold, size: bk.size, page: p, pageW: pageW, pageH: pageH });
         }
 
         /* --- 行分组: 先按y分带(y容差4),栏布局交给layoutRowsFromBands --- */
@@ -5082,7 +5088,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
       safe = safe.split("\n").filter(function(l){ return !/^\d{1,4}(-\d{1,4})?$/.test(l.trim()); }).join("\n");
       finalText = safe.trim();
     }
-    return { text: finalText, pages: numPages, images: allImages, boldLines: boldLines, sizeHeads: sizeHeads };
+    return { text: finalText, pages: numPages, images: allImages, boldLines: boldLines, sizeHeads: sizeHeads, blocks: allBlocks };
   });
 }
 
@@ -5601,7 +5607,7 @@ function cleanPaperText(text){
 }
 
 /* 录入论文 / 随笔 (随笔复用同一套查看编辑界面) */
-function addPaper(title, fullText, analysis, structured, category, writtenAt){
+function addPaper(title, fullText, analysis, structured, category, writtenAt, layout){
   category = category || "paper";
   const isEssay = category === "essay";
   const trimmedText = fullText.trim();
@@ -5665,6 +5671,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt){
     outline: outline,
     analysis: paperAnalysis,
     structured: isEssay ? null : (structured || null),
+    layout: isEssay ? null : (Array.isArray(layout) && layout.length ? layout : null), /* PDF文字块坐标字号(版面保真还原用),随笔不用 */
     highlights: [],
     addedAt: new Date().toISOString(),
     writtenAt: writtenAtIso || null
@@ -6229,16 +6236,9 @@ function renderPaperText(item){
     renderEssayText(item, prText);
     return;
   }
-  /* 结构化排版优先: AI/本地归纳出的标准结构 → 美观渲染 */
-  if(item.structured && (item.structured.sections || item.structured.abstract)){
-    renderStructuredPaper(item, prText);
-    return;
-  }
+  /* 不再走AI/structured重排: 按原文段落原样呈现(用户要求不改动原文版式)
+     参考文献仍按规则识别为带检索链接的列表 */
   const lines = (item.fullText || "").split(/\r?\n/);
-  const outlineMap = {};
-  if(item.outline){
-    for(let i=0; i<item.outline.length; i++) outlineMap[item.outline[i].line] = item.outline[i];
-  }
   /* 参考文献区块识别(标题行之后不再按普通段落渲染,改为带检索链接的列表) */
   let refStart = -1;
   for(let i=0; i<lines.length; i++){
@@ -6267,15 +6267,10 @@ function renderPaperText(item){
       break;
     }
     const raw = lines[i] || "";
-    const isHeader = outlineMap[i] || (PR_HEAD_LINE_RE.test(raw) && raw.trim().length > 1 && raw.trim().length < 50);
+    /* 不识别标题层级: 原样按段落呈现, 不把行改成h4(保持原文版式不动) */
     const lineText = escapeHtml(raw);
     html += '<span class="pr-section-anchor" id="pr-line-' + i + '"></span>';
-    if(isHeader){
-      html += '<h4 class="pr-section-title">' + lineText + '</h4>';
-    }else{
-      /* 段落: 首行缩进2em + 段间距1.15em,结构清晰不拥挤 */
-      html += '<p class="pr-para-line">' + (lineText || "&nbsp;") + '</p>';
-    }
+    html += '<p class="pr-para-line">' + (lineText || "&nbsp;") + '</p>';
   }
   prText.innerHTML = html;
 }
@@ -11428,6 +11423,7 @@ if(paperFullTextInput){
 let paperEntryFromPdf = false; /* 全文是否来自PDF导入 */
 let paperEntryImages = null;  /* PDF导入提取的图片 */
 let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:导入时已完成,直接入册 */
+let paperEntryLayout = null;  /* PDF导入的文字块坐标字号(版面保真还原用,渲染层启用后1:1还原版面) */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
@@ -11456,7 +11452,7 @@ if(paperEntrySubmit){
       paperEntryStructured = null;
     }
     const noun = isEssay ? "随笔" : "论文";
-    const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal);
+    const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal, paperEntryLayout);
     if(result && result.error === "duplicate"){
       toast("此" + noun + "已在册中");
       return;
@@ -11590,17 +11586,12 @@ if(paperPdfBtn){
             paperEntryFromPdf = true;
             paperEntryImages = (res.images && res.images.length) ? res.images : null;
             paperEntryStructured = null;
+            paperEntryLayout = (res.blocks && res.blocks.length) ? res.blocks : null;
             let usedEngine = "本地几何解析";
-            if(gStruct && gStruct.sections && gStruct.sections.length > 0){
-              const gText = structuredToText(gStruct);
-              if(gText.trim().length > 120 && grobidFidelityOk(res.text, gText, 0.90)){
-                paperEntryStructured = gStruct;
-                if(paperFullTextInput){ paperFullTextInput.value = gText; updatePaperEntryStats(); }
-                usedEngine = "GROBID云端引擎(Zotero同款)";
-                if(gStruct.title && gStruct.title.length >= 4 && paperTitleInput && !paperTitleInput.value.trim()){
-                  paperTitleInput.value = gStruct.title;
-                }
-              }
+            /* GROBID结果: 仅用于识别真实论文标题, 不再用其重组文本覆盖原文 */
+            if(gStruct && gStruct.title && gStruct.title.length >= 4 && paperTitleInput && !paperTitleInput.value.trim()){
+              paperTitleInput.value = gStruct.title;
+              usedEngine = "本地几何解析 + GROBID标题";
             }
             if(paperTitleInput && !paperTitleInput.value.trim()){
               paperTitleInput.value = file.name.replace(/\.caj$/i, "");
@@ -11669,19 +11660,13 @@ if(paperPdfBtn){
           paperEntryFromPdf = true; /* 全文来自PDF导入 */
           paperEntryImages = (res.images && res.images.length) ? res.images : null;
           paperEntryStructured = null;
+          paperEntryLayout = (res.blocks && res.blocks.length) ? res.blocks : null;
           let usedEngine = "本地几何解析";
-          /* GROBID结果采纳判定: 结构有效 + 字符保真≥90%(GROBID滤页眉页脚属正常损耗) */
-          if(gStruct && gStruct.sections && gStruct.sections.length > 0){
-            const gText = structuredToText(gStruct);
-            if(gText.trim().length > 120 && grobidFidelityOk(res.text, gText, 0.90)){
-              paperEntryStructured = gStruct;
-              if(paperFullTextInput){ paperFullTextInput.value = gText; updatePaperEntryStats(); }
-              usedEngine = "GROBID云端引擎(Zotero同款)";
-              /* GROBID识别出真实论文标题 → 填充标题框(优先于文件名) */
-              if(gStruct.title && gStruct.title.length >= 4 && paperTitleInput && !paperTitleInput.value.trim()){
-                paperTitleInput.value = gStruct.title;
-              }
-            }
+          /* GROBID结果: 仅用于识别真实论文标题, 不再用其重组文本覆盖原文
+             (用户要求: 导入后原文原样不改动, 版面/段落/文字保持原样) */
+          if(gStruct && gStruct.title && gStruct.title.length >= 4 && paperTitleInput && !paperTitleInput.value.trim()){
+            paperTitleInput.value = gStruct.title;
+            usedEngine = "本地几何解析 + GROBID标题";
           }
           /* 标题仍留空 → 取文件名 */
           if(paperTitleInput && !paperTitleInput.value.trim()){
