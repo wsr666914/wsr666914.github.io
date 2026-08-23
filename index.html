@@ -5340,7 +5340,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt){
     fullText: trimmedText,
     outline: outline,
     analysis: paperAnalysis,
-    structured: structured || null,
+    structured: isEssay ? null : (structured || null),
     highlights: [],
     addedAt: new Date().toISOString(),
     writtenAt: writtenAtIso || null
@@ -5900,6 +5900,11 @@ function extractRefBlock(lines){
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
+  /* 随笔: 纯文章展示 —— 无标题层级/无结构化/无参考文献, 仅按段落渲染正文 */
+  if(item.category === "essay"){
+    renderEssayText(item, prText);
+    return;
+  }
   /* 结构化排版优先: AI/本地归纳出的标准结构 → 美观渲染 */
   if(item.structured && (item.structured.sections || item.structured.abstract)){
     renderStructuredPaper(item, prText);
@@ -5948,6 +5953,25 @@ function renderPaperText(item){
       html += '<p class="pr-para-line">' + (lineText || "&nbsp;") + '</p>';
     }
   }
+  prText.innerHTML = html;
+}
+
+/* ============================================================
+   随笔纯文章渲染 —— 仅按段落展示正文, 无标题层级/结构化/参考文献
+   ============================================================ */
+function renderEssayText(item, prText){
+  const text = (item.fullText || "").replace(/\u00A0/g, " ");
+  if(!text.trim()){ prText.innerHTML = ""; return; }
+  /* 按空行分段; 段内换行保留为 <br>; 单纯一篇文章, 不识别标题/不拆章节 */
+  const paras = text.split(/\r?\n[ \t]*\r?\n/);
+  let html = "";
+  for(let i=0; i<paras.length; i++){
+    const p = paras[i].replace(/^\s+|\s+$/g, "");
+    if(!p) continue;
+    const lineHtml = escapeHtml(p).replace(/\r\n|\r|\n/g, "<br>");
+    html += '<p class="pr-para-line">' + lineHtml + '</p>';
+  }
+  if(!html) html = '<p class="pr-para-line">' + escapeHtml(text.trim()) + '</p>';
   prText.innerHTML = html;
 }
 
