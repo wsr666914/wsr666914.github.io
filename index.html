@@ -5780,6 +5780,7 @@ function openPaperReader(itemId){
   /* 渲染全文 + 应用高亮 (applyHighlightsToDom 内部会先重建全文) */
   applyHighlightsToDom(item);
 
+
   /* 显示 */
   const modal = document.getElementById("paperReaderModal");
   if(modal) modal.classList.add("show");
@@ -5979,6 +5980,17 @@ function openPaperReader(itemId){
     function applyCols(on){
       const pt = document.getElementById("prText");
       if(!pt) return;
+      /* 版面保真模式: layout绝对定位逐块1:1还原原PDF版面,双栏天然;
+         CSS columns会把pr-layout-root分栏导致绝对定位版面错位,
+         故强制单栏并隐藏手动双栏按钮(此模式下双栏按钮无意义) */
+      const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+      if(cur && Array.isArray(cur.layout) && cur.layout.length){
+        pt.classList.remove("pr-2col");
+        prColBtn.classList.remove("on");
+        prColBtn.style.display = "none";
+        return;
+      }
+      prColBtn.style.display = "";
       pt.classList.toggle("pr-2col", !!on);
       prColBtn.classList.toggle("on", !!on);
       try{ localStorage.setItem(STORAGE_KEY + "_cols", on ? "1" : "0"); }catch(e){}
