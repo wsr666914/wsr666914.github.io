@@ -1784,6 +1784,14 @@
       <label>门类</label>
       <div class="modal-cats" id="modalCats"></div>
     </div>
+    <div class="modal-field" id="editSubcatField" style="display:none">
+      <label id="editSubcatLabel">小门类</label>
+      <div class="cb-row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="editSubcatSel" title="选择已有小门类" style="flex:1;min-width:120px"></select>
+        <input id="editSubcatNew" type="text" class="cb-new-input" placeholder="或输入新名称" autocomplete="off" style="flex:1;min-width:120px" />
+        <button id="editSubcatAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">＋ 加入</button>
+      </div>
+    </div>
     <div class="modal-field">
       <label>品评 · 一至五星</label>
       <div class="stars-input" id="editStars"></div>
@@ -9433,6 +9441,10 @@ function updateItem(id, patch){
   if(Object.prototype.hasOwnProperty.call(patch, "category")){ it.category = patch.category; it.manualOverride = true; }
   if(Object.prototype.hasOwnProperty.call(patch, "rating")) it.rating = Math.max(0, Math.min(5, parseInt(patch.rating, 10) || 0));
   if(Object.prototype.hasOwnProperty.call(patch, "description")) it.description = String(patch.description).trim();
+  if(Object.prototype.hasOwnProperty.call(patch, "subCategory")){
+    const hasSub = (it.category === "beverage" || it.category === "skincare");
+    it.subCategory = hasSub ? String(patch.subCategory || "").trim() : "";
+  }
   saveState();
   render();
 }
@@ -10413,9 +10425,67 @@ const editNameInput = document.getElementById("editName");
 const editDescInput = document.getElementById("editDesc");
 const editStarsEl = document.getElementById("editStars");
 const modalCats = document.getElementById("modalCats");
+const editSubcatField = document.getElementById("editSubcatField");
+const editSubcatLabel = document.getElementById("editSubcatLabel");
+const editSubcatSel = document.getElementById("editSubcatSel");
+const editSubcatNew = document.getElementById("editSubcatNew");
+const editSubcatAddBtn = document.getElementById("editSubcatAddBtn");
 let editCurrentId = null;
 let editSelectedCat = null;
 let editRating = 0;
+let editSubcat = ""; /* 编订中选中的小门类 */
+
+/* 渲染编订弹窗的小门类下拉, 数据源依据 editSelectedCat */
+function renderEditSubcatSelect(){
+  if(!editSubcatSel) return;
+  const list = getSubcatList(editSelectedCat);
+  const noneLabel = "— 不分" + subcatLabel(editSelectedCat) + " —";
+  let html = '<option value="">' + noneLabel + '</option>';
+  for(let i=0; i<list.length; i++){
+    const b = list[i];
+    html += '<option value="' + escapeHtml(b) + '"' + (editSubcat === b ? ' selected' : '') + '>' + escapeHtml(b) + '</option>';
+  }
+  editSubcatSel.innerHTML = html;
+}
+/* 依据当前选中门类决定小门类区显隐与文案 */
+function syncEditSubcat(){
+  if(!editSubcatField) return;
+  const show = (editSelectedCat === "beverage" || editSelectedCat === "skincare");
+  editSubcatField.style.display = show ? "" : "none";
+  if(show){
+    const cObj = CATEGORIES[editSelectedCat];
+    if(cObj && editSubcatLabel) editSubcatLabel.textContent = cObj.name + subcatLabel(editSelectedCat) + " · 小门类";
+    if(editSubcatNew) editSubcatNew.placeholder = "或输入新" + subcatLabel(editSelectedCat) + "名";
+    renderEditSubcatSelect();
+  } else {
+    editSubcat = "";
+    if(editSubcatNew) editSubcatNew.value = "";
+  }
+}
+if(editSubcatSel){
+  editSubcatSel.onchange = function(){
+    editSubcat = this.value || "";
+    if(editSubcatNew) editSubcatNew.value = "";
+  };
+}
+if(editSubcatAddBtn){
+  editSubcatAddBtn.onclick = function(){
+    const n = editSubcatNew ? editSubcatNew.value.trim() : "";
+    if(!n){ toast("请先输入新" + subcatLabel(editSelectedCat) + "名"); return; }
+    const added = addSubcatItem(editSelectedCat, n);
+    if(!added){ toast(subcatLabel(editSelectedCat) + "「" + n + "」已存在"); }
+    else { toast("已加入" + subcatLabel(editSelectedCat) + "「" + n + "」"); }
+    editSubcat = n;
+    if(editSubcatNew) editSubcatNew.value = "";
+    renderEditSubcatSelect();
+    renderSubcatBar();
+  };
+}
+if(editSubcatNew){
+  editSubcatNew.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); if(editSubcatAddBtn) editSubcatAddBtn.click(); }
+  });
+}
 
 function renderEditStars(){
   if(!editStarsEl) return;
@@ -10423,12 +10493,13 @@ function renderEditStars(){
   for(let s=1; s<=5; s++){
     html += '<span class="star' + (s<=editRating?' on':'') + '" data-v="' + s + '">★</span>';
   }
-  html += '<span class="clear" data-v="0">清</span>';
+  /* 0分(未评)时全部置灰, 点当前星级再次点击可清零 */
   editStarsEl.innerHTML = html;
-  const stars = editStarsEl.querySelectorAll(".star, .clear");
+  const stars = editStarsEl.querySelectorAll(".star");
   for(let i=0; i<stars.length; i++){
     stars[i].onclick = function(){
-      editRating = parseInt(this.dataset.v, 10) || 0;
+      const v = parseInt(this.dataset.v, 10) || 0;
+      editRating = (v === editRating) ? 0 : v; /* 再次点击同星级 → 清零 */
       renderEditStars();
     };
   }
@@ -10449,7 +10520,11 @@ function renderEditCats(){
       const all = modalCats.querySelectorAll(".modal-cat");
       for(let j=0; j<all.length; j++) all[j].classList.remove("active");
       this.classList.add("active");
-      editSelectedCat = this.dataset.cat;
+      const newCat = this.dataset.cat;
+      /* 换门类时清掉旧小门类(跨门类小门类不通用) */
+      if(newCat !== editSelectedCat) editSubcat = "";
+      editSelectedCat = newCat;
+      syncEditSubcat();
     };
   }
 }
@@ -10460,10 +10535,13 @@ function openEditModal(id){
   if(!it) return;
   editSelectedCat = it.category;
   editRating = (typeof it.rating === "number") ? it.rating : 0;
+  editSubcat = (it.subCategory || "");
   if(editNameInput) editNameInput.value = it.name;
   if(editDescInput) editDescInput.value = it.description || "";
+  if(editSubcatNew) editSubcatNew.value = "";
   renderEditCats();
   renderEditStars();
+  syncEditSubcat();
   editModal.classList.add("show");
   setTimeout(function(){ if(editNameInput) editNameInput.focus(); }, 50);
 }
@@ -10479,11 +10557,24 @@ if(modalSave){
     const name = editNameInput ? editNameInput.value.trim() : "";
     if(!name){ toast("名目不可为空"); return; }
     const desc = editDescInput ? editDescInput.value : "";
+    /* 小门类: 若新建输入框有内容,先加入列表并选中; 非小门类门类则清空 */
+    let sub = editSubcat || "";
+    const hasSub = (editSelectedCat === "beverage" || editSelectedCat === "skincare");
+    if(hasSub){
+      const newName = editSubcatNew ? editSubcatNew.value.trim() : "";
+      if(newName){
+        addSubcatItem(editSelectedCat, newName);
+        sub = newName;
+      }
+    } else {
+      sub = "";
+    }
     updateItem(editCurrentId, {
       name: name,
       category: editSelectedCat,
       rating: editRating,
-      description: desc
+      description: desc,
+      subCategory: sub
     });
     toast("已存档编订");
     editModal.classList.remove("show");
