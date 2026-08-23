@@ -1,0 +1,5 @@
+恢复双栏按钮与老账号身份码回填(仅回退Word导入)
+
+- 「◫ 双栏」按钮恢复: CSS多栏+标题跨栏通栏, 偏好记忆(localStorage _cols)
+- 老账号登录自动回填身份码: genSyncCode生成+云端推送+弹窗展示
+- Word导入保持上一版纯文本链路(mammoth转文本+sizeHeads标题层级), 不含HTML保真渲染
