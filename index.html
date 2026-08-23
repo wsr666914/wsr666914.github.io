@@ -1023,30 +1023,24 @@
   }
   .nav-code-btn:hover{ background:rgba(47,93,98,.1); border-color:var(--teal); }
   .pr-text-wrap{
-    flex:1; overflow-y:auto; padding:36px 56px 80px;
+    flex:1; overflow:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
     transition:padding .25s ease;
   }
-  /* ===== 双栏排版(Word式左右分栏) ===== */
-  .pr-margin-ctl{ position:relative; }
-  .pr-margin-btn{
-    padding:3px 12px; border:1px solid rgba(60,72,88,.28); border-radius:8px;
+  /* ===== 缩放控制 ===== */
+  .pr-zoom-ctl{ display:flex; align-items:center; gap:2px; }
+  .pr-zoom-btn{
+    padding:4px 10px; border:1px solid rgba(60,72,88,.28); border-radius:8px;
     background:rgba(60,72,88,.05); color:var(--ink-soft); cursor:pointer;
-    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:12.5px; font-weight:600;
-    letter-spacing:.04em; transition:all .2s; white-space:nowrap;
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:14px; font-weight:600;
+    line-height:1; transition:all .2s; white-space:nowrap;
   }
-  .pr-margin-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
-  .pr-margin-btn.on{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.12); }
-  /* 双栏正文: 内容流式左右分栏,中缝细线(还原Word双栏论文版式) */
-  #prText.pr-2col{
-    column-count:2; column-gap:2.4em;
-    column-rule:1px solid var(--line-soft);
-    max-width:100%;   /* 双栏时放宽单栏740px限制 */
+  .pr-zoom-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
+  .pr-zoom-pct{
+    min-width:44px; text-align:center; font-size:12px; color:var(--ink-soft);
+    cursor:pointer; font-family:"JetBrains Mono",monospace; letter-spacing:.02em;
   }
-  #prText.pr-2col h1, #prText.pr-2col h2, #prText.pr-2col h3,
-  #prText.pr-2col h4, #prText.pr-2col .pr-section-title{
-    column-span:all;   /* 标题跨栏(Word双栏文档大标题通栏惯例) */
-  }
+  .pr-zoom-pct:hover{ color:var(--teal); }
   .pr-text{
     max-width:740px; margin:0 auto;
     font-family:"Newsreader","Noto Serif SC",Georgia,serif;
@@ -1059,6 +1053,8 @@
     margin:0 0 1.15em; text-indent:2em;
   }
   /* 版面保真渲染: PDF文字块绝对定位1:1还原原版面(双栏天然/字号关系保真) */
+  /* 版面保真模式: 取消单栏740px限制,让PDF页自由展开并居中,左右留白对称 */
+  .pr-text.pr-layout-mode{ max-width:none; }
   .pr-text .pr-layout-root{ padding:8px 0; text-align:center; overflow-x:auto; }
   .pr-text .pr-layout-root::before{
     content:"版面保真·原PDF版式1:1还原(可编辑·可标注;跨文字块标注暂不支持)";
@@ -1942,8 +1938,10 @@
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色/加粗/划线/备注">✕ 取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
-        <div class="pr-margin-ctl">
-          <button class="pr-margin-btn" id="prColBtn" title="双栏排版(左右分栏,还原Word双栏论文版式)">◫ 双栏</button>
+        <div class="pr-zoom-ctl">
+          <button class="pr-zoom-btn" id="prZoomOut" title="缩小 (Ctrl+-)">−</button>
+          <span class="pr-zoom-pct" id="prZoomPct" title="点击重置为100%">100%</span>
+          <button class="pr-zoom-btn" id="prZoomIn" title="放大 (Ctrl+=)">+</button>
         </div>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
@@ -5700,7 +5698,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, chat:[] };
 
 /* 推入操作历史(撤销用): 记录全文+结构化排版变更前的快照 */
 function pushTextHistory(item){
@@ -5974,37 +5972,25 @@ function openPaperReader(itemId){
     };
   }
 
-  /* ===== 双栏排版切换(Word式左右分栏): 记忆偏好 ===== */
-  const prColBtn = document.getElementById("prColBtn");
-  if(prColBtn){
-    function applyCols(on){
+  /* ===== 缩放控制: 放大/缩小正文(版面保真与段落模式通用,记忆上次缩放) ===== */
+  const prZoomIn = document.getElementById("prZoomIn");
+  const prZoomOut = document.getElementById("prZoomOut");
+  const prZoomPct = document.getElementById("prZoomPct");
+  if(prZoomIn && prZoomOut && prZoomPct){
+    function applyZoom(z){
+      prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(z*10)/10));
       const pt = document.getElementById("prText");
-      if(!pt) return;
-      /* 版面保真模式: layout绝对定位逐块1:1还原原PDF版面,双栏天然;
-         CSS columns会把pr-layout-root分栏导致绝对定位版面错位,
-         故强制单栏并隐藏手动双栏按钮(此模式下双栏按钮无意义) */
-      const cur = state.items.find(function(x){ return x.id === prState.itemId; });
-      if(cur && Array.isArray(cur.layout) && cur.layout.length){
-        pt.classList.remove("pr-2col");
-        prColBtn.classList.remove("on");
-        prColBtn.style.display = "none";
-        return;
-      }
-      prColBtn.style.display = "";
-      pt.classList.toggle("pr-2col", !!on);
-      prColBtn.classList.toggle("on", !!on);
-      try{ localStorage.setItem(STORAGE_KEY + "_cols", on ? "1" : "0"); }catch(e){}
+      if(pt) pt.style.zoom = prState.zoom;
+      prZoomPct.textContent = Math.round(prState.zoom*100) + "%";
+      try{ localStorage.setItem(STORAGE_KEY + "_zoom", String(prState.zoom)); }catch(e){}
     }
-    /* 恢复上次偏好 */
-    let savedCols = "0";
-    try{ savedCols = localStorage.getItem(STORAGE_KEY + "_cols") || "0"; }catch(e){}
-    applyCols(savedCols === "1");
-    prColBtn.onclick = function(){
-      const pt = document.getElementById("prText");
-      const nowOn = !(pt && pt.classList.contains("pr-2col"));
-      applyCols(nowOn);
-      toast(nowOn ? "已切换双栏排版(标题通栏)" : "已切换单栏排版");
-    };
+    /* 恢复上次缩放 */
+    let savedZoom = 1;
+    try{ savedZoom = parseFloat(localStorage.getItem(STORAGE_KEY + "_zoom")) || 1; }catch(e){}
+    applyZoom(savedZoom);
+    prZoomIn.onclick = function(){ applyZoom(prState.zoom + 0.1); };
+    prZoomOut.onclick = function(){ applyZoom(prState.zoom - 0.1); };
+    prZoomPct.onclick = function(){ applyZoom(1); };
   }
 
   /* 撤销最近一次操作(删除/排版/标注) */
@@ -6287,11 +6273,15 @@ function renderLayoutPaper(item, prText){
   }
   html += '</div>';
   prText.innerHTML = html;
+  /* 标记版面保真模式: CSS取消单栏740px限宽,让PDF页自由展开居中,左右留白对称 */
+  prText.classList.add("pr-layout-mode");
   return true;
 }
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
+  /* 重置版面保真类: 仅layout模式添加,普通/随笔模式移除,恢复单栏740px限宽 */
+  prText.classList.remove("pr-layout-mode");
   /* 随笔: 纯文章展示 —— 无标题层级/无结构化/无参考文献, 仅按段落渲染正文 */
   if(item.category === "essay"){
     renderEssayText(item, prText);
