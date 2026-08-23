@@ -884,13 +884,13 @@
   }
   .pp-h1{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
-    font-size:18.5px; font-weight:700; color:var(--ink);
+    font-size:19.5px; font-weight:700; color:var(--ink);
     margin:28px 0 12px; padding-left:11px;
     border-left:3px solid var(--accent); line-height:1.4;
   }
   .pp-h2{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
-    font-size:16px; font-weight:700; color:var(--ink);
+    font-size:16.5px; font-weight:700; color:var(--ink);
     margin:22px 0 9px; line-height:1.5;
   }
   .pp-h2::before{
@@ -899,13 +899,24 @@
     margin-right:8px; vertical-align:2px;
   }
   .pp-h3{
-    font-size:14.5px; font-weight:600; color:var(--ink-soft);
+    font-size:15px; font-weight:600; color:var(--ink-soft);
     margin:16px 0 7px; line-height:1.5;
   }
   .pp-h3::before{ content:"·"; color:var(--accent); font-weight:700; margin-right:6px; }
+  /* PDF原文加粗小标题: 保持原文的粗体强调(用户要求导入保持PDF结构分层) */
+  .pp-bh{
+    font-weight:800; letter-spacing:.02em;
+    text-shadow:0 .3px 0 currentColor;
+  }
   .pp-para{
     font-size:14px; line-height:1.98; text-align:justify;
     margin:0 0 13px; text-indent:2em; color:var(--ink-soft); white-space:normal;
+  }
+  /* Word式编辑: 正文区可直接点击定位/打字/删除;轻描边提示可编辑 */
+  .pr-text[contenteditable="true"]{ cursor:text; outline:none; }
+  .pr-text[contenteditable="true"]:focus{
+    box-shadow:inset 0 0 0 1px rgba(47,93,98,.10);
+    border-radius:6px;
   }
   .pp-refs-h{ margin-top:32px; }
 
@@ -1629,7 +1640,7 @@
         </div>
       </aside>
       <div class="pr-text-wrap" id="prTextWrap">
-        <div class="pr-text" id="prText"></div>
+        <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
       </div>
     </div>
@@ -3397,7 +3408,7 @@ function stripMetaNumbers(text){
 }
 
 /* ---- 0x. 全局标题行判定正则(供reformatPdfText/compactReformatText共用) ---- */
-const PP_HEAD_RE = /^(\[\d{1,3}(?:[-,]\d{1,3})*\]\s|\d+(\.\d+)*[\.\)、\s]|第[一二三四五六七八九十百\d]+[章节部篇]|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
+const PP_HEAD_RE = /^(\[\d{1,3}(?:[-,]\d{1,3})*\]\s|\d+(?:\.\d+)*[\.\)、]|\d{1,2}\s+\S|\d+(?:\.\d+)+\s|第[一二三四五六七八九十百\d]+[章节部篇]|[一二三四五六七八九十]+[、.．]|[（(][一二三四五六七八九十]+[）)]|[（(]\d{1,2}[）)]|Abstract|摘\s*要|引\s*言|Introduction|Conclusion|结\s*论|参考文献|References|Acknowledg|致\s*谢|Keywords?|关键词|Chapter\s+\d+|Fig\.?\s*\d+|Table\s*\d+|图\s*\d+|表\s*\d+)/i;
 
 /* ---- 0y. 字数守卫: 清洗后实质字符(去空白)损失超阈值 → 回退保守清洗
    用户最高优先级要求"正文字数不能少"——任何清洗误删超过5%即整体回退 */
@@ -4699,6 +4710,9 @@ function openPaperReader(itemId){
       /* 存储标注 */
       const item2 = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!item2) return;
+      /* Word式编辑可能有未同步内容 → 先把DOM同步到数据,防止标注重建DOM时丢失编辑 */
+      if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+      rebuildFromDom(item2);
       if(!item2.highlights) item2.highlights = [];
 
       if(prState.activeFmt === "note"){
@@ -4747,7 +4761,7 @@ function openPaperReader(itemId){
       if(prState.delMode){
         deactivateAllColor();
         deactivateAllFmt();
-        toast("删除模式:选中文字后确认删除 (或直接按 Delete 键)");
+        toast("删除模式:选中文字后确认删除(平时可直接用 Delete 键光标删除)");
       }else{
         toast("已退出删除模式");
       }
@@ -4762,22 +4776,8 @@ function openPaperReader(itemId){
     };
   }
 
-  /* ===== 键盘删除键: 阅读器内选中文字按 Delete/Backspace 删除 ===== */
-  document.onkeydown = function(e){
-    const modal = document.getElementById("paperReaderModal");
-    if(!modal || !modal.classList.contains("show")) return;
-    /* 仅 Delete/Backspace 且有文字选区 且焦点不在输入框 */
-    if(e.key !== "Delete" && e.key !== "Backspace") return;
-    const tag = (e.target && e.target.tagName) || "";
-    if(tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-    const sel = window.getSelection();
-    if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-    /* 选区必须在论文正文内 */
-    const prTextEl = document.getElementById("prText");
-    if(!prTextEl || !prTextEl.contains(sel.anchorNode)) return;
-    e.preventDefault();
-    deleteSelectedText(sel);
-  };
+  /* ===== 键盘删除已由 contenteditable 原生支持(Word式:光标处直接删/选中删) =====
+     原 onkeydown 拦截删除逻辑已移除,避免与原生编辑冲突 */
 
   /* ===== AI 按钮组 ===== */
   const prAiReadBtn = document.getElementById("prAiRead");
@@ -4849,17 +4849,23 @@ function updateSaveBtnState(){
   if(prState.dirty) btn.classList.add("dirty");
   else btn.classList.remove("dirty");
 }
-/* 保存标注(显式保存) */
+/* 保存标注(显式保存) —— Word式编辑后先从DOM同步全文再落盘 */
 function savePaperHighlights(){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(item){
+    /* 未保存的编辑立即同步(防抖可能还没触发) */
+    if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+    rebuildFromDom(item);
+  }
   saveState();
   prState.dirty = false;
   updateSaveBtnState();
-  toast("标注已保存 · 下次进入仍可见");
+  toast("已保存 · 编辑与标注均会保留");
 }
 
 /* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
 /* 标题行识别正则: 编号标题/章节词/Abstract 等,且行长较短 */
-const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
+const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|[（(][一二三四五六七八九十]+[）)]|[（(]\d{1,2}[）)]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
 
 function renderPaperText(item){
   const prText = document.getElementById("prText");
@@ -4903,7 +4909,7 @@ function renderStructuredPaper(item, prText){
   if(title){
     h += '<header class="pp-head"><h2 class="pp-title">' + escapeHtml(title) + '</h2><div class="pp-rule"></div></header>';
     /* 来源徽章: 原文链接(联网查询DOI) + 多学术网站检索直达(知网/万方/维普/百度学术/谷歌学术/S2/arXiv/RG/PubMed/CORE) */
-    h += '<div class="pp-src-row">';
+    h += '<div class="pp-src-row" contenteditable="false">';
     if(st.sourceUrl){
       h += '<a class="pp-src-badge pp-src-doi" href="' + escapeHtml(st.sourceUrl) + '" target="_blank" rel="noopener">🔗 原文链接</a>';
     }
@@ -4938,7 +4944,9 @@ function renderStructuredPaper(item, prText){
     if(!sec.heading && !hasParas) continue;
     if(sec.heading){
       const lv = Math.max(1, Math.min(3, sec.level || 1));
-      h += '<h3 class="pp-h' + lv + '">' + escapeHtml(sec.heading) + '</h3>';
+      /* PDF粗体小标题 → pp-bh 类(渲染保持原文的加粗强调) */
+      const bhCls = sec.bold ? " pp-bh" : "";
+      h += '<h3 class="pp-h' + lv + bhCls + '">' + escapeHtml(sec.heading) + '</h3>';
     }
     for(let j=0; j<(sec.paras || []).length; j++){
       const p = sec.paras[j];
@@ -4948,7 +4956,7 @@ function renderStructuredPaper(item, prText){
 
   /* --- PDF图片(导入时提取的论文插图) --- */
   if(item.images && item.images.length){
-    h += '<section class="pp-images">';
+    h += '<section class="pp-images" contenteditable="false">';
     h += '<h3 class="pp-h1 pp-images-h">图表</h3>';
     h += '<div class="pp-images-grid">';
     for(let i=0; i<item.images.length; i++){
@@ -4976,7 +4984,7 @@ function renderStructuredPaper(item, prText){
       q = q.split(/[\[\.]/)[0].trim() || r;
       h += '<li class="pp-ref" data-idx="[' + (i + 1) + ']">';
       h += '<span class="pp-ref-text">' + escapeHtml(r) + '</span>';
-      h += '<a class="pp-ref-link" href="javascript:void(0)" data-q="' + escapeHtml(q.slice(0, 160)) + '" title="联网检索该文献原文">⇢</a>';
+      h += '<a class="pp-ref-link" contenteditable="false" href="javascript:void(0)" data-q="' + escapeHtml(q.slice(0, 160)) + '" title="联网检索该文献原文">⇢</a>';
       h += '</li>';
     }
     h += '</ol>';
@@ -5152,6 +5160,9 @@ function closePaperReader(){
 function deleteSelectedText(sel){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.fullText) return;
+  /* Word式编辑可能有未同步内容 → 先同步DOM到数据,保证fullText定位准确 */
+  if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+  rebuildFromDom(item);
   const txt = sel.toString();
   if(!txt.trim()){ toast("选中的是空白"); return; }
   /* 渲染时空行显示为 &nbsp;(\u00A0),选区文本需映射回换行 */
@@ -5180,6 +5191,149 @@ function deleteSelectedText(sel){
   applyHighlightsToDom(item);
   toast("已删除 " + n + " 字");
 }
+
+/* ============================================================
+   Word 式编辑(contenteditable) —— DOM → 数据 同步
+   · prText 可直接点击定位光标/打字/删除键删字/Enter换行
+   · input 事件防抖 700ms → rebuildFromDom 同步 structured+fullText+highlights
+   · 保存(保存标注按钮/退出保存)时强制同步
+   ============================================================ */
+/* 从 DOM 提取标注(高亮/加粗/划线/备注) —— 编辑后的标注以 DOM 为准 */
+function extractHighlightsFromDom(root){
+  const out = [];
+  const els = root.querySelectorAll("mark.hl, strong.pr-bold, u.pr-underline, u.pr-note");
+  for(let i=0; i<els.length; i++){
+    const el = els[i];
+    const text = el.textContent.replace(/\u00A0/g, " ").trim();
+    if(!text || text.length < 2) continue;
+    if(el.tagName === "MARK"){
+      const e2 = { text: text, type: "highlight", color: el.style.background || "#FFE08A" };
+      out.push(e2);
+    }else if(el.tagName === "STRONG"){
+      out.push({ text: text, type: "bold" });
+    }else if(el.classList.contains("pr-note")){
+      out.push({ text: text, type: "note", note: el.dataset.note || "" });
+    }else{
+      out.push({ text: text, type: "underline" });
+    }
+  }
+  return out;
+}
+
+/* 从 prText DOM 重建 item 数据(structured + fullText + highlights)
+   结构化渲染: pp-title/pp-abs-body/pp-kw-chip/pp-h1-3/pp-para/pp-ref 逐元素映射
+   非结构化渲染: 逐行取文本 */
+function rebuildFromDom(item){
+  const prText = document.getElementById("prText");
+  if(!prText || !item) return;
+  try{
+    if(item.structured && (item.structured.sections || item.structured.abstract)){
+      const doc = prText.querySelector(".pp-doc");
+      if(doc){
+        const st = { title: "", abstract: "", keywords: [], sections: [], references: [] };
+        const titleEl = doc.querySelector(".pp-title");
+        st.title = titleEl ? titleEl.textContent.replace(/\u00A0/g, " ").trim() : (st.title || "");
+        const absEl = doc.querySelector(".pp-abs-body");
+        st.abstract = absEl ? absEl.textContent.replace(/\u00A0/g, " ").trim() : "";
+        st.keywords = [];
+        const chips = doc.querySelectorAll(".pp-kw-chip");
+        for(let i=0; i<chips.length; i++){
+          const t = chips[i].textContent.trim();
+          if(t) st.keywords.push(t);
+        }
+        let cur = null;
+        function flushSec(){
+          if(cur && (cur.heading || cur.paras.length)) st.sections.push(cur);
+          cur = null;
+        }
+        const kids = doc.children;
+        for(let i=0; i<kids.length; i++){
+          const el = kids[i];
+          const tag = el.tagName;
+          if(el.classList.contains("pp-h1") || el.classList.contains("pp-h2") || el.classList.contains("pp-h3")){
+            flushSec();
+            const lv = el.classList.contains("pp-h1") ? 1 : (el.classList.contains("pp-h2") ? 2 : 3);
+            cur = { level: lv, heading: el.textContent.replace(/\u00A0/g, " ").trim(), paras: [], bold: el.classList.contains("pp-bh") };
+          }else if(tag === "OL" || el.classList.contains("pp-refs")){
+            flushSec();
+            const lis = el.querySelectorAll("li");
+            for(let j=0; j<lis.length; j++){
+              const txtEl = lis[j].querySelector(".pp-ref-text");
+              const t = (txtEl ? txtEl.textContent : lis[j].textContent).replace(/\u00A0/g, " ").trim();
+              if(t) st.references.push(t);
+            }
+          }else if(tag === "P" || tag === "DIV" || tag === "H4"){
+            /* 段落(含 contenteditable Enter 产生的 div) */
+            if(el.closest(".pp-abstract") || el.closest(".pp-images")) continue;
+            const t = el.textContent.replace(/\u00A0/g, " ").trim();
+            if(t){
+              if(!cur) cur = { level: 1, heading: "", paras: [], bold: false };
+              cur.paras.push(t);
+            }
+          }
+          /* header/pp-src-row/pp-abstract/pp-images 跳过(徽章/图片/摘要卡片壳) */
+        }
+        flushSec();
+        item.structured = st;
+        item.fullText = structuredToText(st);
+        /* 摘要/关键词在卡片壳内被编辑的情况: 壳内文本已提取,壳外高亮正常 */
+      }else{
+        /* 结构化容器被删坏 → 退化为纯文本提取 */
+        item.fullText = domToPlainText(prText);
+        item.structured = null;
+      }
+    }else{
+      item.fullText = domToPlainText(prText);
+    }
+    item.highlights = extractHighlightsFromDom(prText);
+    item.outline = generateOutline(item.fullText);
+    item.analysis = analyzePaper(item.fullText);
+    item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+  }catch(e){ /* 同步失败静默,保持旧数据 */ }
+}
+
+/* 非结构化 DOM → 逐行纯文本(空行 &nbsp; → 换行) */
+function domToPlainText(root){
+  const lines = [];
+  const kids = root.children;
+  for(let i=0; i<kids.length; i++){
+    const el = kids[i];
+    if(el.classList.contains("pr-section-anchor")) continue;
+    const t = el.textContent.replace(/\u00A0/g, " ").trim();
+    if(el.classList.contains("pr-para-line") || el.tagName === "P" || el.tagName === "DIV" || el.tagName === "H4"){
+      lines.push(t);
+    }else if(t){
+      lines.push(t);
+    }
+  }
+  return lines.join("\n");
+}
+
+/* input 防抖同步: Word式编辑时每700ms把DOM变化写回数据(不写localStorage,点保存才写) */
+let _prEditSyncTimer = null;
+(function initWordEditSync(){
+  function hook(){
+    const prText = document.getElementById("prText");
+    if(!prText) return;
+    prText.addEventListener("input", function(){
+      prState.dirty = true;
+      updateSaveBtnState();
+      if(_prEditSyncTimer) clearTimeout(_prEditSyncTimer);
+      _prEditSyncTimer = setTimeout(function(){
+        const item = state.items.find(function(x){ return x.id === prState.itemId; });
+        if(item) rebuildFromDom(item);
+      }, 700);
+    });
+    /* 粘贴强制纯文本(防止富文本样式入侵) */
+    prText.addEventListener("paste", function(e){
+      e.preventDefault();
+      const t = (e.clipboardData || window.clipboardData).getData("text/plain");
+      if(t) document.execCommand("insertText", false, t);
+    });
+  }
+  if(document.readyState === "complete") hook();
+  else document.addEventListener("DOMContentLoaded", hook);
+})();
 
 /* ============================================================
    检查可删除内容 —— 真实检测乱码/页眉页脚残留/重复行/字体残留
@@ -5531,6 +5685,7 @@ function parsePaperStructure(rawText, faithful, boldLines){
     }
     if(CHAP_RE.test(p) || CN_NUM_RE.test(p)) return 1;
     if(/^[（(][一二三四五六七八九十]+[）)]\s*\S/.test(p)) return 2; /* （一）→二级 */
+    if(/^[（(]\d{1,2}[）)]\s*\S/.test(p)) return 3; /* （1）→三级(隶属（一）之下) */
     if(KNOWN_HEAD.test(p.replace(/\s+/g,""))) return 1;
     /* PDF粗体小标题行(无编号,如"实验数据分析"): 字体加粗是知网小标题惯例 */
     if(boldSet.size > 0 && boldSet.has(p.trim()) && p.length >= 4){
@@ -5625,6 +5780,10 @@ function parsePaperStructure(rawText, faithful, boldLines){
     const lv = isHeadingLine(p);
     if(lv > 0){
       newSec(lv, p);
+      /* PDF粗体小标题(PDF原文字体加粗) → 记录bold标记,渲染时保持粗体强调 */
+      if(boldSet.size > 0 && boldSet.has(p.trim()) && p.length >= 4){
+        curSec.bold = true;
+      }
       mode = "body";
       continue;
     }
@@ -5773,6 +5932,8 @@ function localHeadLevel(t){
   if(/^第[一二三四五六七八九十百\d]+[章节部篇]/.test(t)) return 1;
   /* （一）→2级(隶属"一、"级之下) */
   if(/^[（(][一二三四五六七八九十]+[）)]/.test(t)) return 2;
+  /* （1）/1)→3级(隶属"（一）"级之下) */
+  if(/^[（(]\d{1,2}[）)]/.test(t)) return 3;
   /* 一、→1级 */
   if(/^[一二三四五六七八九十]+[、.．]/.test(t)) return 1;
   return 1; /* 标准章节词(摘要/引言/结论等) */
@@ -5806,7 +5967,8 @@ function localMarkBlock(text){
     }
     const isHead = t.length <= 60 && !/[。！？；;]/.test(t) &&
       (/^(\d+(?:\.\d+)*)\s*[.、)）]?\s+\S/.test(t) || /^第[一二三四五六七八九十百\d]+[章节部篇]/.test(t) ||
-       /^[（(][一二三四五六七八九十]+[）)]/.test(t) || /^[一二三四五六七八九十]+[、.．]\s*\S/.test(t) ||
+       /^[（(][一二三四五六七八九十]+[）)]/.test(t) || /^[（(]\d{1,2}[）)]\s*\S/.test(t) ||
+       /^[一二三四五六七八九十]+[、.．]\s*\S/.test(t) ||
        /^(摘\s*要|Abstract|引\s*言|结\s*论|致\s*谢|关键词|Keywords?)/i.test(t.replace(/\s+/g,"")));
     if(isHead) inRefs = false;
     out.push(isHead ? ("#H" + localHeadLevel(t) + " " + t) : "#P " + t);
@@ -6119,63 +6281,7 @@ async function aiStructuredReformat(fullText, onProgress, onStage, opts){
   return { st: st, usedAI: usedAI, noKey: noKey };
 }
 
-/* ---- 7e. AI 后台精读: 导入完成后后台通读全文,优化排版结构 ----
-   · 不阻塞导入: 导入先以本地排版立即可用,AI精读完成后自动升级结构
-   · 逐字保真: aiStructuredReformat内部逐字校验,AI改写即弃用,保持原排版
-   · 阅读器打开该文且无未保存修改时自动刷新;支持撤销(pushTextHistory) */
-const _aiRefiningIds = new Set();
-async function aiBackgroundRefine(item){
-  try{
-    if(!item || !item.fullText) return;
-    const cfg = getAiConfig();
-    if(!cfg || !cfg.key) return;              /* 未配置AI → 不精读(保持本地排版) */
-    if(item.fullText.length < 400) return;    /* 过短无需精读 */
-    if(_aiRefiningIds.has(item.id)) return;   /* 防重入 */
-    if(prState && prState.itemId === item.id && prState.dirty) return; /* 有未保存修改 */
-    _aiRefiningIds.add(item.id);
-    ppProgressShow("AI 正在后台精读论文 · 优化排版结构(不影响当前使用)…");
-    const result = await aiStructuredReformat(item.fullText, function(i, n){
-      ppProgressUpdate(88 * i / n, "AI 精读中 · 第 " + i + "/" + n + " 段");
-    }, null, {
-      onSource:function(st, src){
-        try{
-          const it = state.items.find(function(x){ return x.structured === st; });
-          if(it){
-            saveState(); render();
-            if(prState && prState.itemId === it.id && typeof applyHighlightsToDom === "function") applyHighlightsToDom(it);
-            if(src && src.url) toast("已联网找到原文链接 · 标题下方可点击直达");
-          }
-        }catch(e){ /* 静默 */ }
-      }
-    });
-    ppProgressHide(300);
-    /* 仅当AI成功归纳出结构才升级;失败/降级/无结构 → 保持导入时的排版
-       严格字数守卫: 精读后实质字符<原文97% → AI删了正文 → 拒绝升级(正文字数不能少) */
-    if(result && result.usedAI && result.st && (result.st.sections || []).length > 0){
-      const beforeLen = textCoreLen(item.fullText);
-      const afterLen = textCoreLen(structuredToText(result.st));
-      if(beforeLen > 200 && afterLen < beforeLen * 0.97){
-        /* AI删减内容 → 保持保真排版不动 */
-        return;
-      }
-      pushTextHistory(item);
-      item.structured = result.st;
-      item.fullText = structuredToText(result.st);
-      item.analysis = analyzePaper(item.fullText);
-      item.outline = generateOutline(item.fullText);
-      saveState();
-      render();
-      if(prState && prState.itemId === item.id && typeof applyHighlightsToDom === "function"){
-        applyHighlightsToDom(item);
-      }
-      toast("AI 精读完成 · 「" + item.name + "」已按原文层级整理结构(正文逐字保留,可撤销)");
-    }
-  }catch(e){
-    ppProgressHide(0);
-  }finally{
-    if(item && item.id) _aiRefiningIds.delete(item.id);
-  }
-}
+/* ---- 7e. (已按用户要求移除AI后台精读:导入即保真排版,后续不再AI重排) ---- */
 
 /* ---- 8. 删除同步: 把删除的文本从structured各字段移除 ---- */
 function applyDeletionToStructured(item, removedTexts){
@@ -7972,8 +8078,6 @@ function renderGallery(){
                   ppProgressUpdate(100, "排版完成");
                   ppProgressHide(900);
                   toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
-                  /* 已配置AI → 后台精读优化结构(不阻塞,失败保持保真排版) */
-                  setTimeout(function(){ aiBackgroundRefine(target); }, 600);
                 });
               }).catch(function(e){
                 ppProgressHide(0);
@@ -8978,7 +9082,6 @@ if(paperEntrySubmit){
       ppProgressUpdate(100, "排版完成");
       ppProgressHide(900);
     }
-    const wasFromPdf = paperEntryFromPdf;
     paperEntryFromPdf = false;
     const result = addPaper(title, fullText, null, structured);
     if(result && result.error === "duplicate"){
@@ -8999,10 +9102,6 @@ if(paperEntrySubmit){
     paperEntryBoldLines = null;
     closePaperEntryModal();
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
-    /* PDF导入且已配置AI → 后台精读优化结构(不阻塞,失败保持保真排版) */
-    if(wasFromPdf && result && result.id){
-      setTimeout(function(){ aiBackgroundRefine(result); }, 600);
-    }
     const archive = document.getElementById("archive");
     if(archive) archive.scrollIntoView({behavior:"smooth"});
   };
