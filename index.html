@@ -802,6 +802,25 @@
   }
   .paper-pdf-btn:hover{ background:var(--accent); color:#fff; }
   .paper-pdf-btn.busy{ opacity:.6; pointer-events:none; }
+  /* ===== 第三方 PDF→Word 转换平台提示(录入弹窗) ===== */
+  .pp-convert-tip{
+    margin-top:10px; padding:10px 14px; border:1px dashed var(--teal);
+    border-radius:10px; background:rgba(47,93,98,.045);
+  }
+  .pp-convert-head{
+    font-size:12px; color:var(--teal); font-weight:600; letter-spacing:.02em;
+  }
+  .pp-convert-links{ margin-top:7px; display:flex; flex-wrap:wrap; gap:6px 8px; }
+  .pp-convert-links a{
+    padding:3px 11px; border:1px solid rgba(47,93,98,.35); border-radius:999px;
+    color:var(--teal); font-size:11.5px; text-decoration:none; font-weight:600;
+    background:#fff; transition:all .18s;
+  }
+  .pp-convert-links a:hover{
+    background:var(--teal); color:#fff; border-color:var(--teal);
+    transform:translateY(-1px); box-shadow:0 3px 8px rgba(47,93,98,.18);
+  }
+  .pp-convert-note{ margin-top:7px; font-size:10.5px; color:var(--ink-mute); line-height:1.6; }
   .pr-text-wrap{
     flex:1; overflow-y:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
@@ -972,7 +991,7 @@
   }
   .pp-src-badge.pp-src-doi:hover{ border-color:var(--teal); color:var(--teal); }
 
-  /* ===== AI排版进度条(全局浮动) ===== */
+  /* ===== 进度条(全局浮动) ===== */
   .pp-progress{
     position:fixed; left:50%; bottom:36px;
     transform:translateX(-50%) translateY(24px);
@@ -1571,6 +1590,17 @@
     <div class="modal-field">
       <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ —— 双引擎解析(Zotero同款GROBID云端引擎+本地几何),自动识别双栏排版/章节结构/参考文献/真实标题">⇪ 导入文档</button></label>
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
+      <div class="pp-convert-tip">
+        <div class="pp-convert-head">☁ PDF 排版不理想？先在成熟平台转为 Word(排版无损)再导入:</div>
+        <div class="pp-convert-links">
+          <a href="https://www.ilovepdf.com/zh-cn/pdf_to_word" target="_blank" rel="noopener">iLovePDF</a>
+          <a href="https://smallpdf.com/cn/pdf-to-word" target="_blank" rel="noopener">Smallpdf</a>
+          <a href="https://tools.pdf24.org/zh/pdf-to-word" target="_blank" rel="noopener">PDF24</a>
+          <a href="https://www.geekersoft.com/zh-cn/pdf-to-word.html" target="_blank" rel="noopener">奇客PDF</a>
+          <a href="https://convertio.co/zh/pdf-doc/" target="_blank" rel="noopener">Convertio</a>
+        </div>
+        <div class="pp-convert-note">流程:平台内上传 PDF → 转为 Word 下载 → 回到此窗点「⇪ 导入文档」选择该 Word 文件,标题层级原样保留</div>
+      </div>
     </div>
     <div class="paper-entry-stats" id="paperEntryStats"></div>
     <div class="modal-actions">
@@ -1609,7 +1639,6 @@
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
-        <button class="pr-reformat-btn" id="prReformat" title="一键排版:按字号/加粗/编号标记智能识别层级,归纳为 标题/摘要/关键词/正文/参考文献(原文逐字保留,即时完成,可Ctrl+Z撤销)">✎ 一键排版</button>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
@@ -2746,6 +2775,14 @@ function afterLogin(){
   if(state.items.length === 0){
     setTimeout(function(){ toast("点击「载入示例」可速览其效"); }, 600);
   }
+  /* 恢复上次正在阅读的论文(刷新页面自动回到审阅界面与原位置) */
+  try{
+    const rid = localStorage.getItem(STORAGE_KEY + "_reading");
+    if(rid){
+      const it = state.items.find(function(x){ return x.id === rid; });
+      if(it && it.fullText) setTimeout(function(){ openPaperReader(rid); }, 250);
+    }
+  }catch(e){ /* 静默 */ }
 }
 
 function loadState(){
@@ -3803,6 +3840,9 @@ function layoutRowsFromBands(bands, pageW){
      (GROBID 会滤掉页眉页脚/页码,阈值放宽到90%;不足则回退本地几何算法)
    ============================================================ */
 const GROBID_ENDPOINTS = [
+  /* 官方 science-miner 演示实例(稳定,Zotero同款引擎首选) */
+  "https://cloud.science-miner.com/grobid/api/processFulltextDocument",
+  /* HuggingFace 空间(国内偶可达,作备份) */
   "https://kermitt2-grobid.hf.space/api/processFulltextDocument"
 ];
 
@@ -4923,15 +4963,19 @@ function openPaperReader(itemId){
   if(modal) modal.classList.add("show");
   document.body.style.overflow = "hidden";
 
+  /* 记住正在阅读的论文(刷新页面后自动恢复审阅界面) */
+  try{ localStorage.setItem(STORAGE_KEY + "_reading", itemId); }catch(e){}
+  /* 恢复上次阅读滚动位置 */
+  try{
+    const sp = parseInt(localStorage.getItem(STORAGE_KEY + "_readpos") || "0", 10);
+    const wrap = document.getElementById("prTextWrap");
+    if(wrap && sp > 0) setTimeout(function(){ wrap.scrollTop = sp; }, 80);
+  }catch(e){}
+
   /* 关闭 */
   const prClose = document.getElementById("prClose");
   if(prClose) prClose.onclick = closePaperReader;
 
-  /* 一键排版: AI思考通读全文→归纳标准学术结构(逐字保真校验,可撤销) */
-  const prReformat = document.getElementById("prReformat");
-  if(prReformat){
-    prReformat.onclick = function(){ runOneClickReformat(); };
-  }
   /* 重做按钮 */
   const prHlRedo = document.getElementById("prHlRedo");
   if(prHlRedo){
@@ -5505,52 +5549,6 @@ function redoLastAction(){
   }
 }
 
-/* ============================================================
-   一键排版 —— 本地即时排版(毫秒级,Zotero式):
-   · 字号分级(PDF大字号/Word标题样式)→ 层级1~3,保持原文大小标题
-   · 编号标记(一、/（一）/（1）/1.1.1/第X章)→ 层级
-   · 粗体小标题行 → 层级2
-   · 原文逐字保留(0改写0删除),排版前推撤销快照 → ↶/Ctrl+Z 可完整回退
-   ============================================================ */
-async function runOneClickReformat(){
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item || !item.fullText){ toast("当前无全文"); return; }
-  const btn = document.getElementById("prReformat");
-  const origLabel = btn ? btn.innerHTML : "";
-  if(btn){ btn.disabled = true; btn.innerHTML = "排版中…"; }
-  const resultEl = document.getElementById("prAiResult");
-  try{
-    /* 先同步未落盘的键盘编辑,保证排版基于最新内容 */
-    prClearPendingSync();
-    rebuildFromDom(item);
-    pushTextHistory(item);  /* 可撤销 */
-    /* 本地即时结构化: 字号+粗体+编号标记识别层级,逐字保真 */
-    const st = parsePaperStructure(item.fullText, false, item.boldLines, item.sizeHeads);
-    item.structured = st;
-    item.fullText = structuredToText(st);
-    item.outline = generateOutline(item.fullText);
-    item.analysis = analyzePaper(item.fullText);
-    item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
-    saveState();
-    applyHighlightsToDom(item);
-    markDirty();
-    const secCount = st.sections.length;
-    const lv1 = st.sections.filter(function(s){ return s.level === 1; }).length;
-    if(resultEl){
-      resultEl.innerHTML = '<div class="pr-ai-hint">✦ 排版完成(即时 · 原文逐字保留)<br>' +
-        '识别 ' + secCount + ' 个章节' + (lv1 ? " · 其中一级标题 " + lv1 + " 个" : "") +
-        (st.abstract ? "<br>已识别摘要/关键词" : "") +
-        (st.references.length ? "<br>参考文献 " + st.references.length + " 条" : "") +
-        '<br>点击「↶ 撤销」或 Ctrl+Z 可恢复排版前状态</div>';
-    }
-    toast("排版完成 · 识别" + secCount + "个章节,原文逐字保留,可撤销");
-  }catch(e){
-    toast("排版失败:" + (e.message || "未知错误"));
-  }finally{
-    if(btn){ btn.disabled = false; btn.innerHTML = origLabel || "✎ 一键排版"; }
-  }
-}
-
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 function closePaperReader(){
   if(prState.dirty){
@@ -5577,6 +5575,8 @@ function closePaperReader(){
   const modal = document.getElementById("paperReaderModal");
   if(modal) modal.classList.remove("show");
   document.body.style.overflow = "";
+  /* 主动关闭 → 清除阅读记忆(刷新页面不再恢复) */
+  try{ localStorage.removeItem(STORAGE_KEY + "_reading"); localStorage.removeItem(STORAGE_KEY + "_readpos"); }catch(e){}
   prState.itemId = null;
   prState.activeColor = null;
   prState.activeFmt = null;
@@ -5588,6 +5588,40 @@ function closePaperReader(){
   const chat = document.getElementById("prChat");
   if(chat) chat.classList.remove("show");
 }
+
+/* ===== 刷新/关闭页面时保护阅读状态 =====
+   · 未保存的编辑/标注自动落盘(刷新不丢内容)
+   · 记住滚动位置,刷新后原位恢复
+   · _reading 键保留 → 重新加载后自动重开审阅界面 */
+window.addEventListener("beforeunload", function(){
+  try{
+    if(prState && prState.itemId){
+      if(prState.dirty){
+        const it = state.items.find(function(x){ return x.id === prState.itemId; });
+        if(it){
+          if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+          rebuildFromDom(it);
+          saveState();
+        }
+      }
+      const wrap = document.getElementById("prTextWrap");
+      if(wrap) localStorage.setItem(STORAGE_KEY + "_readpos", String(Math.round(wrap.scrollTop)));
+    }
+  }catch(e){ /* 静默 */ }
+});
+/* 滚动位置防抖记忆(会话中途意外退出也有记录) */
+(function(){
+  const wrap = document.getElementById("prTextWrap");
+  if(!wrap) return;
+  let t = null;
+  wrap.addEventListener("scroll", function(){
+    if(!prState || !prState.itemId) return;
+    if(t) clearTimeout(t);
+    t = setTimeout(function(){
+      try{ localStorage.setItem(STORAGE_KEY + "_readpos", String(Math.round(wrap.scrollTop))); }catch(e){}
+    }, 400);
+  });
+})();
 
 /* ============================================================
    删除选中文字 —— 从 fullText 中定位并删除(需确认)
@@ -5698,8 +5732,12 @@ function rebuildFromDom(item){
               if(t) st.references.push(t);
             }
           }else if(tag === "P" || tag === "DIV" || tag === "H4"){
-            /* 段落(含 contenteditable Enter 产生的 div) */
-            if(el.closest(".pp-abstract") || el.closest(".pp-images")) continue;
+          /* 段落(含 contenteditable Enter 产生的 div)
+             跳过功能壳: 摘要卡片/图片区/文献检索徽章行/翻译浮层
+             (否则徽章文字"知网万方维普…"会被误提取为正文首段) */
+          if(el.closest(".pp-abstract") || el.closest(".pp-images") ||
+             el.closest(".pp-src-row") || el.closest(".pp-src-head") ||
+             el.classList.contains("pr-translation") || el.classList.contains("pp-translation")) continue;
             const t = el.textContent.replace(/\u00A0/g, " ").trim();
             if(t){
               if(!cur) cur = { level: 1, heading: "", paras: [], bold: false };
@@ -5727,13 +5765,17 @@ function rebuildFromDom(item){
   }catch(e){ /* 同步失败静默,保持旧数据 */ }
 }
 
-/* 非结构化 DOM → 逐行纯文本(空行 &nbsp; → 换行) */
+/* 非结构化 DOM → 逐行纯文本(空行 &nbsp; → 换行)
+   跳过功能元素: 行锚点/翻译浮层(否则译文会被误提取为正文行) */
 function domToPlainText(root){
   const lines = [];
   const kids = root.children;
   for(let i=0; i<kids.length; i++){
     const el = kids[i];
-    if(el.classList.contains("pr-section-anchor")) continue;
+    if(el.classList.contains("pr-section-anchor") ||
+       el.classList.contains("pr-translation") ||
+       el.classList.contains("pp-translation") ||
+       el.classList.contains("pp-src-row")) continue;
     const t = el.textContent.replace(/\u00A0/g, " ").trim();
     if(el.classList.contains("pr-para-line") || el.tagName === "P" || el.tagName === "DIV" || el.tagName === "H4"){
       lines.push(t);
@@ -6318,14 +6360,14 @@ function localMarkBlock(text){
   return out.join("\n");
 }
 
-/* ---- 7a. AI排版进度条(全局浮动,所有排版入口共用) ---- */
+/* ---- 7a. PDF导入进度条(全局浮动) ---- */
 let ppProgHideTimer = null;
 function ppProgressShow(label){
   const el = document.getElementById("ppProgress");
   if(!el) return;
   if(ppProgHideTimer){ clearTimeout(ppProgHideTimer); ppProgHideTimer = null; }
   const lb = document.getElementById("ppProgLabel");
-  if(lb) lb.textContent = label || "AI 排版中…";
+  if(lb) lb.textContent = label || "处理中…";
   const fill = document.getElementById("ppProgFill");
   const pc = document.getElementById("ppProgPct");
   if(fill) fill.style.width = "0%";
@@ -6899,10 +6941,7 @@ async function runAiRead(){
   }
 }
 
-/* ============================================================
-   AI 排版函数已移除(一键排版按钮已删除)
-   排版功能在导入/录入入口自动执行,不再在阅读器内触发
-   ============================================================ */
+/* 论文结构化系统已移除: PDF导入原文逐字保存,不做AI排版/改写 */
 
 /* ============================================================
    翻译选中文字 —— AI翻译,译文插入选区后;再次点击取消译文
@@ -7193,82 +7232,92 @@ async function fetchRelatedPapers(){
     }
   }
 
-  /* OpenAlex: 免费真实学术API(无密钥),返回真实论文+真实被引数
-     先按中文文献筛选(language:zh,更易在知网命中),再兜底全语言; 按真实被引数降序 */
-  /* OpenAlex精确关联链: ① 按标题找到本论文 → ② 取其 related_works(OpenAlex官方
-     基于引文网络计算的关联文献,同领域同主题) → ③ 批量取详情,按真实被引排序 */
-  async function fetchOpenAlexExactRelated(){
-    try{
-      if(!item.name) return null;
-      /* ① 标题检索本论文 */
-      const q = await ppFetchTimeout("https://api.openalex.org/works?search=" + encodeURIComponent(item.name.slice(0, 100)) + "&per-page=10&select=id,display_name,related_works", 9000);
-      const jq = JSON.parse(q);
-      let self = null;
-      const list0 = (jq.results) || [];
-      for(let k=0; k<list0.length; k++){
-        if(list0[k] && list0[k].display_name && ppTitleMatch(list0[k].display_name, item.name)){ self = list0[k]; break; }
-      }
-      if(!self) return null;
-      /* ② related_works(OpenAlex官方关联文献,引文网络同主题) */
-      if(!self.related_works || self.related_works.length === 0) return null;
-      const ids = self.related_works.slice(0, 12).map(function(x){ return String(x).replace("https://openalex.org/", "").replace(/^W/, "W"); });
-      /* ③ 批量取详情 */
-      const t2 = await ppFetchTimeout("https://api.openalex.org/works?filter=openalex:" + ids.join("|") + "&per-page=12&select=display_name,publication_year,cited_by_count,doi,language", 9000);
-      const j2 = JSON.parse(t2);
-      const list = (j2.results) || [];
-      const results = [];
-      const seen = {};
-      for(let k=0; k<list.length; k++){
-        const it = list[k];
-        if(!it || !it.display_name) continue;
-        const key = ppNormTitle(it.display_name);
-        if(!key || seen[key]) continue;
-        seen[key] = 1;
-        results.push({
-          title: it.display_name,
-          cites: (it.cited_by_count != null && it.cited_by_count > 0) ? it.cited_by_count : "",
-          year: it.publication_year || "",
-          doi: it.doi || "",
-          zh: (it.language === "zh") || /[\u4e00-\u9fff]/.test(it.display_name || "")
-        });
-      }
-      if(results.length === 0) return null;
-      /* 知网可检索优先: 只保留中文文献(language:zh,知网收录源);组内按真实被引降序 */
-      const zhOnly = results.filter(function(x){ return x.zh; });
-      const final = (zhOnly.length >= 3 ? zhOnly : results).sort(function(x, y){
-        const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
-        return cy - cx;
-      });
-      return final.slice(0, 8);
-    }catch(e){ return null; }
-  }
-
-  /* OpenAlex关键词检索(次级: 精确关联失败时) —— 只检索中文文献(知网可查) */
-  async function fetchOpenAlexRelated(){
+  /* 主源 Crossref: 全球DOI注册库,CORS开放,中文期刊同样注册(实测可命中
+     "论古希腊神话传说中女性形象的类群演变与性别意识"等真正相关中文文献)
+     中文标题(含汉字=知网可查)优先,按真实被引数(is-referenced-by-count)降序 */
+  async function fetchCrossrefRelated(){
     const results = [];
     const seen = {};
-    const candidates = [];
-    /* 仅用标题前80字(去掉关键词拼接,提高主题相关度) */
+    const a = item.analysis || {};
+    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 2).join(" ") : "";
     const tq = (item.name || kw).slice(0, 80).trim();
-    /* 中文文献优先两条: 标题检索 + 关键词组合检索(OpenAlex的zh文献几乎全部源自知网收录) */
-    candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(tq) + "&filter=language:zh&per-page=8&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi,type");
-    candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(kw.slice(0, 40)) + "&filter=language:zh&per-page=8&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi,type");
-    for(let i=0; i<candidates.length && results.length < 5; i++){
+    /* 检索词组合: 标题+关键词 → 关键词 → 标题(逐级提高召回) */
+    const queries = [];
+    if(tq && kws) queries.push(tq + " " + kws);
+    if(kws) queries.push(kws);
+    if(tq) queries.push(tq);
+    for(let i=0; i<queries.length && results.length < 8; i++){
+      const q = queries[i];
+      if(!q) continue;
       try{
-        const txt = await ppFetchTimeout(candidates[i], 9000);
+        const url = "https://api.crossref.org/works?query=" + encodeURIComponent(q) +
+          "&rows=15&select=DOI,title,container-title,is-referenced-by-count,issued";
+        const txt = await ppFetchTimeout(url, 9000);
+        const j = JSON.parse(txt);
+        const list = (j.message && j.message.items) || [];
+        for(let k=0; k<list.length; k++){
+          const it = list[k];
+          const t = (it.title && it.title[0]) ? it.title[0] : "";
+          if(!t) continue;
+          /* 排除自身论文 */
+          if(item.name && ppTitleMatch(t, item.name)) continue;
+          const key = ppNormTitle(t);
+          if(!key || seen[key]) continue;
+          seen[key] = 1;
+          const yr = (it.issued && it.issued["date-parts"] && it.issued["date-parts"][0] && it.issued["date-parts"][0][0]) ? it.issued["date-parts"][0][0] : "";
+          results.push({
+            title: t,
+            cites: (it["is-referenced-by-count"] != null && it["is-referenced-by-count"] > 0) ? it["is-referenced-by-count"] : "",
+            year: yr,
+            doi: it.DOI ? "https://doi.org/" + it.DOI : "",
+            zh: /[\u4e00-\u9fff]/.test(t)
+          });
+        }
+      }catch(e){ /* 尝试下一个检索词 */ }
+    }
+    /* 中文文献优先(标题含汉字=知网可查),组内按真实被引降序 */
+    const zhOnly = results.filter(function(x){ return x.zh; });
+    const final = (zhOnly.length >= 3 ? zhOnly : results).sort(function(x, y){
+      const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
+      return cy - cx;
+    });
+    return final.slice(0, 5);
+  }
+
+  /* 次级 OpenAlex: 只检索中文文献(language:zh),且带主题门禁——
+     标题必须命中至少一个关键词/标题前段,杜绝"青藏高原式"主题漂移误配 */
+  async function fetchOpenAlexRelatedStrict(){
+    const results = [];
+    const seen = {};
+    const a = item.analysis || {};
+    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 3) : [];
+    const tq = (item.name || "").slice(0, 60).trim();
+    const candidates = [];
+    if(tq) candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(tq) + "&filter=language:zh&per-page=12&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi");
+    for(let i=0; i<kws.length && candidates.length < 3; i++){
+      candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(kws[i]) + "&filter=language:zh&per-page=12&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi");
+    }
+    const mustHave = (kws.length >= 2) ? kws.slice(0, 2) : [tq.slice(0, 8)];
+    const tqHead = tq.slice(0, 8);
+    for(let c=0; c<candidates.length && results.length < 8; c++){
+      try{
+        const txt = await ppFetchTimeout(candidates[c], 9000);
         const j = JSON.parse(txt);
         const list = (j.results) || [];
         for(let k=0; k<list.length; k++){
           const it = list[k];
           if(!it || !it.display_name) continue;
-          const title = it.display_name;
-          /* 排除自身论文 */
-          if(item.name && ppTitleMatch(title, item.name)) continue;
-          const key = ppNormTitle(title);
+          const t = it.display_name;
+          if(item.name && ppTitleMatch(t, item.name)) continue;
+          /* 主题门禁: 标题须含关键词或标题前段,否则丢弃(防误配) */
+          const hit = (tqHead.length >= 2 && t.indexOf(tqHead) >= 0) ||
+            mustHave.some(function(kw){ return kw && kw.length >= 2 && t.indexOf(kw) >= 0; });
+          if(!hit) continue;
+          const key = ppNormTitle(t);
           if(!key || seen[key]) continue;
           seen[key] = 1;
           results.push({
-            title: title,
+            title: t,
             cites: (it.cited_by_count != null && it.cited_by_count > 0) ? it.cited_by_count : "",
             year: it.publication_year || "",
             doi: it.doi || "",
@@ -7315,17 +7364,17 @@ async function fetchRelatedPapers(){
     }catch(e){ return []; }
   }
 
-  /* 主路径: OpenAlex精确关联(引文网络同主题,与本文最相关) */
-  const exactPapers = await fetchOpenAlexExactRelated();
-  if(exactPapers && exactPapers.length > 0){
-    renderList(exactPapers, "来源: OpenAlex 引文网络关联(与本文同主题)· 中文文献知网可查 · 真实被引数 · 点击直达知网检索");
+  /* 主路径: Crossref 真实索引(中文文献知网可查,真实被引数) */
+  const exactPapers = await fetchCrossrefRelated();
+  if(exactPapers.length > 0){
+    renderList(exactPapers, "来源: Crossref 真实学术索引(中文文献知网可查)· 真实被引数 · 点击直达知网检索");
     return;
   }
 
-  /* 次级: OpenAlex 中文文献标题检索(全部源自知网收录) */
-  const realPapers = await fetchOpenAlexRelated();
+  /* 次级: OpenAlex 中文文献(带主题门禁,防误配) */
+  const realPapers = await fetchOpenAlexRelatedStrict();
   if(realPapers.length > 0){
-    renderList(realPapers, "来源: OpenAlex 中文文献索引(源自知网收录)· 真实被引数 · 点击直达知网检索");
+    renderList(realPapers, "来源: OpenAlex 中文文献(主题相关已筛选· 知网可查)· 真实被引数 · 点击直达知网检索");
     return;
   }
 
@@ -8654,7 +8703,7 @@ function renderGallery(){
           if(file.size > 10*1024*1024){ toast("文件过大(超10MB)"); return; }
           const fname = file.name.toLowerCase();
           if(fname.endsWith(".pdf")){
-            /* PDF 并行提取(双栏检测+页眉页脚过滤) → 保真排版(自动转为可编辑文本) */
+            /* PDF 并行提取(双栏检测+页眉页脚过滤) → 原文直接写入 */
             if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
             toast("正在并行解析PDF……", 2000);
             const reader = new FileReader();
@@ -8665,46 +8714,19 @@ function renderGallery(){
                   ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
                 });
               }).then(function(res){
+                ppProgressHide(300);
                 if(res.text.trim().length < 50){
-                  ppProgressHide(0);
                   toast("PDF提取文本过少,可能为扫描件(图片型PDF)");
                   return;
                 }
-                /* PDF保真排版: 文本与PDF逐字一致(仅删页眉页脚页码),本地结构识别;AI联网修复双栏顺序;联网核对原文后台进行不阻塞 */
-                ppProgressShow("按 PDF 原文保真排版(转为可编辑文本)…");
-                return aiStructuredReformat(res.text, function(i, n){
-                  ppProgressUpdate(90 * i / n, "AI 联网校对双栏阅读顺序 · 第 " + i + "/" + n + " 段");
-                }, null, {
-                  faithful:true,
-                  boldLines: res.boldLines,
-                  sizeHeads: res.sizeHeads,
-                  onSource:function(st, src){
-                    /* 后台联网查到原文链接: 保存并刷新(阅读器打开中则同步刷新徽章) */
-                    try{
-                      saveState();
-                      render();
-                      if(prState && prState.itemId === target.id){
-                        const cur = state.items.find(function(x){ return x.id === target.id; });
-                        if(cur && typeof applyHighlightsToDom === "function") applyHighlightsToDom(cur);
-                      }
-                      if(src && src.url) toast("已联网找到原文链接 · 标题下方可点击直达");
-                    }catch(e){ /* 静默 */ }
-                  }
-                }).then(function(result){
-                  target.structured = result.st;
-                  target.fullText = structuredToText(result.st);
-                  target.analysis = analyzePaper(target.fullText);
-                  target.outline = generateOutline(target.fullText);
-                  /* 保存字体信号到条目: 后续「一键排版」仍按原PDF层级识别 */
-                  if(res.boldLines && res.boldLines.length) target.boldLines = res.boldLines;
-                  if(res.sizeHeads && res.sizeHeads.length) target.sizeHeads = res.sizeHeads;
-                  if(res.images && res.images.length) target.images = res.images;
-                  saveState();
-                  render();
-                  ppProgressUpdate(100, "排版完成");
-                  ppProgressHide(900);
-                  toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
-                });
+                /* 原文逐字保存,不经过AI排版 */
+                target.fullText = res.text;
+                target.analysis = analyzePaper(target.fullText);
+                target.outline = generateOutline(target.fullText);
+                if(res.images && res.images.length) target.images = res.images;
+                saveState();
+                render();
+                toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
               }).catch(function(e){
                 ppProgressHide(0);
                 toast("PDF解析失败:" + (e.message || "未知错误"));
@@ -8712,37 +8734,15 @@ function renderGallery(){
             };
             reader.readAsArrayBuffer(file);
           }else{
-            /* TXT/MD 直接读取 → AI排版+排除无关内容;联网核对原文后台进行 */
+            /* TXT/MD 直接读取 */
             const reader = new FileReader();
             reader.onload = function(){
-              ppProgressShow("AI 正在通读论文并排版…");
-              aiStructuredReformat(this.result, function(i, n){
-                ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
-              }, null, {
-                onSource:function(st, src){
-                  try{
-                    saveState();
-                    render();
-                    if(prState && prState.itemId === target.id){
-                      const cur = state.items.find(function(x){ return x.id === target.id; });
-                      if(cur && typeof applyHighlightsToDom === "function") applyHighlightsToDom(cur);
-                    }
-                    if(src && src.url) toast("已联网找到原文链接 · 标题下方可点击直达");
-                  }catch(e){ /* 静默 */ }
-                }
-              }).then(function(result){
-                target.structured = result.st;
-                target.fullText = structuredToText(result.st);
-                target.analysis = analyzePaper(target.fullText);
-                target.outline = generateOutline(target.fullText);
-                saveState();
-                render();
-                ppProgressUpdate(100, "排版完成");
-                ppProgressHide(900);
-                toast("「" + target.name + "」AI 排版完成,可点「查看全文」阅读标注");
-              }).catch(function(){
-                ppProgressHide(0);
-              });
+              target.fullText = this.result;
+              target.analysis = analyzePaper(target.fullText);
+              target.outline = generateOutline(target.fullText);
+              saveState();
+              render();
+              toast("「" + target.name + "」已导入,可点「查看全文」阅读标注");
             };
             reader.readAsText(file, "UTF-8");
           }
@@ -9582,7 +9582,6 @@ function openPaperEntryModal(){
   if(paperFullTextInput) paperFullTextInput.value = "";
   paperEntryFromPdf = false;
   paperEntryImages = null;
-  paperEntryBoldLines = null;
   paperEntryStructured = null;
   updatePaperEntryStats();
   if(paperEntryModal) paperEntryModal.classList.add("show");
@@ -9620,108 +9619,25 @@ if(paperEntryModal){
 if(paperFullTextInput){
   paperFullTextInput.addEventListener("input", updatePaperEntryStats);
 }
-let paperEntryFromPdf = false; /* 全文是否来自PDF导入(决定保真/AI排版路径) */
-let paperEntryBoldLines = null; /* PDF粗体小标题行(字体加粗识别,保真排版层级依据) */
-let paperEntrySizeHeads = null; /* PDF字号标题行(字号分级识别,排版层级依据) */
+let paperEntryFromPdf = false; /* 全文是否来自PDF导入 */
 let paperEntryImages = null;  /* PDF导入提取的图片 */
-let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:整理入册直接采用,零改写 */
+let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:导入时已完成,直接入册 */
 if(paperEntrySubmit){
-  paperEntrySubmit.onclick = async function(){
+  paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
-    let fullText = paperFullTextInput ? paperFullTextInput.value : "";
+    const fullText = paperFullTextInput ? paperFullTextInput.value : "";
     if(!fullText.trim()){
       toast("请粘贴论文全文");
       return;
     }
-    /* 排版路径分流:
-       · PDF导入 → 保真排版:文本与PDF逐字一致(仅删页眉页脚页码),AI不干预
-       · 复制粘贴 → AI保真排版:AI只做结构标记+删无关行,逐字校验不改写,失败回退本地 */
+    /* PDF导入: 原文直接入册,不经过任何AI排版/改写
+       GROBID结构化结果若在导入时已完成 → 直接采用(paragraph顺序正确)
+       否则 → 原文逐字保存,用户在阅读器里自行编辑标注 */
     let structured = null;
-    const cfg = getAiConfig();
-    const origLabel = paperEntrySubmit.innerHTML;
-    if(paperEntryFromPdf && paperEntryStructured){
-      /* GROBID(Zotero同款引擎)结构化结果直接入册:导入时已完成,零等待零改写 */
-      ppProgressShow("GROBID 结构化结果入册中(Zotero 同款引擎 · 已在导入时完成)…");
+    if(paperEntryStructured){
       structured = paperEntryStructured;
-      fullText = structuredToText(structured);
-      ppProgressUpdate(100, "排版完成");
-      ppProgressHide(500);
-      toast("GROBID 排版完成(导入时已解析)· 原文保真,双栏阅读顺序正确");
-    }else if(paperEntryFromPdf){
-      /* PDF保真排版(本地几何解析结果): 本地结构识别,文本与PDF逐字一致,AI不干预 */
-      ppProgressShow("按 PDF 原文保真排版(转为可编辑文本)…");
-      const result = await aiStructuredReformat(fullText, null, null, {
-        faithful:true,
-        boldLines: paperEntryBoldLines,
-        sizeHeads: paperEntrySizeHeads,
-        onSource:function(st, src){
-          /* 入册后异步到达: 按引用找到条目,保存并刷新(阅读器打开中则同步刷新徽章) */
-          try{
-            const it = state.items.find(function(x){ return x.structured === st; });
-            if(it){
-              saveState();
-              render();
-              if(prState && prState.itemId === it.id && typeof applyHighlightsToDom === "function"){
-                applyHighlightsToDom(it);
-              }
-              if(src && src.url) toast("已联网找到原文链接 · 标题下方可点击直达");
-            }
-          }catch(e){ /* 静默 */ }
-        }
-      });
-      structured = result.st;
-      fullText = structuredToText(structured);
-      ppProgressUpdate(100, "排版完成");
-      ppProgressHide(900);
-      toast("已转为可编辑文本 · 文字与 PDF 原文一致");
-    }else if(cfg && cfg.key){
-      paperEntrySubmit.disabled = true;
-      ppProgressShow("AI 正在排版(逐字保留原文)…");
-      try{
-        const result = await aiStructuredReformat(fullText, function(i, n){
-          paperEntrySubmit.innerHTML = "AI 排版 " + i + "/" + n + "…";
-          ppProgressUpdate(78 * i / n, "AI 排版中 · 第 " + i + "/" + n + " 段");
-        }, function(stage){
-          if(stage === "query") ppProgressUpdate(84, "正在联网核对论文原文…");
-        });
-        structured = result.st;
-        fullText = structuredToText(structured);
-        ppProgressUpdate(100, "排版完成");
-        ppProgressHide(900);
-        toast(result.usedAI ? "AI 排版完成 · 原文逐字保留,已归纳为标准学术结构" : "AI 暂不可用,已完成本地排版(原文不变)");
-      }catch(e){
-        ppProgressHide(0);
-        structured = parsePaperStructure(fullText);
-        fullText = structuredToText(structured);
-      }finally{
-        paperEntrySubmit.innerHTML = origLabel;
-        paperEntrySubmit.disabled = false;
-      }
-    }else{
-      /* 未配置AI: 本地排版(0改写);联网核对原文后台进行不阻塞 */
-      ppProgressShow("正在排版(转为可编辑文本)…");
-      const result = await aiStructuredReformat(fullText, null, null, {
-        onSource:function(st, src){
-          try{
-            const it = state.items.find(function(x){ return x.structured === st; });
-            if(it){
-              saveState();
-              render();
-              if(prState && prState.itemId === it.id && typeof applyHighlightsToDom === "function"){
-                applyHighlightsToDom(it);
-              }
-              if(src && src.url) toast("已联网找到原文链接 · 标题下方可点击直达");
-            }
-          }catch(e){ /* 静默 */ }
-        }
-      });
-      structured = result.st;
-      fullText = structuredToText(structured);
-      ppProgressUpdate(100, "排版完成");
-      ppProgressHide(900);
+      paperEntryStructured = null;
     }
-    paperEntryFromPdf = false;
-    paperEntryStructured = null;
     const result = addPaper(title, fullText, null, structured);
     if(result && result.error === "duplicate"){
       toast("此论文已在册中");
@@ -9731,12 +9647,6 @@ if(paperEntrySubmit){
       toast("论文内容为空");
       return;
     }
-    /* 保存字体信号到条目: 后续「一键排版」仍按原PDF层级识别 */
-    if(result && (paperEntryBoldLines || paperEntrySizeHeads)){
-      result.boldLines = paperEntryBoldLines || null;
-      result.sizeHeads = paperEntrySizeHeads || null;
-      saveState();
-    }
     /* PDF导入的图片保存到条目 */
     if(result && paperEntryImages && paperEntryImages.length){
       result.images = paperEntryImages;
@@ -9744,8 +9654,7 @@ if(paperEntrySubmit){
       render();
     }
     paperEntryImages = null;
-    paperEntryBoldLines = null;
-    paperEntrySizeHeads = null;
+    paperEntryFromPdf = false;
     closePaperEntryModal();
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
     const archive = document.getElementById("archive");
@@ -9795,15 +9704,13 @@ if(paperPdfBtn){
               paperFullTextInput.value = text;
               updatePaperEntryStats();
             }
-            paperEntryFromPdf = true;  /* Word文档行序可靠,走保真排版路径 */
+            paperEntryFromPdf = true;  /* Word文档行序可靠 */
             paperEntryImages = null;
-            paperEntryBoldLines = null;
             paperEntryStructured = null;
-            paperEntrySizeHeads = (sizeHeads.length && sizeHeads.length <= lines.length * 0.25) ? sizeHeads : null;
             if(paperTitleInput && !paperTitleInput.value.trim()){
               paperTitleInput.value = file.name.replace(/\.docx$/i, "");
             }
-            toast("Word已解析(" + lines.length + "段,识别" + (paperEntrySizeHeads ? paperEntrySizeHeads.length : 0) + "个标题)· 点「整理入册」自动排版");
+            toast("Word已解析(" + lines.length + "段)· 点「整理入册」");
           }).catch(function(e){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
@@ -9864,7 +9771,6 @@ if(paperPdfBtn){
             }
             paperEntryFromPdf = true;
             paperEntryImages = (res.images && res.images.length) ? res.images : null;
-            paperEntryBoldLines = (res.boldLines && res.boldLines.length) ? res.boldLines : null;
             paperEntryStructured = null;
             let usedEngine = "本地几何解析";
             if(gStruct && gStruct.sections && gStruct.sections.length > 0){
@@ -9905,6 +9811,13 @@ if(paperPdfBtn){
         const rawBytes = new Uint8Array(this.result);
         /* 本地路: pdf.js几何解析(需副本,pdf.js会消耗buffer) */
         const localP = pdfjsLib.getDocument({data: rawBytes.slice(0)}).promise.then(function(pdf){
+          /* 读取PDF元数据标题(知网论文通常嵌入真实标题) */
+          pdf.getMetadata().then(function(meta){
+            const mt = (meta && meta.info && meta.info.Title) ? meta.info.Title.trim() : "";
+            if(mt && mt.length >= 3 && paperTitleInput && !paperTitleInput.value.trim()){
+              paperTitleInput.value = mt;
+            }
+          }).catch(function(){});
           return extractPdfTextEnhanced(pdf, function(d, t){
             ppProgressUpdate(70 * d / t, "本地几何解析 · 第 " + d + "/" + t + " 页");
           });
@@ -9919,9 +9832,11 @@ if(paperPdfBtn){
           ppProgressUpdate(86, "GROBID 解析成功 · 结构化章节中…");
           return parseTeiToStructured(tei);
         });
-        Promise.all([localP, grobidP]).then(function(arr){
-          const res = arr[0];
-          const gStruct = arr[1];
+        /* 结果应用(本地先出,GROBID到达后升级): 彻底避免云端不可达时干等25秒 */
+        let applied = false;
+        function applyResult(res, gStruct, isUpgrade){
+          if(applied && !isUpgrade) return;
+          applied = true;
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
           ppProgressHide(300);
@@ -9935,8 +9850,6 @@ if(paperPdfBtn){
           }
           paperEntryFromPdf = true; /* 全文来自PDF导入 */
           paperEntryImages = (res.images && res.images.length) ? res.images : null;
-          paperEntryBoldLines = (res.boldLines && res.boldLines.length) ? res.boldLines : null;
-          paperEntrySizeHeads = (res.sizeHeads && res.sizeHeads.length) ? res.sizeHeads : null;
           paperEntryStructured = null;
           let usedEngine = "本地几何解析";
           /* GROBID结果采纳判定: 结构有效 + 字符保真≥90%(GROBID滤页眉页脚属正常损耗) */
@@ -9962,6 +9875,13 @@ if(paperPdfBtn){
             (paperEntryStructured ? " · 识别" + secN + "个章节" + (refN ? "+" + refN + "条参考文献" : "") : "") +
             (res.images && res.images.length ? " · 含" + res.images.length + "张图表" : "") +
             " · 点「整理入册」");
+        }
+        /* 本地结果立即应用;GROBID若在预算内到达且保真达标 → 原地升级 */
+        localP.then(function(res){
+          applyResult(res, null, false);
+          grobidP.then(function(gStruct){
+            if(gStruct) applyResult(res, gStruct, true);
+          });
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
@@ -10105,9 +10025,9 @@ function toast(msg, duration){
 })();
 </script>
 
-<!-- AI排版进度条(全局浮动) -->
+<!-- 进度条(全局浮动) -->
 <div class="pp-progress" id="ppProgress">
-  <div class="pp-prog-label"><span class="pp-pl" id="ppProgLabel">AI 排版中…</span><span class="pp-pp" id="ppProgPct">0%</span></div>
+  <div class="pp-prog-label"><span class="pp-pl" id="ppProgLabel">处理中…</span><span class="pp-pp" id="ppProgPct">0%</span></div>
   <div class="pp-prog-track"><div class="pp-prog-fill" id="ppProgFill"></div></div>
 </div>
 
