@@ -4783,6 +4783,19 @@ function grobidFidelityOk(localText, grobidText, minRatio){
   }catch(e){ return false; }
 }
 
+/* 清洗CJK字间空格: pdfjs提取中文时,常因字体编码/ToUnicode映射在汉字之间插入单个空格,
+   表现为"字 与 字 之 间 有空格"。移除CJK字符(汉字+中文标点+全角符号)之间的空白,
+   保留拉丁词间空格(英文单词分隔)和中英文边界空格。多次循环处理连续汉字夹空格。 */
+function squeezeCjkSpaces(s){
+  if(!s) return s;
+  var prev;
+  do{
+    prev = s;
+    s = s.replace(/([\u4e00-\u9fff\u3000-\u303f\uff00-\uffef])\s+([\u4e00-\u9fff\u3000-\u303f\uff00-\uffef])/g, "$1$2");
+  }while(s !== prev);
+  return s;
+}
+
 function extractPdfTextEnhanced(pdf, onPageDone){
   const numPages = pdf.numPages;
   /* 并行提取: 6路worker并发处理各页(原串行逐页,大PDF提速数倍);页序按页码索引保持 */
@@ -4879,7 +4892,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           try{
             fsize = Math.abs(it.transform[3]) || Math.abs(it.transform[0]) || 0;
           }catch(e){}
-          items.push({ x: it.transform[4], y: it.transform[5], str: it.str, w: it.width || 0, bold: bold, size: fsize });
+          items.push({ x: it.transform[4], y: it.transform[5], str: squeezeCjkSpaces(it.str), w: it.width || 0, bold: bold, size: fsize });
         }
         /* 同步收集本页文字块到全文(保留原始坐标/字号/页码,供查看器绝对定位1:1还原版面) */
         for(let bi=0; bi<items.length; bi++){
@@ -4928,6 +4941,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
               lineSize = its[j].size;
             }
           }
+          line = squeezeCjkSpaces(line);
           line = line.replace(/\s{2,}/g, " ").trim();
           if(line){
             lines.push(line);
