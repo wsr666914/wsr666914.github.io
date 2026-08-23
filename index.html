@@ -903,7 +903,7 @@
     scroll-behavior:smooth;
     transition:padding .25s ease;
   }
-  /* ===== 双栏排版(Word式左右分栏) ===== */
+  /* ===== 页边距调整(Word式) ===== */
   .pr-margin-ctl{ position:relative; }
   .pr-margin-btn{
     padding:3px 12px; border:1px solid rgba(60,72,88,.28); border-radius:8px;
@@ -913,36 +913,28 @@
   }
   .pr-margin-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
   .pr-margin-btn.on{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.12); }
-  /* 双栏正文: 内容流式左右分栏,中缝细线(还原Word双栏论文版式) */
-  #prText.pr-2col{
-    column-count:2; column-gap:2.4em;
-    column-rule:1px solid var(--line-soft);
-    max-width:100%;   /* 双栏时放宽单栏740px限制 */
+  .pr-margin-pop{
+    position:absolute; top:calc(100% + 8px); right:0; z-index:30;
+    min-width:168px; padding:8px; border-radius:12px;
+    background:#fff; border:1px solid rgba(60,72,88,.14);
+    box-shadow:0 12px 32px rgba(28,32,40,.16);
+    opacity:0; visibility:hidden; transform:translateY(-6px);
+    transition:all .18s ease;
   }
-  #prText.pr-2col h1, #prText.pr-2col h2, #prText.pr-2col h3,
-  #prText.pr-2col h4, #prText.pr-2col .pr-section-title{
-    column-span:all;   /* 标题跨栏(Word双栏文档大标题通栏惯例) */
+  .pr-margin-pop.show{ opacity:1; visibility:visible; transform:translateY(0); }
+  .pr-margin-pop-h{
+    font-size:10.5px; color:var(--ink-mute); letter-spacing:.14em;
+    padding:2px 6px 6px; border-bottom:1px solid rgba(60,72,88,.08); margin-bottom:4px;
   }
-  /* ===== Word原文文档(导入即所得) ===== */
-  .pp-word-doc{
-    font-family:"Noto Serif SC",serif; color:var(--ink);
-    white-space:normal; text-indent:0; text-align:left;  /* 覆盖pr-text的pre-wrap/2em缩进,还原Word版式 */
+  .pr-margin-opt{
+    display:flex; justify-content:space-between; align-items:baseline; width:100%;
+    padding:7px 10px; border:0; border-radius:8px; background:transparent;
+    color:var(--ink); font-family:"Noto Serif SC",serif; font-size:12.5px; cursor:pointer;
+    transition:background .15s;
   }
-  .pp-word-doc p{ text-indent:0; }
-  .pp-word-doc h1{ font-size:1.55em; font-weight:700; margin:1em 0 .5em; line-height:1.5; }
-  .pp-word-doc h2{ font-size:1.35em; font-weight:700; margin:.9em 0 .4em; line-height:1.5; }
-  .pp-word-doc h3{ font-size:1.18em; font-weight:700; margin:.8em 0 .35em; line-height:1.5; }
-  .pp-word-doc h4,.pp-word-doc h5,.pp-word-doc h6{ font-size:1.05em; font-weight:700; margin:.7em 0 .3em; line-height:1.5; }
-  .pp-word-doc p{ margin:.4em 0; line-height:1.9; }
-  .pp-word-doc ul,.pp-word-doc ol{ margin:.5em 0; padding-left:1.8em; line-height:1.9; }
-  .pp-word-doc li{ margin:.15em 0; }
-  .pp-word-doc strong{ font-weight:700; }
-  .pp-word-doc em{ font-style:italic; }
-  .pp-word-doc table{ border-collapse:collapse; margin:.8em 0; width:100%; font-size:.92em; }
-  .pp-word-doc th,.pp-word-doc td{ border:1px solid var(--line); padding:5px 9px; line-height:1.6; }
-  .pp-word-doc th{ background:rgba(60,72,88,.05); font-weight:600; }
-  .pp-word-doc img{ max-width:100%; height:auto; margin:.6em auto; display:block; border-radius:4px; }
-  .pp-word-doc a{ color:var(--teal); }
+  .pr-margin-opt span{ font-size:10px; color:var(--ink-mute); font-family:inherit; }
+  .pr-margin-opt:hover{ background:rgba(47,93,98,.08); }
+  .pr-margin-opt.on{ background:rgba(47,93,98,.12); color:var(--teal); font-weight:700; }
   .pr-text{
     max-width:740px; margin:0 auto;
     font-family:"Newsreader","Noto Serif SC",Georgia,serif;
@@ -1765,7 +1757,14 @@
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
         <div class="pr-margin-ctl">
-          <button class="pr-margin-btn" id="prColBtn" title="双栏排版(左右分栏,还原Word双栏论文版式)">◫ 双栏</button>
+          <button class="pr-margin-btn" id="prMarginBtn" title="调整正文页边距(类似Word)">▤ 边距</button>
+          <div class="pr-margin-pop" id="prMarginPop">
+            <div class="pr-margin-pop-h">页边距</div>
+            <button class="pr-margin-opt" data-m="narrow">窄 <span>17px / 32px</span></button>
+            <button class="pr-margin-opt" data-m="normal">适中 <span>36px / 56px</span></button>
+            <button class="pr-margin-opt" data-m="wide">宽 <span>64px / 96px</span></button>
+            <button class="pr-margin-opt" data-m="xwide">超宽 <span>96px / 140px</span></button>
+          </div>
         </div>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
@@ -3132,19 +3131,6 @@ function afterLogin(){
   state.trash = [];
   loadState();
   migrateItems();
-  /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
-  try{
-    const users = getUsers();
-    if(currentUser && users[currentUser] && !users[currentUser].code){
-      users[currentUser].code = genSyncCode();
-      saveUsers(users);
-      setTimeout(function(){
-        syncPushNow();
-        showSyncCodeModal();
-        toast("已为该账号生成身份码(多设备同步已开通,请妥善保存)", 5000);
-      }, 1200);
-    }
-  }catch(e){ /* 静默 */ }
   purgeExpiredTrash();   /* 回收站7天自动清空 */
   updateTrashBtn();      /* 导航徽章 */
   render();
@@ -5236,7 +5222,7 @@ function cleanPaperText(text){
 }
 
 /* 录入论文 */
-function addPaper(title, fullText, analysis, structured, html){
+function addPaper(title, fullText, analysis, structured){
   const trimmedText = fullText.trim();
   if(!trimmedText) return { error:"empty" };
   /* 提取标题:用户指定 > 首个"真实标题行"(跳过作者名/学校/文献编号等噪声行) > 前40字
@@ -5285,7 +5271,6 @@ function addPaper(title, fullText, analysis, structured, html){
     outline: outline,
     analysis: paperAnalysis,
     structured: structured || null,
-    html: html || null,   /* Word保真HTML: 有值时阅读器按原版式渲染(导入即所得) */
     highlights: [],
     addedAt: new Date().toISOString()
   };
@@ -5299,14 +5284,13 @@ function addPaper(title, fullText, analysis, structured, html){
 /* 论文查看器状态 */
 let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false };
 
-/* 推入操作历史(撤销用): 记录全文+结构化排版+Word保真HTML变更前的快照 */
+/* 推入操作历史(撤销用): 记录全文+结构化排版变更前的快照 */
 function pushTextHistory(item){
   if(!item) return;
   prState.history.push({
     type:"text",
     fullText:item.fullText,
-    structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-    html: item.html || null
+    structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
   });
   if(prState.history.length > 50) prState.history.shift();
   prState.redoHistory = [];   /* 产生新操作 → 重做链失效(标准undo语义) */
@@ -5337,8 +5321,7 @@ function openPaperReader(itemId){
     analysis: item.analysis,
     highlights: item.highlights,
     description: item.description,
-    structured: item.structured || null,
-    html: item.html || null
+    structured: item.structured || null
   }));
   updateSaveBtnState();
 
@@ -5562,26 +5545,46 @@ function openPaperReader(itemId){
     };
   }
 
-  /* ===== 双栏排版切换(Word式左右分栏): 记忆偏好 ===== */
-  const prColBtn = document.getElementById("prColBtn");
-  if(prColBtn){
-    function applyCols(on){
-      const pt = document.getElementById("prText");
-      if(!pt) return;
-      pt.classList.toggle("pr-2col", !!on);
-      prColBtn.classList.toggle("on", !!on);
-      try{ localStorage.setItem(STORAGE_KEY + "_cols", on ? "1" : "0"); }catch(e){}
-    }
-    /* 恢复上次偏好 */
-    let savedCols = "0";
-    try{ savedCols = localStorage.getItem(STORAGE_KEY + "_cols") || "0"; }catch(e){}
-    applyCols(savedCols === "1");
-    prColBtn.onclick = function(){
-      const pt = document.getElementById("prText");
-      const nowOn = !(pt && pt.classList.contains("pr-2col"));
-      applyCols(nowOn);
-      toast(nowOn ? "已切换双栏排版(标题通栏)" : "已切换单栏排版");
+  /* ===== 页边距调整(Word式): 窄/适中/宽/超宽,记忆到本地 ===== */
+  const prMarginBtn = document.getElementById("prMarginBtn");
+  const prMarginPop = document.getElementById("prMarginPop");
+  if(prMarginBtn && prMarginPop){
+    const MARGINS = {
+      narrow: { tb: 17, lr: 32 },
+      normal: { tb: 36, lr: 56 },
+      wide:   { tb: 64, lr: 96 },
+      xwide:  { tb: 96, lr: 140 }
     };
+    function applyMargin(m){
+      const conf = MARGINS[m] || MARGINS.normal;
+      const wrap = document.getElementById("prTextWrap");
+      if(wrap) wrap.style.padding = conf.tb + "px " + conf.lr + "px 80px";
+      try{ localStorage.setItem(STORAGE_KEY + "_margin", m); }catch(e){}
+      const opts = prMarginPop.querySelectorAll(".pr-margin-opt");
+      for(let j=0; j<opts.length; j++) opts[j].classList.toggle("on", opts[j].dataset.m === m);
+    }
+    /* 恢复上次边距 */
+    let savedM = "normal";
+    try{ savedM = localStorage.getItem(STORAGE_KEY + "_margin") || "normal"; }catch(e){}
+    applyMargin(savedM);
+    prMarginBtn.onclick = function(e){
+      e.stopPropagation();
+      prMarginPop.classList.toggle("show");
+    };
+    const mOpts = prMarginPop.querySelectorAll(".pr-margin-opt");
+    for(let j=0; j<mOpts.length; j++){
+      mOpts[j].onclick = function(){
+        applyMargin(this.dataset.m);
+        prMarginPop.classList.remove("show");
+        toast("页边距已调整为「" + this.textContent.replace(/\s+/g, " ").trim().split(" ")[0] + "」");
+      };
+    }
+    /* 点击面板外关闭 */
+    document.addEventListener("click", function(e){
+      if(prMarginPop.classList.contains("show") && !e.target.closest(".pr-margin-ctl")){
+        prMarginPop.classList.remove("show");
+      }
+    });
   }
 
   /* 撤销最近一次操作(删除/排版/标注) */
@@ -5836,12 +5839,6 @@ function extractRefBlock(lines){
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
-  /* Word保真HTML最优先: "导入即所得"——mammoth解析的原版式(标题层级/加粗/列表/表格)
-     原样渲染,可在工具栏切「◫ 双栏」还原Word左右分栏论文版式 */
-  if(item.html){
-    prText.innerHTML = '<div class="pp-word-doc">' + item.html + '</div>';
-    return;
-  }
   /* 结构化排版优先: AI/本地归纳出的标准结构 → 美观渲染 */
   if(item.structured && (item.structured.sections || item.structured.abstract)){
     renderStructuredPaper(item, prText);
@@ -6095,14 +6092,12 @@ function undoLastAction(){
     prState.redoHistory.push({
       type:"text",
       fullText:item.fullText,
-      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-      html: item.html || null
+      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
     });
     if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-    /* 回退全文+结构化排版+Word保真HTML(撤销键盘编辑/删除/排版/清理) */
+    /* 回退全文+结构化排版(撤销键盘编辑/删除/排版/清理) */
     item.fullText = op.fullText;
     item.structured = op.structured || null;
-    item.html = op.html || null;
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
@@ -6135,13 +6130,11 @@ function redoLastAction(){
     prState.history.push({
       type:"text",
       fullText:item.fullText,
-      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-      html: item.html || null
+      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
     });
     if(prState.history.length > 50) prState.history.shift();
     item.fullText = op.fullText;
     item.structured = op.structured || null;
-    item.html = op.html || null;
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
@@ -6176,7 +6169,6 @@ function closePaperReader(){
         item.highlights = prState.snapshot.highlights;
         item.description = prState.snapshot.description;
         item.structured = prState.snapshot.structured || null;
-        item.html = prState.snapshot.html || null;
         saveState();
         render();
       }
@@ -6308,24 +6300,6 @@ function rebuildFromDom(item){
   const prText = document.getElementById("prText");
   if(!prText || !item) return;
   try{
-    /* Word保真模式: html字段有值 → 当前DOM原样回写html(编辑/标注不丢失),
-       fullText从DOM提取纯文本(供检索/统计/摘要)
-       注意: 保存html前在"克隆节点"上剥离标注包装(mark.hl等),
-       标注数据只存item.highlights,防止下次渲染双重标注;活DOM不受影响 */
-    if(item.html){
-      const wordEl = prText.querySelector(".pp-word-doc");
-      if(wordEl){
-        const clone = wordEl.cloneNode(true);
-        unwrapWordAnnotations(clone);
-        item.html = clone.innerHTML;
-        item.fullText = domToPlainText(clone);
-        item.highlights = extractHighlightsFromDom(prText);
-        item.outline = generateOutline(item.fullText);
-        item.analysis = analyzePaper(item.fullText);
-        item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段(Word版式)";
-      }
-      return;
-    }
     if(item.structured && (item.structured.sections || item.structured.abstract)){
       const doc = prText.querySelector(".pp-doc");
       if(doc){
@@ -6423,45 +6397,11 @@ function domToPlainText(root){
     const t = el.textContent.replace(/\u00A0/g, " ").trim();
     if(el.classList.contains("pr-para-line") || el.tagName === "P" || el.tagName === "DIV" || el.tagName === "H4"){
       lines.push(t);
-    }else if((el.tagName === "UL" || el.tagName === "OL") && !el.classList.contains("pp-refs")){
-      /* Word列表 → 逐项一行(保持条目独立可识别) */
-      const lis = el.querySelectorAll(":scope > li");
-      for(let j=0; j<lis.length; j++){
-        const lt = lis[j].textContent.replace(/\u00A0/g, " ").trim();
-        if(lt) lines.push(lt);
-      }
-    }else if(el.tagName === "TABLE"){
-      /* Word表格 → 逐行单元格,制表符分隔 */
-      const trs = el.querySelectorAll("tr");
-      for(let j=0; j<trs.length; j++){
-        const cells = trs[j].querySelectorAll("th,td");
-        const cellsText = [];
-        for(let k=0; k<cells.length; k++){
-          const ct = cells[k].textContent.replace(/\u00A0/g, " ").trim();
-          if(ct) cellsText.push(ct);
-        }
-        if(cellsText.length) lines.push(cellsText.join("\t"));
-      }
     }else if(t){
       lines.push(t);
     }
   }
   return lines.join("\n");
-}
-
-/* 剥离Word保真HTML中的标注包装元素(mark.hl/strong.pr-bold/u.pr-underline/u.pr-note)
-   保存html前调用: 标注数据存item.highlights,html里只留纯净排版,防止双重标注 */
-function unwrapWordAnnotations(root){
-  if(!root) return;
-  const marks = root.querySelectorAll("mark.hl, strong.pr-bold, u.pr-underline, u.pr-note");
-  for(let i=marks.length - 1; i >= 0; i--){
-    const m = marks[i];
-    const parent = m.parentNode;
-    if(!parent) continue;
-    while(m.firstChild) parent.insertBefore(m.firstChild, m);
-    parent.removeChild(m);
-    parent.normalize();   /* 合并相邻文本节点 */
-  }
 }
 
 /* input 防抖同步: Word式编辑时每700ms把DOM变化写回数据(不写localStorage,点保存才写) */
@@ -10368,7 +10308,6 @@ function openPaperEntryModal(){
   paperEntryFromPdf = false;
   paperEntryImages = null;
   paperEntryStructured = null;
-  paperEntryHtml = null;
   updatePaperEntryStats();
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
@@ -10408,7 +10347,6 @@ if(paperFullTextInput){
 let paperEntryFromPdf = false; /* 全文是否来自PDF导入 */
 let paperEntryImages = null;  /* PDF导入提取的图片 */
 let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:导入时已完成,直接入册 */
-let paperEntryHtml = null;    /* Word(.docx)保真HTML: mammoth解析原文版式,入册后阅读器原样渲染 */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
@@ -10425,8 +10363,7 @@ if(paperEntrySubmit){
       structured = paperEntryStructured;
       paperEntryStructured = null;
     }
-    const entryHtml = paperEntryHtml;
-    const result = addPaper(title, fullText, null, structured, entryHtml);
+    const result = addPaper(title, fullText, null, structured);
     if(result && result.error === "duplicate"){
       toast("此论文已在册中");
       return;
@@ -10443,7 +10380,6 @@ if(paperEntrySubmit){
     }
     paperEntryImages = null;
     paperEntryFromPdf = false;
-    paperEntryHtml = null;
     closePaperEntryModal();
     toast("论文已入册 · 可点击「查看全文」阅读并标注");
     const archive = document.getElementById("archive");
@@ -10452,30 +10388,6 @@ if(paperEntrySubmit){
 }
 
 /* ===== 录入弹窗文档导入(PDF / Word / CAJ) ===== */
-/* Word HTML清洗: 去脚本/事件属性/危险协议,保留全部排版元素(标题层级/加粗/斜体/列表/表格/图片)
-   "导入即所得"——mammoth产出的结构化HTML原样入册,阅读器按Word原版式渲染 */
-function sanitizeWordHtml(raw){
-  if(!raw) return "";
-  const doc = new DOMParser().parseFromString(raw, "text/html");
-  /* 1. 移除危险节点(script/style/link/meta/iframe/object/embed) */
-  const killers = doc.querySelectorAll("script,style,link,meta,iframe,object,embed,form,input,button");
-  for(let i=killers.length - 1; i >= 0; i--) killers[i].remove();
-  /* 2. 清洗全部元素: 剥离事件属性/on*句柄/危险协议href,保留语义排版属性 */
-  const all = doc.querySelectorAll("*");
-  for(let i=0; i<all.length; i++){
-    const el = all[i];
-    const attrs = Array.prototype.slice.call(el.attributes);
-    for(let j=0; j<attrs.length; j++){
-      const name = attrs[j].name.toLowerCase();
-      const val = (attrs[j].value || "").trim().toLowerCase();
-      if(name.startsWith("on")){ el.removeAttribute(attrs[j].name); continue; }
-      if((name === "href" || name === "src") && val && !/^(https?:|data:image\/|#|mailto:)/.test(val)){
-        el.removeAttribute(attrs[j].name);   /* javascript:等危险协议 */
-      }
-    }
-  }
-  return (doc.body ? doc.body.innerHTML : "").trim();
-}
 const paperPdfBtn = document.getElementById("paperPdfBtn");
 if(paperPdfBtn){
   paperPdfBtn.onclick = function(){
@@ -10488,9 +10400,7 @@ if(paperPdfBtn){
       if(file.size > 20*1024*1024){ toast("文件过大(超20MB)"); return; }
       const fname = file.name.toLowerCase();
       if(fname.endsWith(".docx")){
-        /* ---- Word(.docx)导入: mammoth解析 → 原文HTML保真保存
-              "导入即所得": h1-h6标题层级/加粗/斜体/下划线/列表/表格/图片 原样保留,
-              阅读器按Word原版式渲染,可在工具栏切「◫ 双栏」还原双栏论文 ---- */
+        /* ---- Word(.docx)导入: mammoth解析,标题层级从h1~h3原生保留 ---- */
         if(!window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
         paperPdfBtn.innerHTML = "⇪ 解析中…";
@@ -10499,17 +10409,19 @@ if(paperPdfBtn){
           mammoth.convertToHtml({ arrayBuffer: this.result }).then(function(r){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
-            /* 清洗HTML(去脚本/事件属性,保留全部排版元素) */
-            const clean = sanitizeWordHtml(r.value || "");
-            const doc = new DOMParser().parseFromString(clean, "text/html");
+            const doc = new DOMParser().parseFromString(r.value, "text/html");
             const lines = [];
-            const blocks = doc.body ? doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li,td,th") : [];
+            const sizeHeads = [];   /* Word标题样式 → 层级 */
+            const blocks = doc.body ? doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li") : [];
             for(let i=0; i<blocks.length; i++){
               const el = blocks[i];
-              /* 跳过嵌套重复提取: li内的p/td内嵌套行 → 由最外层块统一提取 */
-              if(el.parentElement && el.parentElement.closest("h1,h2,h3,h4,h5,h6,p,li,td,th")) continue;
               const t = (el.textContent || "").replace(/\s+/g, " ").trim();
-              if(t) lines.push(t);
+              if(!t) continue;
+              lines.push(t);
+              const tag = el.tagName.toLowerCase();
+              if(tag === "h1") sizeHeads.push({ line: t, level: 1 });
+              else if(tag === "h2") sizeHeads.push({ line: t, level: 2 });
+              else if(tag === "h3" || tag === "h4") sizeHeads.push({ line: t, level: 3 });
             }
             const text = lines.join("\n");
             if(text.trim().length < 50){ toast("Word文档文本过少,请检查文件"); return; }
@@ -10520,14 +10432,10 @@ if(paperPdfBtn){
             paperEntryFromPdf = true;  /* Word文档行序可靠 */
             paperEntryImages = null;
             paperEntryStructured = null;
-            paperEntryHtml = clean;    /* 原文HTML入册(保真渲染) */
-            /* 智能标题: Word首行样式标题(h1/h2) > 文件名 */
             if(paperTitleInput && !paperTitleInput.value.trim()){
-              const h1 = doc.body ? doc.body.querySelector("h1,h2") : null;
-              const ht = h1 ? (h1.textContent || "").replace(/\s+/g, " ").trim() : "";
-              paperTitleInput.value = (ht && ht.length >= 3 && ht.length <= 120) ? ht : file.name.replace(/\.docx$/i, "");
+              paperTitleInput.value = file.name.replace(/\.docx$/i, "");
             }
-            toast("Word已按原版式解析(" + lines.length + "段)· 点「整理入册」");
+            toast("Word已解析(" + lines.length + "段)· 点「整理入册」");
           }).catch(function(e){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
