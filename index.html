@@ -246,6 +246,33 @@
   .stat{ animation: statIn .45s cubic-bezier(.2,.7,.3,1) both; }
   @keyframes statIn{ from{ opacity:0; transform: translateY(10px); } to{ opacity:1; transform:none; } }
 
+  /* ============ 随笔日期输入 (年/月/日 分框, 汉字固定不可删) ============ */
+  .essay-date-input{ display:inline-flex; align-items:center; gap:1px; flex-wrap:wrap; }
+  .essay-date-input input{
+    width:4.2em; padding:6px 8px; border:1px solid var(--line); border-radius:8px;
+    background:transparent; color:var(--ink); font-family:"JetBrains Mono", monospace;
+    font-size:14px; text-align:center;
+    transition:border-color .18s, box-shadow .18s;
+  }
+  .essay-date-input input:focus{ outline:none; border-color:var(--ink-soft); box-shadow:0 0 0 3px rgba(60,40,20,.08); }
+  .essay-date-input input::placeholder{ color:var(--ink-mute); font-size:12px; }
+  .edi-unit{ color:var(--ink-soft); font-family:"Newsreader","Noto Serif SC",serif; font-size:14px; padding:0 4px 0 1px; user-select:none; }
+
+  /* ============ 随笔按月筛选条 ============ */
+  .essay-month-bar{ max-width:var(--maxw); margin:0 auto; padding:6px 28px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .essay-month-bar .label{ font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); margin-right:8px; }
+  .em-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .em-chip{
+    display:inline-flex; align-items:center; padding:5px 12px; border:1px solid var(--line);
+    background:transparent; color:var(--ink-soft); border-radius:999px; cursor:pointer;
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
+    transition: transform .18s cubic-bezier(.2,.7,.3,1), border-color .18s, color .18s, box-shadow .18s;
+    animation: chipIn .4s cubic-bezier(.2,.7,.3,1) both;
+  }
+  .em-chip:hover{ transform: translateY(-2px); box-shadow:0 4px 12px rgba(60,40,20,.10); border-color:var(--ink-soft); color:var(--ink); }
+  .em-chip:active{ transform: scale(.96); }
+  .em-chip.active{ background:var(--cat-color, var(--ink)); color:#fff8e7; border-color:var(--cat-color, var(--ink)); }
+
   /* ============ 工具栏 ============ */
   .toolbar{
     max-width:var(--maxw); margin:0 auto; padding:0 28px 16px;
@@ -1626,6 +1653,12 @@
   <button class="modal-btn" id="bulkCancel">退出</button>
 </div>
 
+<!-- 随笔按月筛选条 (仅随笔门类显示) -->
+<div class="essay-month-bar" id="essayMonthBar" style="display:none">
+  <span class="label">按月</span>
+  <div class="em-chips" id="essayMonthChips"></div>
+</div>
+
 <!-- 识别列表模态框 -->
 <div class="modal-bg" id="pendingModal">
   <div class="modal modal-batch">
@@ -1710,7 +1743,14 @@
     </div>
     <div class="modal-field" id="essayDateField" style="display:none">
       <label>随笔时间</label>
-      <input type="datetime-local" id="essayDate" autocomplete="off" title="手动填写这篇随笔的写作时间" />
+      <div class="essay-date-input" id="essayDateInput">
+        <input type="text" id="essayYear"  inputmode="numeric" maxlength="4" placeholder="年" autocomplete="off" title="填写年份(4位)" />
+        <span class="edi-unit">年</span>
+        <input type="text" id="essayMonth" inputmode="numeric" maxlength="2" placeholder="月" autocomplete="off" title="填写月份(1-12)" />
+        <span class="edi-unit">月</span>
+        <input type="text" id="essayDay"   inputmode="numeric" maxlength="2" placeholder="日" autocomplete="off" title="填写日期(1-31)" />
+        <span class="edi-unit">日</span>
+      </div>
     </div>
     <div class="modal-field">
       <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ —— 双引擎解析(Zotero同款GROBID云端引擎+本地几何),自动识别双栏排版/章节结构/参考文献/真实标题">⇪ 导入文档</button></label>
@@ -2791,7 +2831,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120 };
+const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayMonthFilter: null };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -9176,6 +9216,7 @@ function migrateItems(){
 function render(){
   renderStats();
   renderFilters();
+  renderEssayMonthBar();
   renderGallery();
 }
 
@@ -9322,6 +9363,52 @@ function renderFilters(){
   initChipDnD(); /* 启用拖拽重排门类顺序 */
 }
 
+/* 随笔按月筛选条: 仅在筛选「随笔」门类时显示; 未选时随笔按写作时间倒序(最新在前) */
+function renderEssayMonthBar(){
+  const bar = document.getElementById("essayMonthBar");
+  const chips = document.getElementById("essayMonthChips");
+  if(!bar || !chips) return;
+  /* 非随笔门类时隐藏 */
+  if(state.filter !== "essay"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  bar.style.display = "";
+  /* 设置随笔主题色,供 active 态使用 */
+  const essayCat = CATEGORIES.essay;
+  if(essayCat) bar.style.setProperty("--cat-color", essayCat.color);
+  /* 收集所有随笔的年月(基于 writtenAt) 并去重, 降序排列 */
+  const months = new Set();
+  state.items.forEach(function(it){
+    if(it.category === "essay" && it.writtenAt){
+      const d = new Date(it.writtenAt);
+      if(isNaN(d.getTime())) return;
+      const ym = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+      months.add(ym);
+    }
+  });
+  const sortedMonths = Array.from(months).sort().reverse(); /* 最近的月份在前 */
+  /* 若当前筛选月份已不存在(随笔被删/改时间) → 自动回退到「全部时间」 */
+  if(state.essayMonthFilter && sortedMonths.indexOf(state.essayMonthFilter) < 0){
+    state.essayMonthFilter = null;
+  }
+  /* 生成按钮: 全部时间 + 各年月 */
+  let html = '<button class="em-chip ' + (state.essayMonthFilter === null ? 'active' : '') + '" data-month="all">全部时间</button>';
+  for(let i=0; i<sortedMonths.length; i++){
+    const ym = sortedMonths[i];
+    const parts = ym.split("-");
+    const label = parts[0] + "年" + parseInt(parts[1],10) + "月";
+    html += '<button class="em-chip ' + (state.essayMonthFilter === ym ? 'active' : '') + '" data-month="' + ym + '">' + label + '</button>';
+  }
+  chips.innerHTML = html;
+  /* 绑定筛选事件 */
+  const btns = chips.querySelectorAll(".em-chip");
+  for(let i=0; i<btns.length; i++){
+    btns[i].onclick = function(){
+      state.essayMonthFilter = this.dataset.month === "all" ? null : this.dataset.month;
+      state.galleryLimit = 120; /* 切换筛选从头显示 */
+      render();
+    };
+  }
+}
+
 function renderGallery(){
   const el = document.getElementById("archive");
   if(!el) return;
@@ -9330,6 +9417,23 @@ function renderGallery(){
   let items = state.items;
   if(state.filter !== "all") items = items.filter(function(i){ return i.category === state.filter; });
   if(q) items = items.filter(function(i){ return i.name.toLowerCase().indexOf(q) >= 0; });
+
+  /* 随笔: 按月筛选 + 按写作时间倒序(最新在前,无筛选时同样倒序) */
+  if(state.filter === "essay"){
+    if(state.essayMonthFilter){
+      items = items.filter(function(i){
+        if(!i.writtenAt) return false;
+        const d = new Date(i.writtenAt);
+        const ym = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
+        return ym === state.essayMonthFilter;
+      });
+    }
+    items = items.slice().sort(function(a,b){
+      const ta = a.writtenAt ? new Date(a.writtenAt).getTime() : (a.addedAt || 0);
+      const tb = b.writtenAt ? new Date(b.writtenAt).getTime() : (b.addedAt || 0);
+      return tb - ta; /* 倒序: 时间大的在前 */
+    });
+  }
 
   if(items.length === 0){
     const big = state.items.length===0 ? "志录尚虚" : "未有所录";
@@ -10370,8 +10474,43 @@ const paperBtn = document.getElementById("paperBtn");
 const paperEntryModal = document.getElementById("paperEntryModal");
 const paperTitleInput = document.getElementById("paperTitle");
 const paperFullTextInput = document.getElementById("paperFullText");
-const essayDateInput = document.getElementById("essayDate");
+const essayYearInput  = document.getElementById("essayYear");
+const essayMonthInput = document.getElementById("essayMonth");
+const essayDayInput   = document.getElementById("essayDay");
 const paperEntryStats = document.getElementById("paperEntryStats");
+
+/* 随笔日期: 年/月/日分框 —— 数字可删可改,「年月日」汉字固定不可删 */
+function fillEssayDateInputs(d){
+  d = d || new Date();
+  const pad = function(n){ return String(n).padStart(2,"0"); };
+  if(essayYearInput)  essayYearInput.value  = d.getFullYear();
+  if(essayMonthInput) essayMonthInput.value = pad(d.getMonth()+1);
+  if(essayDayInput)   essayDayInput.value   = pad(d.getDate());
+}
+function getEssayDateValue(){
+  const y = essayYearInput  ? essayYearInput.value.trim()  : "";
+  const m = essayMonthInput ? essayMonthInput.value.trim() : "";
+  const d = essayDayInput   ? essayDayInput.value.trim()   : "";
+  if(!y || !m || !d) return "";
+  const yi = parseInt(y,10), mi = parseInt(m,10), di = parseInt(d,10);
+  if(!yi || !mi || !di) return "";
+  if(mi < 1 || mi > 12 || di < 1 || di > 31) return "";
+  /* 用中午12点构造,避免时区边界导致日期漂移 */
+  const dt = new Date(yi, mi-1, di, 12, 0, 0);
+  if(isNaN(dt.getTime())) return "";
+  return dt.toISOString();
+}
+function clearEssayDateInputs(){
+  if(essayYearInput)  essayYearInput.value = "";
+  if(essayMonthInput) essayMonthInput.value = "";
+  if(essayDayInput)   essayDayInput.value = "";
+}
+/* 录入框自动跳格: 年填满4位→月, 月填满2位→日 */
+(function bindEssayDateAutoTab(){
+  const jump = function(cur, next){ if(cur && next && cur.value.length >= (cur.maxLength||2)){ next.focus(); next.select && next.select(); } };
+  if(essayYearInput)  essayYearInput.addEventListener("input", function(){ jump(essayYearInput, essayMonthInput); });
+  if(essayMonthInput) essayMonthInput.addEventListener("input", function(){ jump(essayMonthInput, essayDayInput); });
+})();
 const paperEntrySubmit = document.getElementById("paperEntrySubmit");
 const paperEntryCancel = document.getElementById("paperEntryCancel");
 
@@ -10395,16 +10534,13 @@ function openPaperEntryModal(category){
   if(pdfBtn) pdfBtn.style.display = isEssay ? "none" : "";
   const convertTip = paperEntryModal ? paperEntryModal.querySelector(".pp-convert-tip") : null;
   if(convertTip) convertTip.style.display = isEssay ? "none" : "";
-  /* 随笔: 隐藏标题框(标题从正文首行自动提取), 显示「随笔时间」并预填当前本地时间; 论文: 反之 */
+  /* 随笔: 隐藏标题框(标题从正文首行自动提取), 显示「随笔时间」并预填当前日期; 论文: 反之 */
   const titleField = paperTitleInput ? paperTitleInput.closest(".modal-field") : null;
   const dateField = document.getElementById("essayDateField");
   if(titleField) titleField.style.display = isEssay ? "none" : "";
   if(dateField) dateField.style.display = isEssay ? "" : "none";
-  if(essayDateInput){
-    const now = new Date();
-    const pad = function(n){ return String(n).padStart(2,"0"); };
-    essayDateInput.value = now.getFullYear() + "-" + pad(now.getMonth()+1) + "-" + pad(now.getDate()) + "T" + pad(now.getHours()) + ":" + pad(now.getMinutes());
-  }
+  if(isEssay) fillEssayDateInputs(new Date());
+  else clearEssayDateInputs();
   /* 标题/说明/字段文案随分类切换 (用 closest 精确定位, 不依赖字段顺序) */
   if(paperEntryModal){
     const h3 = paperEntryModal.querySelector("h3");
@@ -10460,9 +10596,19 @@ if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
     const fullText = paperFullTextInput ? paperFullTextInput.value : "";
-    const essayDateVal = (paperEntryCategory === "essay" && essayDateInput) ? essayDateInput.value : "";
+    const isEssay = paperEntryCategory === "essay";
+    /* 随笔: 必须填写写作日期(年月日),数字可自由编辑,「年月日」汉字固定 */
+    let essayDateVal = "";
+    if(isEssay){
+      essayDateVal = getEssayDateValue();
+      if(!essayDateVal){
+        toast("请填写随笔时间(年/月/日)");
+        if(essayYearInput){ essayYearInput.focus(); essayYearInput.select(); }
+        return;
+      }
+    }
     if(!fullText.trim()){
-      toast("请粘贴" + (paperEntryCategory === "essay" ? "随笔" : "论文") + "全文");
+      toast("请粘贴" + (isEssay ? "随笔" : "论文") + "全文");
       return;
     }
     /* PDF导入: 原文直接入册,不经过任何AI排版/改写
@@ -10473,7 +10619,6 @@ if(paperEntrySubmit){
       structured = paperEntryStructured;
       paperEntryStructured = null;
     }
-    const isEssay = paperEntryCategory === "essay";
     const noun = isEssay ? "随笔" : "论文";
     const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal);
     if(result && result.error === "duplicate"){
