@@ -821,10 +821,83 @@
     transform:translateY(-1px); box-shadow:0 3px 8px rgba(47,93,98,.18);
   }
   .pp-convert-note{ margin-top:7px; font-size:10.5px; color:var(--ink-mute); line-height:1.6; }
+  /* ===== 回收站 ===== */
+  .trash-badge{
+    display:inline-block; min-width:16px; margin-left:5px; padding:0 4px;
+    border-radius:99px; background:#B0432C; color:#fff; font-size:9.5px;
+    font-family:inherit; line-height:15px; text-align:center; vertical-align:2px;
+  }
+  .trash-badge:empty{ display:none; }
+  .trash-modal{ width:min(560px, 92vw); }
+  .trash-tip{
+    padding:8px 12px; margin-bottom:10px; border-radius:8px;
+    background:rgba(176,67,44,.06); border:1px solid rgba(176,67,44,.16);
+    font-size:11.5px; color:var(--ink-mute); line-height:1.7;
+  }
+  .trash-list{ max-height:46vh; overflow-y:auto; margin-bottom:14px; }
+  .trash-empty{
+    padding:36px 0; text-align:center; color:var(--ink-mute);
+    font-size:13px; letter-spacing:.08em;
+  }
+  .trash-item{
+    display:flex; align-items:center; gap:10px; padding:10px 12px; margin-bottom:8px;
+    border:1px solid rgba(60,72,88,.12); border-radius:10px; background:rgba(60,72,88,.02);
+    transition:all .18s;
+  }
+  .trash-item:hover{ border-color:rgba(47,93,98,.35); background:rgba(47,93,98,.04); }
+  .trash-item-info{ flex:1; min-width:0; }
+  .trash-item-name{
+    font-size:13.5px; font-weight:600; color:var(--ink);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .trash-item-meta{ margin-top:3px; font-size:10.5px; color:var(--ink-mute); }
+  .trash-item-meta b{ color:#B0432C; font-weight:600; }
+  .trash-item-act{ display:flex; gap:6px; flex-shrink:0; }
+  .trash-restore-btn, .trash-forever-btn{
+    padding:4px 12px; border-radius:7px; font-size:11.5px; font-weight:600; cursor:pointer;
+    font-family:"Noto Serif SC",serif; transition:all .18s;
+  }
+  .trash-restore-btn{ border:1px solid rgba(47,93,98,.4); background:transparent; color:var(--teal); }
+  .trash-restore-btn:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
+  .trash-forever-btn{ border:1px solid rgba(176,67,44,.35); background:transparent; color:#B0432C; }
+  .trash-forever-btn:hover{ background:#B0432C; color:#fff; border-color:#B0432C; }
   .pr-text-wrap{
     flex:1; overflow-y:auto; padding:36px 56px 80px;
     scroll-behavior:smooth;
+    transition:padding .25s ease;
   }
+  /* ===== 页边距调整(Word式) ===== */
+  .pr-margin-ctl{ position:relative; }
+  .pr-margin-btn{
+    padding:3px 12px; border:1px solid rgba(60,72,88,.28); border-radius:8px;
+    background:rgba(60,72,88,.05); color:var(--ink-soft); cursor:pointer;
+    font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:12.5px; font-weight:600;
+    letter-spacing:.04em; transition:all .2s; white-space:nowrap;
+  }
+  .pr-margin-btn:hover{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.08); }
+  .pr-margin-btn.on{ border-color:var(--teal); color:var(--teal); background:rgba(47,93,98,.12); }
+  .pr-margin-pop{
+    position:absolute; top:calc(100% + 8px); right:0; z-index:30;
+    min-width:168px; padding:8px; border-radius:12px;
+    background:#fff; border:1px solid rgba(60,72,88,.14);
+    box-shadow:0 12px 32px rgba(28,32,40,.16);
+    opacity:0; visibility:hidden; transform:translateY(-6px);
+    transition:all .18s ease;
+  }
+  .pr-margin-pop.show{ opacity:1; visibility:visible; transform:translateY(0); }
+  .pr-margin-pop-h{
+    font-size:10.5px; color:var(--ink-mute); letter-spacing:.14em;
+    padding:2px 6px 6px; border-bottom:1px solid rgba(60,72,88,.08); margin-bottom:4px;
+  }
+  .pr-margin-opt{
+    display:flex; justify-content:space-between; align-items:baseline; width:100%;
+    padding:7px 10px; border:0; border-radius:8px; background:transparent;
+    color:var(--ink); font-family:"Noto Serif SC",serif; font-size:12.5px; cursor:pointer;
+    transition:background .15s;
+  }
+  .pr-margin-opt span{ font-size:10px; color:var(--ink-mute); font-family:inherit; }
+  .pr-margin-opt:hover{ background:rgba(47,93,98,.08); }
+  .pr-margin-opt.on{ background:rgba(47,93,98,.12); color:var(--teal); font-weight:700; }
   .pr-text{
     max-width:740px; margin:0 auto;
     font-family:"Newsreader","Noto Serif SC",Georgia,serif;
@@ -1443,6 +1516,7 @@
       <a href="#" id="exportBtn">导出</a>
       <a href="#" id="importBtn" title="导入JSON备份文件恢复数据">导入</a>
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
+      <a href="#" id="navTrash" title="回收站:删除的记录保留7天,可恢复或彻底删除">🗑 回收站<span class="trash-badge" id="trashBadge"></span></a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -1639,6 +1713,16 @@
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
         </div>
+        <div class="pr-margin-ctl">
+          <button class="pr-margin-btn" id="prMarginBtn" title="调整正文页边距(类似Word)">▤ 边距</button>
+          <div class="pr-margin-pop" id="prMarginPop">
+            <div class="pr-margin-pop-h">页边距</div>
+            <button class="pr-margin-opt" data-m="narrow">窄 <span>17px / 32px</span></button>
+            <button class="pr-margin-opt" data-m="normal">适中 <span>36px / 56px</span></button>
+            <button class="pr-margin-opt" data-m="wide">宽 <span>64px / 96px</span></button>
+            <button class="pr-margin-opt" data-m="xwide">超宽 <span>96px / 140px</span></button>
+          </div>
+        </div>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
@@ -1668,6 +1752,19 @@
         <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- 回收站弹窗 -->
+<div class="modal-bg" id="trashModal">
+  <div class="modal trash-modal">
+    <h3>🗑 回收站 <span class="sub">删除的记录保留 7 天</span></h3>
+    <div class="trash-tip">误删的条目可随时恢复回原分类;超过 7 天将自动彻底清空。恢复论文类条目时,全文与颜色标注一并还原。</div>
+    <div class="trash-list" id="trashList"></div>
+    <div class="modal-row">
+      <button class="btn-ghost" id="trashEmptyBtn">彻底清空回收站</button>
+      <button class="modal-btn" id="trashCloseBtn">关闭</button>
     </div>
   </div>
 </div>
@@ -2631,7 +2728,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], pendingReview: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120 };
+const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120 };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -2765,8 +2862,11 @@ function doLogout(){
 function afterLogin(){
   state.items = [];
   state.pendingReview = [];
+  state.trash = [];
   loadState();
   migrateItems();
+  purgeExpiredTrash();   /* 回收站7天自动清空 */
+  updateTrashBtn();      /* 导航徽章 */
   render();
   renderComposerCats();
   updatePredict();
@@ -2811,6 +2911,14 @@ function loadState(){
       const parr = JSON.parse(praw);
       if(Array.isArray(parr)) state.pendingReview = parr;
     }
+    /* 回收站 */
+    const traw = localStorage.getItem(STORAGE_KEY + "_trash");
+    if(traw){
+      try{
+        const tarr = JSON.parse(traw);
+        if(Array.isArray(tarr)) state.trash = tarr;
+      }catch(e){ /* 忽略损坏的回收站数据 */ }
+    }
   }catch(e){ console.warn("load failed", e); }
 }
 function saveState(){
@@ -2820,6 +2928,7 @@ function saveState(){
     localStorage.setItem(STORAGE_KEY, main);
     try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){ /* 备份失败不影响主数据 */ }
     localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
+    try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(state.trash || [])); }catch(e2){}
   }
   catch(e){
     /* 容量超限: 瘦身图片后重试 */
@@ -2830,12 +2939,29 @@ function saveState(){
         localStorage.setItem(STORAGE_KEY, main);
         try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){}
         localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
+        try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(state.trash || [])); }catch(e2){}
         toast("存储空间紧张,已自动压缩图片并保存成功");
         return;
       }catch(e2){ /* 仍失败则提示导出 */ }
     }
     console.warn("save failed", e);
     toast("保存失败:浏览器存储空间不足,请尽快「导出数据」备份", 5000);
+  }
+}
+
+/* ===== 回收站: 删除内容保留7天后自动清空 ===== */
+const TRASH_RETAIN_MS = 7 * 24 * 60 * 60 * 1000; /* 7天 */
+/* 清理过期回收站条目(登录加载时调用) */
+function purgeExpiredTrash(){
+  if(!state.trash || !state.trash.length) return;
+  const now = Date.now();
+  const before = state.trash.length;
+  state.trash = state.trash.filter(function(t){
+    return !t.deletedAt || (now - t.deletedAt) < TRASH_RETAIN_MS;
+  });
+  if(state.trash.length < before){
+    saveState();
+    toast("回收站已自动清空 " + (before - state.trash.length) + " 条超期记录(保留期7天)", 4000);
   }
 }
 
@@ -4993,7 +5119,49 @@ function openPaperReader(itemId){
     prState.activeColor = null;
     for(let j=0; j<hlColors.length; j++) hlColors[j].classList.remove("active");
   }
+  /* Word式标注应用/取消(核心): 选中文字已有同款标注→移除,没有→添加
+     与"先点按钮再选文字"共用同一份数据操作,两种交互等效 */
+  function prApplyOrToggleAnnotation(selText, type, color){
+    const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+    if(!cur) return false;
+    if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+    rebuildFromDom(cur);
+    if(!cur.highlights) cur.highlights = [];
+    /* 完全匹配的同款标注 → 取消(Word式toggle) */
+    const idx = cur.highlights.findIndex(function(h){
+      return h.text === selText && h.type === type && (h.color || null) === (color || null);
+    });
+    if(idx >= 0){
+      cur.highlights.splice(idx, 1);
+      pushHlHistory();
+      saveState();
+      markDirty();
+      applyHighlightsToDom(cur);
+      toast("已取消「" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"备注") + "」");
+      return true;
+    }
+    /* 不存在 → 添加 */
+    const entry = { text: selText, type: type };
+    if(color) entry.color = color;
+    cur.highlights.push(entry);
+    pushHlHistory();
+    saveState();
+    markDirty();
+    applyHighlightsToDom(cur);
+    toast("已" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"添加备注"));
+    return true;
+  }
+  /* 读取当前有效选区(≥2字,在正文内) */
+  function prGetLiveSelection(){
+    const sel = window.getSelection();
+    if(!sel || sel.isCollapsed || sel.rangeCount === 0) return null;
+    const txt = sel.toString().replace(/\u00A0/g, " ").trim();
+    if(!txt || txt.length < 2) return null;
+    return { sel: sel, text: txt };
+  }
   for(let i=0; i<hlColors.length; i++){
+    /* mousedown不夺焦点:保住用户刚做的选区(Word式"先选文字后点按钮") */
+    hlColors[i].addEventListener("mousedown", function(e){ e.preventDefault(); });
     hlColors[i].onclick = function(){
       const color = this.dataset.color;
       if(color === "clear"){
@@ -5010,20 +5178,63 @@ function openPaperReader(itemId){
         deactivateAllFmt();
         return;
       }
+      /* Word式:先选中文字再点颜色 → 直接标注(不用进模式) */
+      const live = prGetLiveSelection();
+      if(live){
+        prApplyOrToggleAnnotation(live.text, "highlight", color);
+        live.sel.removeAllRanges();
+        return;
+      }
+      /* 无选区 → 进/出标注模式(再点同色退出) */
+      if(prState.activeColor === color){
+        deactivateAllColor();
+        toast("已退出标注模式");
+        return;
+      }
       deactivateAllFmt();
       prState.activeColor = color;
       for(let j=0; j<hlColors.length; j++) hlColors[j].classList.remove("active");
       this.classList.add("active");
-      toast("已选标注色 · 选中文字即可标注");
+      toast("已选标注色 · 选中文字即可标注(再点此色退出)");
     };
   }
 
-  /* 格式按钮: 加粗/划线/备注 (排除删除按钮) */
+  /* 格式按钮: 加粗/划线/备注 (排除删除按钮)
+     Word式交互: 有选区→直接应用/取消;无选区→进模式(再点退出) */
   for(let i=0; i<fmtBtns.length; i++){
-    if(fmtBtns[i].id === "prDelMode") continue;
+    if(fmtBtns[i].id === "prDelMode" || fmtBtns[i].id === "prTranslate") continue;
+    fmtBtns[i].addEventListener("mousedown", function(e){ e.preventDefault(); });
     fmtBtns[i].onclick = function(){
       const fmt = this.dataset.fmt;
-      /* 再次点击取消 */
+      if(!fmt) return;
+      /* Word式:先选中文字再点按钮 → 直接应用/取消 */
+      const live = prGetLiveSelection();
+      if(live && (fmt === "bold" || fmt === "underline" || fmt === "highlight")){
+        prApplyOrToggleAnnotation(live.text, fmt, null);
+        live.sel.removeAllRanges();
+        return;
+      }
+      /* 备注模式:有选区时弹输入框 */
+      if(live && fmt === "note"){
+        const noteText = prompt("为选中文字添加备注:");
+        if(noteText && noteText.trim()){
+          const cur = state.items.find(function(x){ return x.id === prState.itemId; });
+          if(cur){
+            if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+            rebuildFromDom(cur);
+            if(!cur.highlights) cur.highlights = [];
+            cur.highlights.push({ text: live.text, type:"note", note: noteText.trim() });
+            pushHlHistory();
+            saveState();
+            markDirty();
+            live.sel.removeAllRanges();
+            applyHighlightsToDom(cur);
+            toast("备注已添加");
+          }
+        }
+        return;
+      }
+      /* 无选区 → 进/出模式(再点同按钮退出) */
       if(prState.activeFmt === fmt){
         deactivateAllFmt();
         toast("已取消「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」模式");
@@ -5033,8 +5244,50 @@ function openPaperReader(itemId){
       prState.activeFmt = fmt;
       for(let j=0; j<fmtBtns.length; j++) fmtBtns[j].classList.remove("active");
       this.classList.add("active");
-      toast("已选「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」· 选中文字即可应用");
+      toast("已选「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」· 选中文字即可应用(再点退出)");
     };
+  }
+
+  /* ===== 页边距调整(Word式): 窄/适中/宽/超宽,记忆到本地 ===== */
+  const prMarginBtn = document.getElementById("prMarginBtn");
+  const prMarginPop = document.getElementById("prMarginPop");
+  if(prMarginBtn && prMarginPop){
+    const MARGINS = {
+      narrow: { tb: 17, lr: 32 },
+      normal: { tb: 36, lr: 56 },
+      wide:   { tb: 64, lr: 96 },
+      xwide:  { tb: 96, lr: 140 }
+    };
+    function applyMargin(m){
+      const conf = MARGINS[m] || MARGINS.normal;
+      const wrap = document.getElementById("prTextWrap");
+      if(wrap) wrap.style.padding = conf.tb + "px " + conf.lr + "px 80px";
+      try{ localStorage.setItem(STORAGE_KEY + "_margin", m); }catch(e){}
+      const opts = prMarginPop.querySelectorAll(".pr-margin-opt");
+      for(let j=0; j<opts.length; j++) opts[j].classList.toggle("on", opts[j].dataset.m === m);
+    }
+    /* 恢复上次边距 */
+    let savedM = "normal";
+    try{ savedM = localStorage.getItem(STORAGE_KEY + "_margin") || "normal"; }catch(e){}
+    applyMargin(savedM);
+    prMarginBtn.onclick = function(e){
+      e.stopPropagation();
+      prMarginPop.classList.toggle("show");
+    };
+    const mOpts = prMarginPop.querySelectorAll(".pr-margin-opt");
+    for(let j=0; j<mOpts.length; j++){
+      mOpts[j].onclick = function(){
+        applyMargin(this.dataset.m);
+        prMarginPop.classList.remove("show");
+        toast("页边距已调整为「" + this.textContent.replace(/\s+/g, " ").trim().split(" ")[0] + "」");
+      };
+    }
+    /* 点击面板外关闭 */
+    document.addEventListener("click", function(e){
+      if(prMarginPop.classList.contains("show") && !e.target.closest(".pr-margin-ctl")){
+        prMarginPop.classList.remove("show");
+      }
+    });
   }
 
   /* 撤销最近一次操作(删除/排版/标注) */
@@ -5257,6 +5510,35 @@ function savePaperHighlights(){
 /* 标题行识别正则: 编号标题/章节词/Abstract 等,且行长较短 */
 const PR_HEAD_LINE_RE = /^(\d+(\.\d+)*[\.\)、\s]+|第[一二三四五六七八九十百]+[章节卷部分]|[一二三四五六七八九十]+[、．.]|[（(][一二三四五六七八九十]+[）)]|[（(]\d{1,2}[）)]|Abstract\s*[:：]?|摘\s*要|引\s*言|Introduction\s*[:：]?|Conclusion\s*[:：]?|结\s*论|参考文献|References\s*[:：]?|致\s*谢|Keywords?\s*[:：]?|关键词\s*[:：]?|Chapter\s+\d+)/i;
 
+/* 参考文献条目起始识别: [1] / [1,2] / [1-3] / 1. / 1、 / 1) 等格式 */
+const PR_REF_LINE_RE = /^\[?\d{1,3}(?:[-,，]\d{1,3})*[\]、.．)]\s*\S/;
+
+/* 从纯文本行中提取参考文献区块: 定位"参考文献/References"标题行,其后编号行拼接成条目
+   连续无编号行视为上一条的折行(知网PDF参考文献常断行),空行结束 */
+function extractRefBlock(lines){
+  let start = -1;
+  for(let i=0; i<lines.length; i++){
+    if(/^(\[?\s*参\s*考\s*文\s*献\s*\]?|References?|Bibliography|REFERENCES)\s*[:：]?\s*$/i.test(lines[i].trim())){
+      start = i + 1;
+      break;
+    }
+  }
+  if(start < 0) return null;
+  const refs = [];
+  for(let i=start; i<lines.length; i++){
+    const t = (lines[i] || "").trim();
+    if(!t) { if(refs.length > 0) break; else continue; }
+    if(PR_REF_LINE_RE.test(t)){
+      refs.push(t);
+    }else if(refs.length > 0){
+      /* 折行: 拼接到上一条 */
+      refs[refs.length - 1] += " " + t;
+    }
+  }
+  /* 至少3条才算有效参考文献区块 */
+  return refs.length >= 3 ? refs : null;
+}
+
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
@@ -5270,8 +5552,33 @@ function renderPaperText(item){
   if(item.outline){
     for(let i=0; i<item.outline.length; i++) outlineMap[item.outline[i].line] = item.outline[i];
   }
+  /* 参考文献区块识别(标题行之后不再按普通段落渲染,改为带检索链接的列表) */
+  let refStart = -1;
+  for(let i=0; i<lines.length; i++){
+    if(/^(\[?\s*参\s*考\s*文\s*献\s*\]?|References?|Bibliography|REFERENCES)\s*[:：]?\s*$/i.test((lines[i] || "").trim())){ refStart = i; break; }
+  }
+  const refList = refStart >= 0 ? extractRefBlock(lines) : null;
   let html = "";
   for(let i=0; i<lines.length; i++){
+    if(refList && i > refStart){
+      /* 参考文献区块 → 整块一次性渲染,跳出循环 */
+      html += '<h4 class="pr-section-title">参考文献</h4><ol class="pp-refs">';
+      for(let r=0; r<refList.length; r++){
+        const txt = refList[r].replace(/^\[?\d{1,3}(?:[-,，]\d{1,3})*[\]、.．)]\s*/, "").trim();
+        const sl = buildRefSearchLinks(txt);
+        html += '<li class="pp-ref" contenteditable="false"><span class="pp-ref-text">' + escapeHtml(txt) + '</span>';
+        if(sl){
+          html += '<span class="pp-ref-links" contenteditable="false">' +
+            '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>' +
+            '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>' +
+            '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>' +
+            '</span>';
+        }
+        html += '</li>';
+      }
+      html += '</ol>';
+      break;
+    }
     const raw = lines[i] || "";
     const isHeader = outlineMap[i] || (PR_HEAD_LINE_RE.test(raw) && raw.trim().length > 1 && raw.trim().length < 50);
     const lineText = escapeHtml(raw);
@@ -5776,6 +6083,15 @@ function domToPlainText(root){
        el.classList.contains("pr-translation") ||
        el.classList.contains("pp-translation") ||
        el.classList.contains("pp-src-row")) continue;
+    /* 参考文献列表 → 还原为 [n] 条目行(保持可再识别结构) */
+    if(el.tagName === "OL" && el.classList.contains("pp-refs")){
+      const lis = el.querySelectorAll("li .pp-ref-text");
+      for(let j=0; j<lis.length; j++){
+        const t = lis[j].textContent.replace(/\u00A0/g, " ").trim();
+        if(t) lines.push("[" + (j+1) + "] " + t);
+      }
+      continue;
+    }
     const t = el.textContent.replace(/\u00A0/g, " ").trim();
     if(el.classList.contains("pr-para-line") || el.tagName === "P" || el.tagName === "DIV" || el.tagName === "H4"){
       lines.push(t);
@@ -7234,24 +7550,25 @@ async function fetchRelatedPapers(){
 
   /* 主源 Crossref: 全球DOI注册库,CORS开放,中文期刊同样注册(实测可命中
      "论古希腊神话传说中女性形象的类群演变与性别意识"等真正相关中文文献)
-     中文标题(含汉字=知网可查)优先,按真实被引数(is-referenced-by-count)降序 */
+     硬性只保留中文标题文献(含汉字=知网可查),按真实被引数降序 */
   async function fetchCrossrefRelated(){
     const results = [];
     const seen = {};
     const a = item.analysis || {};
-    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 2).join(" ") : "";
+    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 3) : [];
     const tq = (item.name || kw).slice(0, 80).trim();
-    /* 检索词组合: 标题+关键词 → 关键词 → 标题(逐级提高召回) */
+    /* 检索词组合(逐级提高中文召回): 标题+关键词 → 标题 → 关键词组合 → 单关键词 */
     const queries = [];
-    if(tq && kws) queries.push(tq + " " + kws);
-    if(kws) queries.push(kws);
+    if(tq && kws.length) queries.push(tq + " " + kws.join(" "));
     if(tq) queries.push(tq);
-    for(let i=0; i<queries.length && results.length < 8; i++){
+    if(kws.length >= 2) queries.push(kws.slice(0, 2).join(" "));
+    for(let i=0; i<kws.length; i++) queries.push(kws[i]);
+    for(let i=0; i<queries.length && results.length < 10; i++){
       const q = queries[i];
       if(!q) continue;
       try{
         const url = "https://api.crossref.org/works?query=" + encodeURIComponent(q) +
-          "&rows=15&select=DOI,title,container-title,is-referenced-by-count,issued";
+          "&rows=20&select=DOI,title,container-title,is-referenced-by-count,issued";
         const txt = await ppFetchTimeout(url, 9000);
         const j = JSON.parse(txt);
         const list = (j.message && j.message.items) || [];
@@ -7259,6 +7576,8 @@ async function fetchRelatedPapers(){
           const it = list[k];
           const t = (it.title && it.title[0]) ? it.title[0] : "";
           if(!t) continue;
+          /* 硬性门禁: 非中文标题(知网查不到)直接丢弃 */
+          if(!/[\u4e00-\u9fff]/.test(t)) continue;
           /* 排除自身论文 */
           if(item.name && ppTitleMatch(t, item.name)) continue;
           const key = ppNormTitle(t);
@@ -7270,18 +7589,16 @@ async function fetchRelatedPapers(){
             cites: (it["is-referenced-by-count"] != null && it["is-referenced-by-count"] > 0) ? it["is-referenced-by-count"] : "",
             year: yr,
             doi: it.DOI ? "https://doi.org/" + it.DOI : "",
-            zh: /[\u4e00-\u9fff]/.test(t)
+            zh: true
           });
         }
       }catch(e){ /* 尝试下一个检索词 */ }
     }
-    /* 中文文献优先(标题含汉字=知网可查),组内按真实被引降序 */
-    const zhOnly = results.filter(function(x){ return x.zh; });
-    const final = (zhOnly.length >= 3 ? zhOnly : results).sort(function(x, y){
+    results.sort(function(x, y){
       const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
       return cy - cx;
     });
-    return final.slice(0, 5);
+    return results.slice(0, 5);
   }
 
   /* 次级 OpenAlex: 只检索中文文献(language:zh),且带主题门禁——
@@ -8419,10 +8736,100 @@ function autoFetchMeta(item){
   }).catch(function(){ /* 静默失败 */ });
 }
 
+/* 删除条目: 确认弹窗 → 移入回收站(保留7天,可恢复) */
 function removeItem(id){
+  const it = state.items.find(function(i){ return i.id === id; });
+  if(!it) return;
+  const catName = CATEGORIES[it.category] ? CATEGORIES[it.category].name : it.category;
+  if(!confirm("确定删除「" + it.name + "」(" + catName + ")?\n删除后进入回收站,保留7天可恢复。")) return;
+  if(!state.trash) state.trash = [];
+  /* 完整备份原条目数据(含论文全文/标注/图片) */
+  state.trash.push(Object.assign({}, it, { deletedAt: Date.now() }));
   state.items = state.items.filter(function(i){ return i.id !== id; });
   saveState();
   render();
+  updateTrashBtn();
+  toast("已移入回收站 · 7天内可在顶部「回收站」恢复");
+}
+
+/* ===== 回收站界面 ===== */
+function updateTrashBtn(){
+  const badge = document.getElementById("trashBadge");
+  if(badge) badge.textContent = (state.trash && state.trash.length) ? String(state.trash.length) : "";
+}
+function openTrashModal(){
+  purgeExpiredTrash();
+  const list = document.getElementById("trashList");
+  if(!list) return;
+  if(!state.trash || !state.trash.length){
+    list.innerHTML = '<div class="trash-empty">回收站为空</div>';
+  }else{
+    const now = Date.now();
+    let h = "";
+    /* 新删除的排前面 */
+    const sorted = state.trash.slice().sort(function(a, b){ return (b.deletedAt || 0) - (a.deletedAt || 0); });
+    for(let i=0; i<sorted.length; i++){
+      const t = sorted[i];
+      const catName = CATEGORIES[t.category] ? CATEGORIES[t.category].name : (t.category || "");
+      const delAt = t.deletedAt ? new Date(t.deletedAt) : null;
+      const daysLeft = t.deletedAt ? Math.max(0, Math.ceil((TRASH_RETAIN_MS - (now - t.deletedAt)) / 86400000)) : 7;
+      const delStr = delAt ? (delAt.getFullYear() + "-" + String(delAt.getMonth()+1).padStart(2,"0") + "-" + String(delAt.getDate()).padStart(2,"0") + " " + String(delAt.getHours()).padStart(2,"0") + ":" + String(delAt.getMinutes()).padStart(2,"0")) : "";
+      h += '<div class="trash-item" data-tid="' + escapeHtml(t.id) + '">' +
+        '<div class="trash-item-info">' +
+          '<div class="trash-item-name">' + escapeHtml(t.name || "未命名") + '</div>' +
+          '<div class="trash-item-meta">' + escapeHtml(catName) + (delStr ? " · 删除于 " + delStr : "") + ' · 剩余 <b>' + daysLeft + '</b> 天自动清空</div>' +
+        '</div>' +
+        '<div class="trash-item-act">' +
+          '<button class="trash-restore-btn">恢复</button>' +
+          '<button class="trash-forever-btn">彻底删除</button>' +
+        '</div>' +
+      '</div>';
+    }
+    list.innerHTML = h;
+    /* 恢复 */
+    const rBtns = list.querySelectorAll(".trash-restore-btn");
+    for(let i=0; i<rBtns.length; i++){
+      rBtns[i].onclick = function(){
+        const row = this.closest(".trash-item");
+        const tid = row ? row.dataset.tid : "";
+        const t = state.trash.find(function(x){ return x.id === tid; });
+        if(!t) return;
+        /* 同名查重 */
+        const dup = state.items.find(function(x){ return x.name === t.name && x.category === t.category; });
+        if(dup){
+          toast("「" + t.name + "」已存在于" + (CATEGORIES[t.category] ? CATEGORIES[t.category].name : "同分类") + ",无法恢复");
+          return;
+        }
+        const restored = Object.assign({}, t);
+        delete restored.deletedAt;
+        state.items.push(restored);
+        state.trash = state.trash.filter(function(x){ return x.id !== tid; });
+        saveState();
+        render();
+        updateTrashBtn();
+        openTrashModal(); /* 刷新列表 */
+        toast("已恢复「" + t.name + "」" + (t.fullText ? "·全文与标注一并还原" : ""));
+      };
+    }
+    /* 彻底删除 */
+    const fBtns = list.querySelectorAll(".trash-forever-btn");
+    for(let i=0; i<fBtns.length; i++){
+      fBtns[i].onclick = function(){
+        const row = this.closest(".trash-item");
+        const tid = row ? row.dataset.tid : "";
+        const t = state.trash.find(function(x){ return x.id === tid; });
+        if(!t) return;
+        if(!confirm("彻底删除「" + t.name + "」?此操作不可恢复。")) return;
+        state.trash = state.trash.filter(function(x){ return x.id !== tid; });
+        saveState();
+        updateTrashBtn();
+        openTrashModal();
+        toast("已彻底删除");
+      };
+    }
+  }
+  const modal = document.getElementById("trashModal");
+  if(modal) modal.classList.add("show");
 }
 function reclassifyItem(id, newCat){
   const it = state.items.find(function(i){ return i.id === id; });
@@ -8497,11 +8904,18 @@ function renderStats(){
       const c = CATEGORIES[cat];
       const cnt = state.items.filter(function(it){ return it.category === cat; }).length;
       if(cnt === 0){ toast(c.name + "已虚"); return; }
-      if(confirm("确定清空「" + c.name + "」分类下全部 " + cnt + " 条志录?此操作不可撤销。")){
+      if(confirm("确定清空「" + c.name + "」分类下全部 " + cnt + " 条志录?\n将移入回收站,保留7天可恢复。")){
+        if(!state.trash) state.trash = [];
+        const now = Date.now();
+        const removed = state.items.filter(function(it){ return it.category === cat; });
+        for(let i=0; i<removed.length; i++){
+          state.trash.push(Object.assign({}, removed[i], { deletedAt: now }));
+        }
         state.items = state.items.filter(function(it){ return it.category !== cat; });
         saveState();
         render();
-        toast("已清空「" + c.name + "」" + cnt + "条");
+        updateTrashBtn();
+        toast("已清空「" + c.name + "」" + cnt + "条 · 已移入回收站");
       }
     };
   }
@@ -8949,13 +9363,20 @@ if(bulkDeleteBtn){
   bulkDeleteBtn.onclick = function(){
     const ids = state.bulkSelected ? Object.keys(state.bulkSelected) : [];
     if(ids.length === 0){ toast("请先勾选要删除的条目"); return; }
-    if(!confirm("确定删除所选 " + ids.length + " 条志录?此操作不可撤销。")) return;
+    if(!confirm("确定删除所选 " + ids.length + " 条志录?\n将移入回收站,保留7天可恢复。")) return;
+    if(!state.trash) state.trash = [];
+    const now = Date.now();
+    const removed = state.items.filter(function(i){ return state.bulkSelected[i.id]; });
+    for(let i=0; i<removed.length; i++){
+      state.trash.push(Object.assign({}, removed[i], { deletedAt: now }));
+    }
     state.items = state.items.filter(function(i){ return !state.bulkSelected[i.id]; });
     state.bulkSelected = {};
     saveState();
     render();
     updateBulkCount();
-    toast("已删除 " + ids.length + " 条");
+    updateTrashBtn();
+    toast("已删除 " + ids.length + " 条 · 已移入回收站");
   };
 }
 const bulkCancelBtn = document.getElementById("bulkCancel");
@@ -9997,6 +10418,24 @@ function toast(msg, duration){
   // 导航栏 AI 配置入口 (免费模型直连)
   const navAiCfgBtn = document.getElementById("navAiCfg");
   if(navAiCfgBtn) navAiCfgBtn.onclick = function(e){ e.preventDefault(); openAiCfgModal(); };
+  // 导航栏回收站入口
+  const navTrashBtn = document.getElementById("navTrash");
+  if(navTrashBtn) navTrashBtn.onclick = function(e){ e.preventDefault(); openTrashModal(); };
+  const trashCloseBtn = document.getElementById("trashCloseBtn");
+  if(trashCloseBtn) trashCloseBtn.onclick = function(){
+    const m = document.getElementById("trashModal");
+    if(m) m.classList.remove("show");
+  };
+  const trashEmptyBtn = document.getElementById("trashEmptyBtn");
+  if(trashEmptyBtn) trashEmptyBtn.onclick = function(){
+    if(!state.trash || !state.trash.length){ toast("回收站已为空"); return; }
+    if(!confirm("彻底清空回收站全部 " + state.trash.length + " 条记录?此操作不可恢复。")) return;
+    state.trash = [];
+    saveState();
+    updateTrashBtn();
+    openTrashModal();
+    toast("回收站已清空");
+  };
   updateNavAiState();
 })();
 
