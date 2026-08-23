@@ -1070,6 +1070,9 @@
     position:absolute; white-space:pre; line-height:1.32; color:#111;
     transform-origin:top left; user-select:text; letter-spacing:-0.01em;
   }
+  /* 版面保真模式下的参考文献检索列表(双栏坐标提取右栏条目,显示在PDF页之后) */
+  .pr-text .pr-layout-refs-title{ margin-top:40px; }
+  .pr-text .pr-layout-refs{ text-align:left; max-width:740px; margin:0 auto; padding:0 8px; }
   /* Word流式版面保真: 富文本段落(字号/缩进/对齐/加粗内联style,分栏用column-count) */
   .pr-text .pr-docflow{ column-gap:28px; }
   .pr-text .pr-docflow-p{ margin:0 0 0.55em; break-inside:avoid; }
@@ -6393,6 +6396,98 @@ function extractRefBlock(lines){
   return refs.length >= 3 ? refs : null;
 }
 
+/* 从layout blocks提取参考文献(双栏布局: 仅取右栏,基于坐标过滤)
+   双栏论文中跨栏居中的"参考文献"标题后,fullText会先左栏后右栏拼接,
+   导致左栏内容(致谢/附录等)被误识别为参考文献条目;
+   本函数直接用layout blocks的x坐标判断栏归属,只提取右栏参考文献 */
+function extractLayoutRefs(blocks){
+  if(!Array.isArray(blocks) || !blocks.length) return null;
+  /* 按页分组 */
+  const pages = {};
+  let maxPage = 1;
+  for(let i=0; i<blocks.length; i++){
+    const b = blocks[i];
+    const pg = b.page || 1;
+    if(!pages[pg]) pages[pg] = { pageW: b.pageW || 595, pageH: b.pageH || 842, items: [] };
+    pages[pg].items.push(b);
+    if(pg > maxPage) maxPage = pg;
+  }
+  /* 检测双栏布局并定位"参考文献"标题行 */
+  let splitX = -1;
+  let refStart = null;  /* {page, y} 参考文献标题行位置 */
+  for(let p=1; p<=maxPage; p++){
+    const pg = pages[p];
+    if(!pg) continue;
+    /* 按y分带(PDF坐标:y大=靠上),形成bands供detectColumnLayout */
+    const sorted = pg.items.slice().sort(function(a,b){ return b.y - a.y; });
+    const bands = [];
+    let band = null;
+    for(let i=0; i<sorted.length; i++){
+      const it = sorted[i];
+      if(band && Math.abs(band.y - it.y) <= 4){ band.items.push(it); }
+      else{ band = { y: it.y, items: [it] }; bands.push(band); }
+    }
+    if(splitX < 0){
+      const layout = detectColumnLayout(bands, pg.pageW);
+      if(layout.cols >= 2 && layout.splitXs.length) splitX = layout.splitXs[0];
+    }
+    if(!refStart){
+      for(let i=0; i<pg.items.length; i++){
+        const t = (pg.items[i].str || "").trim();
+        if(/^(\[?\s*参\s*考\s*文\s*献\s*\]?|References?|Bibliography|REFERENCES)\s*[:：]?\s*$/i.test(t)){
+          refStart = { page: p, y: pg.items[i].y };
+          break;
+        }
+      }
+    }
+  }
+  /* 非双栏或无参考文献标题 → 回退null(由调用方走纯文本提取) */
+  if(splitX < 0 || !refStart) return null;
+  /* 仅提取参考文献标题行之后且位于右栏的blocks
+     PDF坐标:y大=靠上;标题行之后= y < refStart.y(更靠下) */
+  const refBlocks = [];
+  for(let p=1; p<=maxPage; p++){
+    const pg = pages[p];
+    if(!pg) continue;
+    for(let i=0; i<pg.items.length; i++){
+      const b = pg.items[i];
+      if(p < refStart.page) continue;
+      if(p === refStart.page && b.y >= refStart.y) continue;  /* y≥标题行=标题行及以上 */
+      if(b.x > splitX) refBlocks.push(b);  /* 仅右栏 */
+    }
+  }
+  /* 按页→y降序(上→下)排序,按y分带拼成行 */
+  refBlocks.sort(function(a,b){
+    if(a.page !== b.page) return a.page - b.page;
+    return b.y - a.y;
+  });
+  const lines = [];
+  let cur = [], curY = -Infinity;
+  for(let i=0; i<refBlocks.length; i++){
+    const b = refBlocks[i];
+    if(cur.length && Math.abs(b.y - curY) > 4){
+      cur.sort(function(a,b){ return a.x - b.x; });
+      lines.push(cur.map(function(c){ return c.str; }).join(""));
+      cur = [];
+    }
+    cur.push(b);
+    curY = b.y;
+  }
+  if(cur.length){
+    cur.sort(function(a,b){ return a.x - b.x; });
+    lines.push(cur.map(function(c){ return c.str; }).join(""));
+  }
+  /* 识别参考文献条目(复用PR_REF_LINE_RE,折行拼接到上一条) */
+  const refs = [];
+  for(let i=0; i<lines.length; i++){
+    const t = (lines[i] || "").trim();
+    if(!t) { if(refs.length > 0) break; else continue; }
+    if(PR_REF_LINE_RE.test(t)) refs.push(t);
+    else if(refs.length > 0) refs[refs.length - 1] += " " + t;
+  }
+  return refs.length >= 3 ? refs : null;
+}
+
 /* 版面保真渲染: 用PDF文字块坐标字号,绝对定位1:1还原原版面
    (双栏天然还原/字号大小关系保真/文字位置保真) —— 像一张可读的PDF照片 */
 function renderLayoutPaper(item, prText){
@@ -6423,6 +6518,27 @@ function renderLayoutPaper(item, prText){
     html += '</div>';
   }
   html += '</div>';
+  /* 双栏布局: 从layout blocks基于坐标提取右栏参考文献,追加检索链接列表
+     (双栏论文"参考文献"标题常跨栏居中,fullText拼接导致左栏文字被误识别为参考文献;
+      此处直接用x坐标判断栏归属,仅提取右栏参考文献,确保检索链接指向正确条目) */
+  const refList = extractLayoutRefs(blocks);
+  if(refList && refList.length){
+    html += '<h4 class="pr-section-title pr-layout-refs-title">参考文献</h4><ol class="pp-refs pr-layout-refs">';
+    for(let r=0; r<refList.length; r++){
+      const txt = refList[r].replace(/^\[?\d{1,3}(?:[-,，]\d{1,3})*[\]、.．)]\s*/, "").trim();
+      const sl = buildRefSearchLinks(txt);
+      html += '<li class="pp-ref" contenteditable="false"><span class="pp-ref-text">' + escapeHtml(txt) + '</span>';
+      if(sl){
+        html += '<span class="pp-ref-links" contenteditable="false">' +
+          '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>' +
+          '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>' +
+          '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>' +
+          '</span>';
+      }
+      html += '</li>';
+    }
+    html += '</ol>';
+  }
   prText.innerHTML = html;
   /* 标记版面保真模式: CSS取消单栏740px限宽,让PDF页自由展开居中,左右留白对称 */
   prText.classList.add("pr-layout-mode");
@@ -6455,7 +6571,8 @@ function renderPaperText(item){
   for(let i=0; i<lines.length; i++){
     if(/^(\[?\s*参\s*考\s*文\s*献\s*\]?|References?|Bibliography|REFERENCES)\s*[:：]?\s*$/i.test((lines[i] || "").trim())){ refStart = i; break; }
   }
-  const refList = refStart >= 0 ? extractRefBlock(lines) : null;
+  /* 优先用layout blocks坐标提取右栏参考文献(双栏布局),失败回退纯文本提取 */
+  const refList = refStart >= 0 ? (extractLayoutRefs(item.layout) || extractRefBlock(lines)) : null;
   let html = "";
   for(let i=0; i<lines.length; i++){
     if(refList && i > refStart){
