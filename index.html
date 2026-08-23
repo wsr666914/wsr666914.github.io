@@ -1205,13 +1205,15 @@
     cursor:pointer;
   }
   .pp-ref-link:hover{ border-color:var(--accent); color:var(--accent); transform:translateY(-1px); }
-  /* 三个检索按钮: 谷歌学术 G / Semantic Scholar S2 / 知网 知 */
+  /* 四个检索按钮: 谷歌学术 G / Semantic Scholar S2 / 知网 知 / 百度新闻 闻 */
   .pp-ref-link.pp-g{ color:#1a73e8; }
   .pp-ref-link.pp-s2{ color:#e8871a; }
   .pp-ref-link.pp-cnki{ color:#c0392b; }
+  .pp-ref-link.pp-news{ color:#2e7d32; }
   .pp-ref-link.pp-g:hover{ border-color:#1a73e8; color:#1a73e8; }
   .pp-ref-link.pp-s2:hover{ border-color:#e8871a; color:#e8871a; }
   .pp-ref-link.pp-cnki:hover{ border-color:#c0392b; color:#c0392b; }
+  .pp-ref-link.pp-news:hover{ border-color:#2e7d32; color:#2e7d32; }
 
   /* ===== 论文来源徽章(原文链接+多学术网站检索) ===== */
   .pp-src-row{ display:flex; justify-content:center; align-items:center; flex-wrap:wrap; gap:5px 6px; margin:-10px 0 22px; }
@@ -6533,6 +6535,7 @@ function renderLayoutPaper(item, prText){
           '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>' +
           '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>' +
           '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>' +
+          '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻</a>' +
           '</span>';
       }
       html += '</li>';
@@ -6587,6 +6590,7 @@ function renderPaperText(item){
             '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>' +
             '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>' +
             '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>' +
+            '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻</a>' +
             '</span>';
         }
         html += '</li>';
@@ -6709,6 +6713,7 @@ function renderStructuredPaper(item, prText){
         h += '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>';
         h += '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>';
         h += '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>';
+        h += '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻</a>';
         h += '</span>';
       }
       h += '</li>';
@@ -7903,7 +7908,8 @@ function buildRefSearchLinks(refText){
     text: (clean || t).slice(0, 120),
     scholar:  "https://scholar.google.com/scholar?q=" + q,
     semantic: "https://www.semanticscholar.org/search?q=" + q,
-    cnki:     "https://kns.cnki.net/kns8s/defaultresult/index?kw=" + q + "&korder=TI"
+    cnki:     "https://kns.cnki.net/kns8s/defaultresult/index?kw=" + q + "&korder=TI",
+    news:     "https://www.baidu.com/s?wd=" + q + "&tn=news"
   };
 }
 
@@ -8502,6 +8508,7 @@ async function fetchReferences(){
         h += '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G 谷歌学术</a>';
         h += '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2 Semantic Scholar</a>';
         h += '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知 知网</a>';
+        h += '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻 百度新闻</a>';
         h += '</div>';
       }
       h += '</div>';
