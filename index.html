@@ -217,11 +217,15 @@
     display:inline-flex; align-items:center; padding:5px 12px; border:1px solid var(--line);
     background:transparent; color:var(--ink-soft); border-radius:999px; cursor:pointer;
     font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
-    transition: transform .18s, border-color .18s, color .18s, box-shadow .18s;
+    transition: transform .18s cubic-bezier(.2,.7,.3,1), border-color .18s, color .18s, box-shadow .18s;
+    animation: chipIn .4s cubic-bezier(.2,.7,.3,1) both;
   }
   .bb-chip:hover{ transform: translateY(-2px); box-shadow:0 4px 12px rgba(60,40,20,.10); border-color:var(--ink-soft); color:var(--ink); }
   .bb-chip:active{ transform: scale(.96); }
   .bb-chip.active{ background:var(--cat-color, var(--ink)); color:#fff8e7; border-color:var(--cat-color, var(--ink)); }
+  .bb-chip.dragging{ opacity:.4; transform: scale(1.06); box-shadow:0 6px 18px rgba(60,40,20,.18); }
+  .bb-chip.drop-before{ box-shadow: -3px 0 0 0 var(--cat-color, var(--accent)), 0 4px 12px rgba(60,40,20,.10); }
+  .bb-chip.drop-after{ box-shadow: 3px 0 0 0 var(--cat-color, var(--accent)), 0 4px 12px rgba(60,40,20,.10); }
   .bb-chip .bb-del{ margin-left:6px; opacity:.5; font-size:11px; }
   .bb-chip .bb-del:hover{ opacity:1; }
   .predict-tag{
@@ -9756,6 +9760,61 @@ function renderSubcatBar(){
       state.galleryLimit = 120;
       render();
     };
+  }
+  initSubcatDnD(); /* 启用小门类拖拽重排 */
+}
+
+/* 小门类拖拽重排: 仿大门类 initChipDnD, 顺序写回 beverageBrands/skincareFuncs 并持久化 */
+function initSubcatDnD(){
+  const root = document.getElementById("beverageBrandChips");
+  if(!root) return;
+  const cat = state.filter;
+  if(cat !== "beverage" && cat !== "skincare") return;
+  let dragName = null;
+  /* 排除「全部」按钮, 其固定首位不可拖动 */
+  const chips = root.querySelectorAll(".bb-chip[data-brand]:not([data-brand=''])");
+  const clearMarks = function(){ root.querySelectorAll(".bb-chip").forEach(function(c){ c.classList.remove("dragging","drop-before","drop-after"); }); };
+  for(let i=0; i<chips.length; i++){
+    const ch = chips[i];
+    ch.setAttribute("draggable","true");
+    ch.title = (ch.title ? ch.title + " · " : "") + "拖拽可调整" + subcatLabel(cat) + "顺序";
+    ch.addEventListener("dragstart", function(e){
+      dragName = ch.dataset.brand;
+      ch.classList.add("dragging");
+      if(e.dataTransfer){ e.dataTransfer.effectAllowed = "move"; try{ e.dataTransfer.setData("text/plain", dragName); }catch(_){} }
+    });
+    ch.addEventListener("dragend", function(){ clearMarks(); dragName = null; });
+    ch.addEventListener("dragover", function(e){
+      if(!dragName || dragName === ch.dataset.brand) return;
+      e.preventDefault();
+      if(e.dataTransfer) e.dataTransfer.dropEffect = "move";
+      const rect = ch.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width/2;
+      clearMarks();
+      ch.classList.add(before ? "drop-before" : "drop-after");
+    });
+    ch.addEventListener("dragleave", function(){ ch.classList.remove("drop-before","drop-after"); });
+    ch.addEventListener("drop", function(e){
+      if(!dragName || dragName === ch.dataset.brand) return;
+      e.preventDefault();
+      const rect = ch.getBoundingClientRect();
+      const before = (e.clientX - rect.left) < rect.width/2;
+      /* 重排当前门类的用户列表 */
+      const list = getSubcatList(cat).slice();
+      const from = list.indexOf(dragName);
+      if(from < 0) return;
+      list.splice(from, 1);
+      let to = list.indexOf(ch.dataset.brand);
+      if(to < 0) return;
+      if(!before) to += 1;
+      list.splice(to, 0, dragName);
+      /* 写回对应列表并持久化 */
+      if(cat === "beverage"){ beverageBrands = list; saveBeverageBrands(); }
+      else if(cat === "skincare"){ skincareFuncs = list; saveSkincareFuncs(); }
+      clearMarks();
+      dragName = null;
+      render();
+    });
   }
 }
 
