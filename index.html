@@ -1708,6 +1708,10 @@
       <label>论文标题</label>
       <input type="text" id="paperTitle" autocomplete="off" placeholder="留空则自动从正文首行提取" />
     </div>
+    <div class="modal-field" id="essayDateField" style="display:none">
+      <label>随笔时间</label>
+      <input type="datetime-local" id="essayDate" autocomplete="off" title="手动填写这篇随笔的写作时间" />
+    </div>
     <div class="modal-field">
       <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ —— 双引擎解析(Zotero同款GROBID云端引擎+本地几何),自动识别双栏排版/章节结构/参考文献/真实标题">⇪ 导入文档</button></label>
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
@@ -5233,7 +5237,7 @@ function cleanPaperText(text){
 }
 
 /* 录入论文 / 随笔 (随笔复用同一套查看编辑界面) */
-function addPaper(title, fullText, analysis, structured, category){
+function addPaper(title, fullText, analysis, structured, category, writtenAt){
   category = category || "paper";
   const isEssay = category === "essay";
   const trimmedText = fullText.trim();
@@ -5258,10 +5262,13 @@ function addPaper(title, fullText, analysis, structured, category){
     const cleanedTitle = ppCleanTitle(paperTitle, trimmedText);
     if(cleanedTitle && cleanedTitle.length >= 3) paperTitle = cleanedTitle;
   }
-  /* 同分类同名去重 */
+  /* 同分类同名去重 (随笔: 同名但不同写作时间视为不同篇) */
   const low = paperTitle.toLowerCase();
+  const writtenAtIso = (isEssay && writtenAt) ? new Date(writtenAt).toISOString() : null;
   const dup = state.items.find(function(i){
-    return i.name.trim().toLowerCase() === low && i.category === category;
+    if(i.name.trim().toLowerCase() !== low || i.category !== category) return false;
+    if(isEssay) return (i.writtenAt || null) === (writtenAtIso || null);
+    return true;
   });
   if(dup) return { error:"duplicate", existing:dup };
 
@@ -5285,7 +5292,8 @@ function addPaper(title, fullText, analysis, structured, category){
     analysis: paperAnalysis,
     structured: structured || null,
     highlights: [],
-    addedAt: new Date().toISOString()
+    addedAt: new Date().toISOString(),
+    writtenAt: writtenAtIso || null
   };
   state.items.unshift(item);
   saveState();
@@ -5343,8 +5351,10 @@ function openPaperReader(itemId){
   const prMeta = document.getElementById("prMeta");
   if(prTitle) prTitle.textContent = item.name;
   if(prMeta){
-    const d = new Date(item.addedAt);
-    const ds = d.getFullYear() + "." + String(d.getMonth()+1).padStart(2,"0") + "." + String(d.getDate()).padStart(2,"0");
+    const d = new Date(item.writtenAt || item.addedAt);
+    const pad = function(n){ return String(n).padStart(2,"0"); };
+    let ds = d.getFullYear() + "." + pad(d.getMonth()+1) + "." + pad(d.getDate());
+    if(item.category === "essay" && item.writtenAt) ds += " " + pad(d.getHours()) + ":" + pad(d.getMinutes());
     prMeta.textContent = (item.description || "") + " · " + ds;
   }
 
@@ -9335,7 +9345,7 @@ function renderGallery(){
   for(let idx=0; idx<visibleCount; idx++){
     const it = items[idx];
     const c = CATEGORIES[it.category] || CATEGORIES[FALLBACK_CAT];
-    const d = new Date(it.addedAt);
+    const d = new Date(it.writtenAt || it.addedAt);
     const dateStr = d.getFullYear() + "." + String(d.getMonth()+1).padStart(2,"0") + "." + String(d.getDate()).padStart(2,"0");
     let conf;
     if(it.manualOverride) conf = "手订";
@@ -10360,6 +10370,7 @@ const paperBtn = document.getElementById("paperBtn");
 const paperEntryModal = document.getElementById("paperEntryModal");
 const paperTitleInput = document.getElementById("paperTitle");
 const paperFullTextInput = document.getElementById("paperFullText");
+const essayDateInput = document.getElementById("essayDate");
 const paperEntryStats = document.getElementById("paperEntryStats");
 const paperEntrySubmit = document.getElementById("paperEntrySubmit");
 const paperEntryCancel = document.getElementById("paperEntryCancel");
@@ -10384,17 +10395,26 @@ function openPaperEntryModal(category){
   if(pdfBtn) pdfBtn.style.display = isEssay ? "none" : "";
   const convertTip = paperEntryModal ? paperEntryModal.querySelector(".pp-convert-tip") : null;
   if(convertTip) convertTip.style.display = isEssay ? "none" : "";
-  /* 标题/说明/字段文案随分类切换 */
+  /* 随笔: 隐藏标题框(标题从正文首行自动提取), 显示「随笔时间」并预填当前本地时间; 论文: 反之 */
+  const titleField = paperTitleInput ? paperTitleInput.closest(".modal-field") : null;
+  const dateField = document.getElementById("essayDateField");
+  if(titleField) titleField.style.display = isEssay ? "none" : "";
+  if(dateField) dateField.style.display = isEssay ? "" : "none";
+  if(essayDateInput){
+    const now = new Date();
+    const pad = function(n){ return String(n).padStart(2,"0"); };
+    essayDateInput.value = now.getFullYear() + "-" + pad(now.getMonth()+1) + "-" + pad(now.getDate()) + "T" + pad(now.getHours()) + ":" + pad(now.getMinutes());
+  }
+  /* 标题/说明/字段文案随分类切换 (用 closest 精确定位, 不依赖字段顺序) */
   if(paperEntryModal){
     const h3 = paperEntryModal.querySelector("h3");
     if(h3) h3.innerHTML = isEssay ? '录入随笔 <span class="sub">ESSAY ENTRY</span>' : '录入论文 <span class="sub">PAPER ENTRY</span>';
     const intro = paperEntryModal.querySelector("p");
     if(intro) intro.textContent = isEssay
-      ? "粘贴一篇随笔 —— 系统将整理归册,可随时点击「查看全文」阅读并标注。"
+      ? "粘贴一篇随笔 —— 填写作时间,系统自动从首行提取标题归册,可随时点击「查看全文」阅读并标注。"
       : "粘贴一整篇论文 —— 系统将自动整理归册,生成解读分析,可随时点击查看全文并进行颜色标注。";
-    const labels = paperEntryModal.querySelectorAll(".modal-field label");
-    if(labels[0] && labels[0].firstChild) labels[0].firstChild.nodeValue = isEssay ? "随笔标题" : "论文标题";
-    if(labels[1] && labels[1].firstChild) labels[1].firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
+    const fullTextLabel = paperFullTextInput ? paperFullTextInput.closest(".modal-field").querySelector("label") : null;
+    if(fullTextLabel && fullTextLabel.firstChild) fullTextLabel.firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
   }
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
@@ -10440,6 +10460,7 @@ if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
     const fullText = paperFullTextInput ? paperFullTextInput.value : "";
+    const essayDateVal = (paperEntryCategory === "essay" && essayDateInput) ? essayDateInput.value : "";
     if(!fullText.trim()){
       toast("请粘贴" + (paperEntryCategory === "essay" ? "随笔" : "论文") + "全文");
       return;
@@ -10454,7 +10475,7 @@ if(paperEntrySubmit){
     }
     const isEssay = paperEntryCategory === "essay";
     const noun = isEssay ? "随笔" : "论文";
-    const result = addPaper(title, fullText, null, structured, paperEntryCategory);
+    const result = addPaper(title, fullText, null, structured, paperEntryCategory, essayDateVal);
     if(result && result.error === "duplicate"){
       toast("此" + noun + "已在册中");
       return;
