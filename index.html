@@ -1058,6 +1058,22 @@
   .pr-text .pr-para-line{
     margin:0 0 1.15em; text-indent:2em;
   }
+  /* 版面保真渲染: PDF文字块绝对定位1:1还原原版面(双栏天然/字号关系保真) */
+  .pr-text .pr-layout-root{ padding:8px 0; text-align:center; overflow-x:auto; }
+  .pr-text .pr-layout-root::before{
+    content:"版面保真·原PDF版式1:1还原(只读预览,编辑/标注适配中)";
+    display:block; margin:0 0 12px; font-size:12px; color:#b58e2b; background:#fdf6e3;
+    border:1px solid #ecd9a8; border-radius:6px; padding:6px 10px; text-align:center;
+  }
+  .pr-text .pr-layout-page{
+    position:relative; margin:0 auto 18px; background:#fff;
+    box-shadow:0 1px 8px rgba(0,0,0,.14); overflow:hidden;
+    transform-origin:top center; border:1px solid #eee;
+  }
+  .pr-text .pr-layout-block{
+    position:absolute; white-space:pre; line-height:1.15; color:#111;
+    transform-origin:top left; user-select:text;
+  }
   .pr-text > p, .pr-text > div{
     margin:0 0 14px; text-indent:0;
   }
@@ -6228,6 +6244,39 @@ function extractRefBlock(lines){
   return refs.length >= 3 ? refs : null;
 }
 
+/* 版面保真渲染: 用PDF文字块坐标字号,绝对定位1:1还原原版面
+   (双栏天然还原/字号大小关系保真/文字位置保真) —— 像一张可读的PDF照片 */
+function renderLayoutPaper(item, prText){
+  const blocks = item.layout;
+  if(!Array.isArray(blocks) || !blocks.length) return false;
+  /* 按页分组 */
+  const pages = {};
+  let maxPage = 1;
+  for(let i=0;i<blocks.length;i++){
+    const b = blocks[i];
+    const pg = b.page || 1;
+    if(!pages[pg]) pages[pg] = { pageW: b.pageW || 595, pageH: b.pageH || 842, items: [] };
+    pages[pg].items.push(b);
+    if(pg > maxPage) maxPage = pg;
+  }
+  let html = '<div class="pr-layout-root">';
+  for(let p=1; p<=maxPage; p++){
+    const pg = pages[p];
+    if(!pg) continue;
+    html += '<div class="pr-layout-page" style="width:' + pg.pageW + 'pt;min-height:' + pg.pageH + 'pt;">';
+    for(let i=0;i<pg.items.length;i++){
+      const b = pg.items[i];
+      /* PDF坐标系原点在左下,向上为正; CSS原点在左上,向下为正 → 翻转y */
+      const top = pg.pageH - b.y - b.size;
+      const fw = b.bold ? 'bold' : 'normal';
+      html += '<span class="pr-layout-block" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(b.str) + '</span>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+  prText.innerHTML = html;
+  return true;
+}
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
@@ -6235,6 +6284,10 @@ function renderPaperText(item){
   if(item.category === "essay"){
     renderEssayText(item, prText);
     return;
+  }
+  /* 版面保真: 有layout坐标字号时,绝对定位逐块1:1还原原PDF版面(字号/双栏/位置保真) */
+  if(Array.isArray(item.layout) && item.layout.length){
+    if(renderLayoutPaper(item, prText)) return;
   }
   /* 不再走AI/structured重排: 按原文段落原样呈现(用户要求不改动原文版式)
      参考文献仍按规则识别为带检索链接的列表 */
