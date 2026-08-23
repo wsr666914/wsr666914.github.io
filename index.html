@@ -1616,6 +1616,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -4794,6 +4795,118 @@ function squeezeCjkSpaces(s){
     s = s.replace(/([\u4e00-\u9fff\u3000-\u303f\uff00-\uffef])\s+([\u4e00-\u9fff\u3000-\u303f\uff00-\uffef])/g, "$1$2");
   }while(s !== prev);
   return s;
+}
+
+/* 解析docx为版面保真layout块: 用JSZip直读word/document.xml,提取每段主导字号(w:sz半磅→pt)/
+   加粗(w:b)/首行缩进(w:ind firstLine twips→pt)/左缩进/分栏(w:sectPr cols num),
+   按行切分(中文字宽≈字号,英文词宽≈0.5*字数*字号,标点≈0.5*字号)构造绝对定位块,
+   走与PDF相同的renderLayoutPaper渲染路径,还原Word原文档字号大小关系/缩进/双栏版面。
+   docx无像素级坐标(Word是流式文档),故坐标按段落流估算,非1:1照片,但字号/缩进/分栏保真。 */
+function parseDocxToLayout(arrayBuffer){
+  return JSZip.loadAsync(arrayBuffer).then(function(zip){
+    const f = zip.file("word/document.xml");
+    if(!f) return null;
+    return f.async("string").then(function(xml){
+      const doc = new DOMParser().parseFromString(xml, "application/xml");
+      /* 分栏: 取所有sectPr里cols最大值(文档级分栏) */
+      let cols = 1;
+      const sectPrs = doc.getElementsByTagName("w:sectPr");
+      for(let i=0;i<sectPrs.length;i++){
+        const c = sectPrs[i].getElementsByTagName("w:cols")[0];
+        if(c){ const n = parseInt(c.getAttribute("w:num")||"1",10); if(n>cols) cols=n; }
+      }
+      const PAGE_W=595, MARGIN=72, CONTENT_W=PAGE_W-MARGIN*2, GAP=14;
+      const colW = cols>1 ? (CONTENT_W-(cols-1)*GAP)/cols : CONTENT_W;
+      const paras = doc.getElementsByTagName("w:p");
+      const paraList = [];
+      for(let i=0;i<paras.length;i++){
+        const p = paras[i];
+        let firstLine=0, left=0;
+        const pPr = p.getElementsByTagName("w:pPr")[0];
+        if(pPr){
+          const ind = pPr.getElementsByTagName("w:ind")[0];
+          if(ind){
+            firstLine = parseInt(ind.getAttribute("w:firstLine")||"0",10)/20;
+            left = parseInt(ind.getAttribute("w:left")||ind.getAttribute("w:start")||"0",10)/20;
+          }
+        }
+        let text="";
+        const sizeCnt={}; let anyBold=false;
+        const runs = p.getElementsByTagName("w:r");
+        for(let r=0;r<runs.length;r++){
+          const run = runs[r];
+          const rPr = run.getElementsByTagName("w:rPr")[0];
+          let sz=0, b=false;
+          if(rPr){
+            const szEl = rPr.getElementsByTagName("w:sz")[0];
+            if(szEl) sz = parseInt(szEl.getAttribute("w:val")||"0",10)/2;
+            if(rPr.getElementsByTagName("w:b").length) b=true;
+          }
+          const ts = run.getElementsByTagName("w:t");
+          let rt="";
+          for(let t=0;t<ts.length;t++) rt += ts[t].textContent||"";
+          if(rt){
+            text += rt;
+            if(sz>0) sizeCnt[sz] = (sizeCnt[sz]||0)+rt.length;
+            if(b) anyBold=true;
+          }
+        }
+        text = squeezeCjkSpaces(text).replace(/\s{2,}/g," ").trim();
+        if(!text) continue;
+        let mainSz=0, maxLen=0;
+        for(const k in sizeCnt){ if(sizeCnt[k]>maxLen){ maxLen=sizeCnt[k]; mainSz=parseFloat(k); } }
+        if(!mainSz) mainSz=10.5;
+        paraList.push({text:text, sz:mainSz, bold:anyBold, firstLine:firstLine, left:left});
+      }
+      const layout=[];
+      const perCol = Math.ceil(paraList.length/cols);
+      let maxCursor = MARGIN;
+      for(let ci=0; ci<cols; ci++){
+        let cursor = MARGIN;
+        const colX = MARGIN + ci*(colW+GAP);
+        const start=ci*perCol, end=Math.min(paraList.length, start+perCol);
+        for(let i=start;i<end;i++){
+          const pa = paraList[i];
+          const sz = pa.sz, lineH = sz*1.32;
+          const tokens = pa.text.match(/[\u4e00-\u9fff\u3400-\u4dbf]|[A-Za-z0-9]+|\s+|[^\s]/g) || [pa.text];
+          let line="", lineW=0, isFirst=true;
+          const flushLine = function(){
+            if(!line) return;
+            const x = colX + pa.left + (isFirst?pa.firstLine:0);
+            /* _top=行顶部距页顶(cursor),排完按pageH统一翻转为PDF底部坐标系 */
+            layout.push({x:x, _top:cursor, str:line.replace(/\s+$/,""), w:lineW, bold:pa.bold, size:sz, col:ci});
+            cursor += lineH;
+            line=""; lineW=0; isFirst=false;
+          };
+          for(let k=0;k<tokens.length;k++){
+            const tok=tokens[k];
+            let tw=0;
+            if(/^[\u4e00-\u9fff\u3400-\u4dbf]$/.test(tok)) tw=sz;
+            else if(/^\s+$/.test(tok)) tw=sz*0.28;
+            else if(/^[A-Za-z0-9]+$/.test(tok)) tw=tok.length*sz*0.52;
+            else tw=sz*0.5;
+            const maxW = isFirst ? (colW-pa.firstLine) : (colW-pa.left);
+            if(lineW+tw>maxW && line){ flushLine(); }
+            if(/^\s+$/.test(tok) && !line) continue;
+            line+=tok; lineW+=tw;
+          }
+          flushLine();
+          cursor += sz*0.35; /* 段间距 */
+        }
+        if(cursor>maxCursor) maxCursor=cursor;
+      }
+      /* 单页长布局: pageH=各栏最大高度,所有块page=1;
+         y翻转为PDF底部坐标系(渲染时 top=pageH-y-size,即块顶部距页顶=_top) */
+      const pageH = maxCursor + MARGIN;
+      for(let i=0;i<layout.length;i++){
+        layout[i].y = pageH - layout[i]._top - layout[i].size;
+        layout[i].page = 1; layout[i].pageW = PAGE_W; layout[i].pageH = pageH;
+        delete layout[i]._top;
+      }
+      const fullText = paraList.map(function(p){return p.text;}).join("\n");
+      return {layout:layout, text:fullText, pages:1};
+    });
+  });
 }
 
 function extractPdfTextEnhanced(pdf, onPageDone){
@@ -11641,46 +11754,57 @@ if(paperPdfBtn){
       if(file.size > 20*1024*1024){ toast("文件过大(超20MB)"); return; }
       const fname = file.name.toLowerCase();
       if(fname.endsWith(".docx")){
-        /* ---- Word(.docx)导入: mammoth解析,标题层级从h1~h3原生保留 ---- */
-        if(!window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
+        /* ---- Word(.docx)导入: 优先JSZip版面保真还原(字号/缩进/双栏),失败回退mammoth纯文本 ---- */
+        if(!window.JSZip && !window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
         paperPdfBtn.innerHTML = "⇪ 解析中…";
         const reader = new FileReader();
         reader.onload = function(){
-          mammoth.convertToHtml({ arrayBuffer: this.result }).then(function(r){
+          const ab = this.result;
+          /* mammoth纯文本回退(JSZip解析失败/无字号信息时) */
+          const mammothFallback = function(){
+            if(!window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
+            mammoth.convertToHtml({ arrayBuffer: ab }).then(function(r){
+              paperPdfBtn.classList.remove("busy");
+              paperPdfBtn.innerHTML = "⇪ 导入文档";
+              const doc = new DOMParser().parseFromString(r.value, "text/html");
+              const lines = [];
+              const blocks = doc.body ? doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li") : [];
+              for(let i=0; i<blocks.length; i++){
+                const el = blocks[i];
+                const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+                if(!t) continue;
+                lines.push(t);
+              }
+              const text = lines.join("\n");
+              if(text.trim().length < 50){ toast("Word文档文本过少,请检查文件"); return; }
+              if(paperFullTextInput){ paperFullTextInput.value = text; updatePaperEntryStats(); }
+              paperEntryFromPdf = true; paperEntryImages = null; paperEntryStructured = null;
+              if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
+              toast("Word已解析(" + lines.length + "段,纯文本模式)· 点「整理入册」");
+            }).catch(function(e){
+              paperPdfBtn.classList.remove("busy");
+              paperPdfBtn.innerHTML = "⇪ 导入文档";
+              toast("Word解析失败:" + (e.message || "未知错误"));
+            });
+          };
+          if(!window.JSZip){ mammothFallback(); return; }
+          parseDocxToLayout(ab).then(function(res){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
-            const doc = new DOMParser().parseFromString(r.value, "text/html");
-            const lines = [];
-            const sizeHeads = [];   /* Word标题样式 → 层级 */
-            const blocks = doc.body ? doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li") : [];
-            for(let i=0; i<blocks.length; i++){
-              const el = blocks[i];
-              const t = (el.textContent || "").replace(/\s+/g, " ").trim();
-              if(!t) continue;
-              lines.push(t);
-              const tag = el.tagName.toLowerCase();
-              if(tag === "h1") sizeHeads.push({ line: t, level: 1 });
-              else if(tag === "h2") sizeHeads.push({ line: t, level: 2 });
-              else if(tag === "h3" || tag === "h4") sizeHeads.push({ line: t, level: 3 });
+            if(res && res.layout && res.layout.length && res.text.trim().length >= 50){
+              if(paperFullTextInput){ paperFullTextInput.value = res.text; updatePaperEntryStats(); }
+              paperEntryFromPdf = true; paperEntryImages = null; paperEntryStructured = null;
+              paperEntryLayout = res.layout;
+              if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
+              toast("Word版面已还原(" + res.layout.length + "块)· 点「整理入册」");
+            }else{
+              mammothFallback();
             }
-            const text = lines.join("\n");
-            if(text.trim().length < 50){ toast("Word文档文本过少,请检查文件"); return; }
-            if(paperFullTextInput){
-              paperFullTextInput.value = text;
-              updatePaperEntryStats();
-            }
-            paperEntryFromPdf = true;  /* Word文档行序可靠 */
-            paperEntryImages = null;
-            paperEntryStructured = null;
-            if(paperTitleInput && !paperTitleInput.value.trim()){
-              paperTitleInput.value = file.name.replace(/\.docx$/i, "");
-            }
-            toast("Word已解析(" + lines.length + "段)· 点「整理入册」");
-          }).catch(function(e){
+          }).catch(function(){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
-            toast("Word解析失败:" + (e.message || "未知错误"));
+            mammothFallback();
           });
         };
         reader.readAsArrayBuffer(file);
