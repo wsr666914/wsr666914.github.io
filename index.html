@@ -6484,7 +6484,11 @@ function applyHighlightsToDom(item){
           if(hlType === "highlight"){
             wrapper = document.createElement("mark");
             wrapper.className = "hl";
-            wrapper.style.background = hl.color || "#FFE08A";
+            /* 用dataset存原始hex色: el.style.background读取会被浏览器规范化为rgb(),
+               导致extractHighlightsFromDom提取的color与按钮data-color(hex)不一致,
+               toggle取消匹配失败 → 颜色取消按钮失效。dataset.color保持原始格式 */
+            wrapper.dataset.color = hl.color || "#FFE08A";
+            wrapper.style.background = wrapper.dataset.color;
           }else if(hlType === "bold"){
             wrapper = document.createElement("strong");
             wrapper.className = "pr-bold";
@@ -6498,6 +6502,23 @@ function applyHighlightsToDom(item){
             wrapper.title = "点击查看备注";
           }
           wrapper.dataset.hlIdx = String(h);
+          /* 标注回归可编辑(继承父级contenteditable): 鼠标可正常拖选标注内部文字
+             非 note 标注: 点击即整体选中其文字,便于"点标注→点同色按钮"toggle取消
+             note 标注: 保留点击弹窗查看备注,不绑定选中 */
+          if(hlType !== "note"){
+            (function(wrap){
+              wrap.addEventListener("mousedown", function(ev){
+                ev.preventDefault();
+                try{
+                  var r = document.createRange();
+                  r.selectNodeContents(wrap);
+                  var s = window.getSelection();
+                  s.removeAllRanges();
+                  s.addRange(r);
+                }catch(_){}
+              });
+            })(wrapper);
+          }
           range.surroundContents(wrapper);
         }catch(e){ /* 跨节点,跳过 */ }
         break;
@@ -6739,7 +6760,7 @@ function extractHighlightsFromDom(root){
     const text = el.textContent.replace(/\u00A0/g, " ").trim();
     if(!text || text.length < 2) continue;
     if(el.tagName === "MARK"){
-      const e2 = { text: text, type: "highlight", color: el.style.background || "#FFE08A" };
+      const e2 = { text: text, type: "highlight", color: el.dataset.color || "#FFE08A" };
       out.push(e2);
     }else if(el.tagName === "STRONG"){
       out.push({ text: text, type: "bold" });
