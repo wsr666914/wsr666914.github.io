@@ -171,6 +171,59 @@
   .cc-chip.active .cat-svg{ color:#fff8e7; }
   .chip.active .cat-svg{ color:var(--paper); }
   .modal-cat.active .cat-svg{ color:var(--cat-color); }
+
+  /* ============ 饮品品牌小门类 (录入区) ============ */
+  .composer-brand{
+    margin-top:12px; padding:12px 14px; border:1px dashed var(--cat-color, var(--line-soft));
+    border-radius:12px; background:color-mix(in srgb, var(--cat-color, var(--accent)) 5%, transparent);
+    animation:fadeUp .25s ease;
+  }
+  .composer-brand .cb-label{
+    display:flex; align-items:baseline; gap:6px;
+    font-family:"JetBrains Mono", monospace; font-size:10px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--ink-mute); margin-bottom:8px;
+  }
+  .composer-brand .cb-sub{ font-size:10px; color:var(--cat-color); letter-spacing:.05em; }
+  .composer-brand .cb-row{ display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+  .composer-brand select{
+    appearance:none; -webkit-appearance:none; flex:1; min-width:120px;
+    padding:7px 28px 7px 10px; border:1px solid var(--line); border-radius:8px;
+    background:var(--paper); color:var(--ink); font-family:"Newsreader","Noto Serif SC",serif; font-size:14px;
+    cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a5c' stroke-width='1.4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 8px center;
+  }
+  .composer-brand select:focus{ outline:none; border-color:var(--cat-color, var(--ink-soft)); box-shadow:0 0 0 3px rgba(60,40,20,.08); }
+  .composer-brand .cb-new-input{
+    flex:1; min-width:120px; padding:7px 10px; border:1px solid var(--line);
+    border-radius:8px; background:var(--paper); color:var(--ink);
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:14px;
+  }
+  .composer-brand .cb-new-input:focus{ outline:none; border-color:var(--cat-color, var(--ink-soft)); box-shadow:0 0 0 3px rgba(60,40,20,.08); }
+  .composer-brand .cb-add-btn{
+    padding:7px 14px; border:1px solid var(--cat-color, var(--accent)); border-radius:8px;
+    background:var(--cat-color, var(--accent)); color:#fff8e7; cursor:pointer;
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px; white-space:nowrap;
+    transition:transform .15s, box-shadow .15s;
+  }
+  .composer-brand .cb-add-btn:hover{ transform:translateY(-1px); box-shadow:0 4px 10px rgba(60,40,20,.12); }
+  .composer-brand .cb-add-btn:active{ transform:scale(.96); }
+  .composer-brand .cb-hint{ display:block; margin-top:8px; font-family:"Newsreader","Noto Serif SC",serif; font-style:italic; font-size:12px; color:var(--ink-mute); }
+
+  /* ============ 饮品品牌筛选条 ============ */
+  .beverage-brand-bar{ max-width:var(--maxw); margin:0 auto; padding:6px 28px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  .beverage-brand-bar .label{ font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); margin-right:8px; }
+  .bb-chips{ display:flex; flex-wrap:wrap; gap:8px; }
+  .bb-chip{
+    display:inline-flex; align-items:center; padding:5px 12px; border:1px solid var(--line);
+    background:transparent; color:var(--ink-soft); border-radius:999px; cursor:pointer;
+    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
+    transition: transform .18s, border-color .18s, color .18s, box-shadow .18s;
+  }
+  .bb-chip:hover{ transform: translateY(-2px); box-shadow:0 4px 12px rgba(60,40,20,.10); border-color:var(--ink-soft); color:var(--ink); }
+  .bb-chip:active{ transform: scale(.96); }
+  .bb-chip.active{ background:var(--cat-color, var(--ink)); color:#fff8e7; border-color:var(--cat-color, var(--ink)); }
+  .bb-chip .bb-del{ margin-left:6px; opacity:.5; font-size:11px; }
+  .bb-chip .bb-del:hover{ opacity:1; }
   .predict-tag{
     display:inline-flex; align-items:center; gap:6px;
     padding:3px 10px; border-radius:999px;
@@ -258,20 +311,26 @@
   .essay-date-input input::placeholder{ color:var(--ink-mute); font-size:12px; }
   .edi-unit{ color:var(--ink-soft); font-family:"Newsreader","Noto Serif SC",serif; font-size:14px; padding:0 4px 0 1px; user-select:none; }
 
-  /* ============ 随笔按月筛选条 ============ */
+  /* ============ 随笔按月筛选条 (年/月 下拉联动) ============ */
   .essay-month-bar{ max-width:var(--maxw); margin:0 auto; padding:6px 28px 14px; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
   .essay-month-bar .label{ font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.2em; text-transform:uppercase; color:var(--ink-mute); margin-right:8px; }
-  .em-chips{ display:flex; flex-wrap:wrap; gap:8px; }
-  .em-chip{
-    display:inline-flex; align-items:center; padding:5px 12px; border:1px solid var(--line);
-    background:transparent; color:var(--ink-soft); border-radius:999px; cursor:pointer;
-    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
-    transition: transform .18s cubic-bezier(.2,.7,.3,1), border-color .18s, color .18s, box-shadow .18s;
-    animation: chipIn .4s cubic-bezier(.2,.7,.3,1) both;
+  .em-selects{ display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .em-selects select{
+    appearance:none; -webkit-appearance:none; padding:6px 26px 6px 10px; border:1px solid var(--line);
+    border-radius:8px; background:transparent; color:var(--ink); font-family:"JetBrains Mono", monospace;
+    font-size:13px; cursor:pointer; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%238a7a5c' stroke-width='1.4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center;
+    transition:border-color .18s, box-shadow .18s;
   }
-  .em-chip:hover{ transform: translateY(-2px); box-shadow:0 4px 12px rgba(60,40,20,.10); border-color:var(--ink-soft); color:var(--ink); }
-  .em-chip:active{ transform: scale(.96); }
-  .em-chip.active{ background:var(--cat-color, var(--ink)); color:#fff8e7; border-color:var(--cat-color, var(--ink)); }
+  .em-selects select:focus{ outline:none; border-color:var(--cat-color, var(--ink-soft)); box-shadow:0 0 0 3px rgba(60,40,20,.08); }
+  .em-selects select:disabled{ opacity:.4; cursor:not-allowed; }
+  .em-unit{ color:var(--ink-soft); font-family:"Newsreader","Noto Serif SC",serif; font-size:13px; padding:0 4px 0 1px; user-select:none; }
+  .em-selects button{
+    padding:5px 12px; border:1px solid var(--line); background:transparent; color:var(--ink-soft);
+    border-radius:999px; cursor:pointer; font-family:"Newsreader","Noto Serif SC",serif; font-size:13px;
+    transition: transform .18s, border-color .18s, color .18s;
+  }
+  .em-selects button:hover{ transform: translateY(-1px); border-color:var(--ink-soft); color:var(--ink); }
+  .em-selects button.active{ background:var(--cat-color, var(--ink)); color:#fff8e7; border-color:var(--cat-color, var(--ink)); }
 
   /* ============ 工具栏 ============ */
   .toolbar{
@@ -320,6 +379,14 @@
     color:var(--cat-color, var(--accent));
   }
   .card-cat .dot{ width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .card-brand{
+    display:inline-flex; align-items:center; gap:4px; margin-top:4px;
+    padding:2px 9px; border-radius:999px; font-family:"Newsreader","Noto Serif SC",serif;
+    font-size:11px; color:var(--cat-color, var(--accent));
+    background:color-mix(in srgb, var(--cat-color, var(--accent)) 10%, transparent);
+    border:1px solid color-mix(in srgb, var(--cat-color, var(--accent)) 35%, transparent);
+  }
+  .bb-count{ margin-left:6px; padding:0 5px; border-radius:8px; background:rgba(60,40,20,.08); font-size:10px; font-family:"JetBrains Mono", monospace; }
   .cat-svg{ display:inline-block; vertical-align:middle; flex-shrink:0; color:var(--cat-color, var(--accent)); }
   .card-del{
     background:transparent; border:none; cursor:pointer; color:var(--ink-mute);
@@ -1620,6 +1687,15 @@
       <span class="cc-hint">不选则用自动判定,点击可覆盖</span>
       <div class="cc-chips" id="composerCats"></div>
     </div>
+    <div class="composer-brand" id="composerBeverageBrand" style="display:none">
+      <span class="cb-label">饮品品牌 <span class="cb-sub">小门类 · 可自建</span></span>
+      <div class="cb-row">
+        <select id="beverageBrandSel" title="选择已有品牌小门类"></select>
+        <input id="beverageBrandNew" class="cb-new-input" type="text" placeholder="或输入新品牌名" autocomplete="off" />
+        <button id="beverageBrandAddBtn" type="button" class="cb-add-btn" title="把左侧输入的品牌加入小门类">＋ 加入</button>
+      </div>
+      <span class="cb-hint">录入饮品时请选择其品牌;同一品牌下的饮品会归到该小门类下</span>
+    </div>
     <div class="composer-extras">
       <button class="btn-link" id="batchBtn" title="粘贴一段文字,自识其中各目">⇶ 粘贴识别</button>
       <button class="btn-link" id="paperBtn" title="粘贴一整篇论文,自动整理归册">§ 录入论文</button>
@@ -1653,10 +1729,22 @@
   <button class="modal-btn" id="bulkCancel">退出</button>
 </div>
 
-<!-- 随笔按月筛选条 (仅随笔门类显示) -->
+<!-- 随笔按月筛选条 (仅随笔门类显示): 自选年+月联动下拉 -->
 <div class="essay-month-bar" id="essayMonthBar" style="display:none">
   <span class="label">按月</span>
-  <div class="em-chips" id="essayMonthChips"></div>
+  <div class="em-selects" id="essayMonthSelects">
+    <select id="essayYearSel" title="选择年份"></select>
+    <span class="em-unit">年</span>
+    <select id="essayMonthSel" title="选择月份"></select>
+    <span class="em-unit">月</span>
+    <button id="essayMonthClear" type="button" title="清除年月筛选,显示全部随笔">全部随笔</button>
+  </div>
+</div>
+
+<!-- 饮品品牌小门类筛选条 (仅饮品门类显示) -->
+<div class="beverage-brand-bar" id="beverageBrandBar" style="display:none">
+  <span class="label">品牌</span>
+  <div class="bb-chips" id="beverageBrandChips"></div>
 </div>
 
 <!-- 识别列表模态框 -->
@@ -2831,7 +2919,7 @@ async function classifyWithOnline(name){
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
-const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayMonthFilter: null };
+const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayYearFilter: null, essayMonthFilter: null, beverageBrandFilter: null };
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -3170,6 +3258,7 @@ function afterLogin(){
   state.pendingReview = [];
   state.trash = [];
   loadState();
+  loadBeverageBrands();
   migrateItems();
   /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
   try{
@@ -3425,16 +3514,61 @@ function uid(){
   return Date.now().toString(36) + Math.random().toString(36).slice(2,7);
 }
 
+/* ============================================================
+   饮品品牌小门类 —— 可自建的品牌列表,持久化于 localStorage
+   录入饮品时选择品牌, 存入 item.subCategory; 饮品门类下可按品牌筛选
+   ============================================================ */
+const BEV_BRANDS_KEY = "wsr_bev_brands_v1";
+const DEFAULT_BEV_BRANDS = [
+  "可口可乐","百事可乐","农夫山泉","怡宝","百岁山","康师傅","统一","娃哈哈",
+  "王老吉","加多宝","红牛","东鹏特饮","元气森林","星巴克","瑞幸","Costa",
+  "蜜雪冰城","喜茶","奈雪","茶百道","霸王茶姬","一点点","CoCo","古茗",
+  "雀巢咖啡","麦斯威尔","三顿半","隅田川","永璞","AGF","UCC",
+  "汇源","味全","椰树","美汁源","依云","巴黎水","圣培露"
+];
+let beverageBrands = []; /* 运行期品牌列表 */
+function loadBeverageBrands(){
+  let saved = [];
+  try{
+    const s = JSON.parse(localStorage.getItem(BEV_BRANDS_KEY) || "[]");
+    if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
+  }catch(e){}
+  const set = new Set(saved);
+  for(let i=0; i<DEFAULT_BEV_BRANDS.length; i++) set.add(DEFAULT_BEV_BRANDS[i]);
+  beverageBrands = Array.from(set);
+}
+function saveBeverageBrands(){
+  try{ localStorage.setItem(BEV_BRANDS_KEY, JSON.stringify(beverageBrands)); }catch(e){}
+}
+function addBeverageBrand(name){
+  const n = (name || "").trim();
+  if(!n) return false;
+  /* 已存在(忽略大小写)则不重复添加 */
+  const exists = beverageBrands.some(function(b){ return b.toLowerCase() === n.toLowerCase(); });
+  if(exists) return false;
+  beverageBrands.push(n);
+  saveBeverageBrands();
+  return true;
+}
+function removeBeverageBrand(name){
+  const n = (name || "").trim();
+  if(!n) return;
+  beverageBrands = beverageBrands.filter(function(b){ return b !== n; });
+  saveBeverageBrands();
+}
+
 function addItem(name, manualCategory, options){
   options = options || {};
   const result = classify(name);
   const finalCategory = manualCategory || result.cat;
   const trimmed = name.trim();
 
-  // 同分类同名去重
+  // 同分类同名去重 (饮品: 同品牌下同名才算重复; 跨品牌允许同名)
   const low = trimmed.toLowerCase();
   const dup = state.items.find(function(i){
-    return i.name.trim().toLowerCase() === low && i.category === finalCategory;
+    if(i.name.trim().toLowerCase() !== low || i.category !== finalCategory) return false;
+    if(finalCategory === "beverage") return (i.subCategory || "") === (options.subCategory || "");
+    return true;
   });
   if(dup){
     return { error:"duplicate", existing:dup, category:finalCategory };
@@ -3450,6 +3584,7 @@ function addItem(name, manualCategory, options){
     manualOverride: !!manualCategory && manualCategory !== result.cat,
     rating: Math.max(0, Math.min(5, parseInt(options.rating, 10) || 0)),  // 0 = 未评
     description: (options.description || "").trim(),
+    subCategory: (finalCategory === "beverage" && options.subCategory) ? options.subCategory.trim() : "",
     addedAt: new Date().toISOString()
   };
   state.items.unshift(item);
@@ -9259,6 +9394,7 @@ function render(){
   renderStats();
   renderFilters();
   renderEssayMonthBar();
+  renderBeverageBrandBar();
   renderGallery();
 }
 
@@ -9398,6 +9534,9 @@ function renderFilters(){
   for(let i=0; i<chips.length; i++){
     chips[i].onclick = function(){
       state.filter = this.dataset.filter;
+      /* 切离随笔/饮品时清空其专属筛选, 避免残留 */
+      if(state.filter !== "essay"){ state.essayYearFilter = null; state.essayMonthFilter = null; }
+      if(state.filter !== "beverage"){ state.beverageBrandFilter = null; }
       state.galleryLimit = 120; /* 切换分类从头显示 */
       render();
     };
@@ -9405,47 +9544,137 @@ function renderFilters(){
   initChipDnD(); /* 启用拖拽重排门类顺序 */
 }
 
-/* 随笔按月筛选条: 仅在筛选「随笔」门类时显示; 未选时随笔按写作时间倒序(最新在前) */
+/* 随笔按月筛选: 年/月 两个下拉联动; 选定年+月后筛该月随笔, 未选时按写作时间倒序 */
 function renderEssayMonthBar(){
   const bar = document.getElementById("essayMonthBar");
-  const chips = document.getElementById("essayMonthChips");
-  if(!bar || !chips) return;
+  const yearSel = document.getElementById("essayYearSel");
+  const monthSel = document.getElementById("essayMonthSel");
+  const clearBtn = document.getElementById("essayMonthClear");
+  if(!bar) return;
   /* 非随笔门类时隐藏 */
-  if(state.filter !== "essay"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  if(state.filter !== "essay"){
+    bar.style.display = "none";
+    if(yearSel) yearSel.innerHTML = "";
+    if(monthSel) monthSel.innerHTML = "";
+    return;
+  }
   bar.style.display = "";
-  /* 设置随笔主题色,供 active 态使用 */
   const essayCat = CATEGORIES.essay;
   if(essayCat) bar.style.setProperty("--cat-color", essayCat.color);
-  /* 收集所有随笔的年月(基于 writtenAt) 并去重, 降序排列 */
-  const months = new Set();
+  if(!yearSel || !monthSel) return;
+  /* 收集所有随笔的 年→月集合 映射 (基于 writtenAt) */
+  const yearMonthMap = {}; /* year(str) -> Set(month number) */
   state.items.forEach(function(it){
-    if(it.category === "essay" && it.writtenAt){
-      const d = new Date(it.writtenAt);
-      if(isNaN(d.getTime())) return;
-      const ym = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
-      months.add(ym);
-    }
+    if(it.category !== "essay" || !it.writtenAt) return;
+    const d = new Date(it.writtenAt);
+    if(isNaN(d.getTime())) return;
+    const y = String(d.getFullYear());
+    const m = d.getMonth() + 1;
+    if(!yearMonthMap[y]) yearMonthMap[y] = new Set();
+    yearMonthMap[y].add(m);
   });
-  const sortedMonths = Array.from(months).sort().reverse(); /* 最近的月份在前 */
-  /* 若当前筛选月份已不存在(随笔被删/改时间) → 自动回退到「全部时间」 */
-  if(state.essayMonthFilter && sortedMonths.indexOf(state.essayMonthFilter) < 0){
-    state.essayMonthFilter = null;
+  const years = Object.keys(yearMonthMap).map(Number).sort(function(a,b){ return b - a; }); /* 降序 */
+  /* 当前筛选状态: essayYearFilter(年字符串|null), essayMonthFilter(月数字|null) */
+  if(!state.essayYearFilter) state.essayYearFilter = null;
+  if(!state.essayMonthFilter) state.essayMonthFilter = null;
+  /* 若当前选中的年已不存在 → 清空 */
+  if(state.essayYearFilter && years.indexOf(Number(state.essayYearFilter)) < 0) state.essayYearFilter = null;
+  /* 渲染年份下拉: 全部 + 各年 */
+  let yHtml = '<option value="">全部</option>';
+  for(let i=0; i<years.length; i++){
+    const y = years[i];
+    yHtml += '<option value="' + y + '"' + (String(state.essayYearFilter) === String(y) ? ' selected' : '') + '>' + y + '</option>';
   }
-  /* 生成按钮: 全部时间 + 各年月 */
-  let html = '<button class="em-chip ' + (state.essayMonthFilter === null ? 'active' : '') + '" data-month="all">全部时间</button>';
-  for(let i=0; i<sortedMonths.length; i++){
-    const ym = sortedMonths[i];
-    const parts = ym.split("-");
-    const label = parts[0] + "年" + parseInt(parts[1],10) + "月";
-    html += '<button class="em-chip ' + (state.essayMonthFilter === ym ? 'active' : '') + '" data-month="' + ym + '">' + label + '</button>';
+  yearSel.innerHTML = yHtml;
+  yearSel.disabled = years.length === 0;
+  /* 渲染月份下拉: 若未选年则禁用; 选年后只列该年有随笔的月份 */
+  let mHtml = '<option value="">全部</option>';
+  let monthsArr = [];
+  if(state.essayYearFilter && yearMonthMap[state.essayYearFilter]){
+    monthsArr = Array.from(yearMonthMap[state.essayYearFilter]).sort(function(a,b){ return a - b; });
+    for(let i=0; i<monthsArr.length; i++){
+      const m = monthsArr[i];
+      mHtml += '<option value="' + m + '"' + (Number(state.essayMonthFilter) === m ? ' selected' : '') + '>' + m + '</option>';
+    }
+  }
+  monthSel.innerHTML = mHtml;
+  monthSel.disabled = !state.essayYearFilter || monthsArr.length === 0;
+  /* 「全部随笔」按钮高亮: 未筛选时 active */
+  if(clearBtn) clearBtn.classList.toggle("active", !state.essayYearFilter && !state.essayMonthFilter);
+  /* 年份变更: 联动刷新月份下拉, 清掉月(月份在新年里可能不存在) */
+  yearSel.onchange = function(){
+    state.essayYearFilter = this.value ? String(this.value) : null;
+    state.essayMonthFilter = null; /* 换年清月 */
+    state.galleryLimit = 120;
+    render();
+  };
+  /* 月份变更: 组合筛选 */
+  monthSel.onchange = function(){
+    state.essayMonthFilter = this.value ? Number(this.value) : null;
+    state.galleryLimit = 120;
+    render();
+  };
+  /* 清除筛选 */
+  if(clearBtn){
+    clearBtn.onclick = function(){
+      state.essayYearFilter = null;
+      state.essayMonthFilter = null;
+      state.galleryLimit = 120;
+      render();
+    };
+  }
+}
+
+/* 饮品品牌筛选条: 仅饮品门类显示; 显示「全部品牌」+ 各品牌(含已用品牌),可删自定义品牌 */
+function renderBeverageBrandBar(){
+  const bar = document.getElementById("beverageBrandBar");
+  const chips = document.getElementById("beverageBrandChips");
+  if(!bar || !chips) return;
+  if(state.filter !== "beverage"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  bar.style.display = "";
+  const bevCat = CATEGORIES.beverage;
+  if(bevCat) bar.style.setProperty("--cat-color", bevCat.color);
+  /* 收集已被饮品条目使用的品牌 */
+  const usedBrands = new Set();
+  state.items.forEach(function(it){
+    if(it.category === "beverage" && it.subCategory) usedBrands.add(it.subCategory);
+  });
+  /* 合并: 用户品牌列表(beverageBrands) ∪ 已用品牌, 保持 beverageBrands 顺序 */
+  const allBrands = beverageBrands.slice();
+  usedBrands.forEach(function(b){ if(allBrands.indexOf(b) < 0) allBrands.push(b); });
+  /* 当前筛选品牌若已不在列表 → 回退全部 */
+  if(state.beverageBrandFilter && allBrands.indexOf(state.beverageBrandFilter) < 0) state.beverageBrandFilter = null;
+  let html = '<button class="bb-chip ' + (state.beverageBrandFilter === null ? 'active' : '') + '" data-brand="">全部品牌</button>';
+  for(let i=0; i<allBrands.length; i++){
+    const b = allBrands[i];
+    const isCustom = beverageBrands.indexOf(b) >= 0; /* 自定义品牌可删 */
+    const cnt = state.items.filter(function(it){ return it.category === "beverage" && it.subCategory === b; }).length;
+    html += '<button class="bb-chip ' + (state.beverageBrandFilter === b ? 'active' : '') + '" data-brand="' + escapeHtml(b) + '">' +
+      escapeHtml(b) + (cnt ? '<span class="bb-count">' + cnt + '</span>' : '') +
+      (isCustom ? '<span class="bb-del" data-del="' + escapeHtml(b) + '" title="删除该品牌小门类">×</span>' : '') +
+    '</button>';
   }
   chips.innerHTML = html;
-  /* 绑定筛选事件 */
-  const btns = chips.querySelectorAll(".em-chip");
+  const btns = chips.querySelectorAll(".bb-chip");
   for(let i=0; i<btns.length; i++){
-    btns[i].onclick = function(){
-      state.essayMonthFilter = this.dataset.month === "all" ? null : this.dataset.month;
-      state.galleryLimit = 120; /* 切换筛选从头显示 */
+    btns[i].onclick = function(e){
+      /* 点删除按钮: 不切换筛选, 只删品牌 */
+      const delEl = e.target && e.target.classList && e.target.classList.contains("bb-del") ? e.target : null;
+      if(delEl){
+        e.stopPropagation();
+        const dn = delEl.dataset.del;
+        if(dn && confirm("删除品牌小门类「" + dn + "」?\n(该品牌下的饮品不会被删, 仅去掉品牌归类)")){
+          removeBeverageBrand(dn);
+          /* 该品牌下饮品的 subCategory 清空 */
+          state.items.forEach(function(it){ if(it.category === "beverage" && it.subCategory === dn) it.subCategory = ""; });
+          saveState();
+          if(state.beverageBrandFilter === dn) state.beverageBrandFilter = null;
+          render();
+        }
+        return;
+      }
+      state.beverageBrandFilter = this.dataset.brand || null;
+      state.galleryLimit = 120;
       render();
     };
   }
@@ -9460,20 +9689,31 @@ function renderGallery(){
   if(state.filter !== "all") items = items.filter(function(i){ return i.category === state.filter; });
   if(q) items = items.filter(function(i){ return i.name.toLowerCase().indexOf(q) >= 0; });
 
-  /* 随笔: 按月筛选 + 按写作时间倒序(最新在前,无筛选时同样倒序) */
+  /* 随笔: 按年/月下拉筛选 + 按写作时间倒序(最新在前,无筛选时同样倒序) */
   if(state.filter === "essay"){
-    if(state.essayMonthFilter){
+    if(state.essayYearFilter || state.essayMonthFilter){
       items = items.filter(function(i){
         if(!i.writtenAt) return false;
         const d = new Date(i.writtenAt);
-        const ym = d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0");
-        return ym === state.essayMonthFilter;
+        if(isNaN(d.getTime())) return false;
+        const y = String(d.getFullYear());
+        const m = d.getMonth() + 1;
+        if(state.essayYearFilter && y !== state.essayYearFilter) return false;
+        if(state.essayMonthFilter && m !== Number(state.essayMonthFilter)) return false;
+        return true;
       });
     }
     items = items.slice().sort(function(a,b){
       const ta = a.writtenAt ? new Date(a.writtenAt).getTime() : (a.addedAt || 0);
       const tb = b.writtenAt ? new Date(b.writtenAt).getTime() : (b.addedAt || 0);
       return tb - ta; /* 倒序: 时间大的在前 */
+    });
+  }
+
+  /* 饮品: 按品牌小门类筛选 */
+  if(state.filter === "beverage" && state.beverageBrandFilter){
+    items = items.filter(function(i){
+      return i.category === "beverage" && (i.subCategory || "") === state.beverageBrandFilter;
     });
   }
 
@@ -9550,6 +9790,10 @@ function renderGallery(){
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
     html += '</div>';
+    /* 饮品: 品牌小门类标签 */
+    if(it.category === "beverage" && it.subCategory){
+      html += '<div class="card-brand" title="品牌小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
+    }
     /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
     let _dispTitle = it.name;
     if(it.category === "essay" && it.writtenAt){
@@ -9782,8 +10026,73 @@ function renderComposerCats(){
       }
       renderComposerCats();
       updatePredict();
+      syncBeverageBrandComposer();
     };
   }
+  syncBeverageBrandComposer();
+}
+
+/* 饮品品牌小门类 —— 录入区显隐 + 下拉渲染 + 新建按钮 */
+const composerBeverageBrandEl = document.getElementById("composerBeverageBrand");
+const beverageBrandSelEl = document.getElementById("beverageBrandSel");
+const beverageBrandNewEl = document.getElementById("beverageBrandNew");
+const beverageBrandAddBtnEl = document.getElementById("beverageBrandAddBtn");
+/* 当前录入选中的品牌(临时态,提交时用) */
+let composerBeverageBrand = "";
+
+function renderBeverageBrandSelect(){
+  if(!beverageBrandSelEl) return;
+  let html = '<option value="">— 不分品牌 —</option>';
+  for(let i=0; i<beverageBrands.length; i++){
+    const b = beverageBrands[i];
+    html += '<option value="' + escapeHtml(b) + '"' + (composerBeverageBrand === b ? ' selected' : '') + '>' + escapeHtml(b) + '</option>';
+  }
+  beverageBrandSelEl.innerHTML = html;
+}
+/* 依据当前最终分类(手选或自动判定)决定品牌区显隐 */
+function syncBeverageBrandComposer(){
+  if(!composerBeverageBrandEl) return;
+  const v = input ? input.value.trim() : "";
+  let finalCat = state.composerCategory;
+  if(!finalCat && v){
+    const r = classify(v);
+    if(r && r.cat) finalCat = r.cat;
+  }
+  const show = (finalCat === "beverage");
+  composerBeverageBrandEl.style.display = show ? "" : "none";
+  if(show){
+    const bevCat = CATEGORIES.beverage;
+    if(bevCat) composerBeverageBrandEl.style.setProperty("--cat-color", bevCat.color);
+    renderBeverageBrandSelect();
+  } else {
+    /* 切离饮品时清掉临时选中 */
+    composerBeverageBrand = "";
+    if(beverageBrandNewEl) beverageBrandNewEl.value = "";
+  }
+}
+if(beverageBrandSelEl){
+  beverageBrandSelEl.onchange = function(){
+    composerBeverageBrand = this.value || "";
+    if(beverageBrandNewEl) beverageBrandNewEl.value = "";
+  };
+}
+if(beverageBrandAddBtnEl){
+  beverageBrandAddBtnEl.onclick = function(){
+    const n = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
+    if(!n){ toast("请先输入新品牌名"); return; }
+    const added = addBeverageBrand(n);
+    if(!added){ toast("品牌「" + n + "」已存在"); }
+    else { toast("已加入品牌「" + n + "」"); }
+    composerBeverageBrand = n; /* 自动选中新建的品牌 */
+    if(beverageBrandNewEl) beverageBrandNewEl.value = "";
+    renderBeverageBrandSelect();
+    renderBeverageBrandBar();
+  };
+}
+if(beverageBrandNewEl){
+  beverageBrandNewEl.addEventListener("keydown", function(e){
+    if(e.key === "Enter"){ e.preventDefault(); if(beverageBrandAddBtnEl) beverageBrandAddBtnEl.click(); }
+  });
 }
 
 function updatePredict(){
@@ -9812,6 +10121,7 @@ function updatePredict(){
     html += '<span class="predict-conf">置信 ' + pct + '% · ' + escapeHtml(src) + '</span>';
   }
   predictEl.innerHTML = html;
+  syncBeverageBrandComposer();
 }
 
 input.addEventListener("input", function(){
@@ -9819,6 +10129,7 @@ input.addEventListener("input", function(){
   if(!input.value.trim()) state.composerCategory = null;
   updatePredict();
   renderComposerCats();
+  syncBeverageBrandComposer();
 });
 input.addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); submit(); }
@@ -9828,19 +10139,41 @@ submitBtn.addEventListener("click", submit);
 function submit(){
   const v = input.value.trim();
   if(!v){ toast("请先键入名目"); return; }
-  const result = addItem(v, state.composerCategory);
+  /* 饮品: 若新建品牌输入框有内容,先加入品牌列表并选中 */
+  const finalCat = state.composerCategory || (classify(v).cat);
+  let brand = composerBeverageBrand || "";
+  if(finalCat === "beverage"){
+    const newName = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
+    if(newName){
+      addBeverageBrand(newName);
+      brand = newName;
+      renderBeverageBrandBar();
+    }
+    if(!brand){
+      toast("请为该饮品选择或新建一个品牌");
+      if(beverageBrandSelEl){ beverageBrandSelEl.focus(); }
+      return;
+    }
+  }
+  const result = addItem(v, state.composerCategory, { subCategory: brand });
   if(result && result.error === "duplicate"){
     const ec = CATEGORIES[result.category] || CATEGORIES[FALLBACK_CAT];
-    toast('「' + v + '」已存在于「' + ec.name + '」分类,未重复入册');
+    const dupHint = (result.category === "beverage" && result.existing && result.existing.subCategory)
+      ? '(品牌「' + result.existing.subCategory + '」下)' : '';
+    toast('「' + v + '」已存在于「' + ec.name + '」' + dupHint + '分类,未重复入册');
     return;
   }
   const c = CATEGORIES[result.category] || CATEGORIES[FALLBACK_CAT];
   const tag = result.manualOverride ? '手订' : '已入';
-  toast(tag + '「' + c.name + '」 · ' + result.name);
+  const brandTag = (result.category === "beverage" && result.subCategory) ? ' · ' + result.subCategory : '';
+  toast(tag + '「' + c.name + '」' + brandTag + ' · ' + result.name);
   input.value = "";
   state.composerCategory = null;
+  composerBeverageBrand = "";
+  if(beverageBrandNewEl) beverageBrandNewEl.value = "";
   renderComposerCats();
   updatePredict();
+  syncBeverageBrandComposer();
   const archive = document.getElementById("archive");
   if(archive) archive.scrollIntoView({behavior:"smooth"});
 }
