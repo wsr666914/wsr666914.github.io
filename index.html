@@ -1697,8 +1697,10 @@
     </div>
     <div class="modal-actions">
       <button class="modal-btn primary" id="aiCfgSave">保存配置</button>
+      <button class="modal-btn" id="aiCfgTest">测试连接</button>
       <button class="modal-btn" id="aiCfgClose">关闭</button>
     </div>
+    <div class="ai-cfg-tip" id="aiCfgTestResult" style="display:none;margin-top:10px;text-align:center;font-size:13px;"></div>
   </div>
 </div>
 
@@ -5748,6 +5750,55 @@ function openAiCfgModal(){
   const closeBtn = document.getElementById("aiCfgClose");
   if(closeBtn){
     closeBtn.onclick = function(){ modal.classList.remove("show"); };
+  }
+  /* 测试连接: 用当前表单值直连一次,立刻给出成功/失败原因(未保存也可测) */
+  const testBtn = document.getElementById("aiCfgTest");
+  const testRes = document.getElementById("aiCfgTestResult");
+  if(testBtn){
+    testBtn.onclick = async function(){
+      const endpoint = (ep ? ep.value : "").trim().replace(/\/+$/, "");
+      const apikey = (key ? key.value : "").trim();
+      const mname = (model ? model.value : "").trim() || "glm-4.7-flash";
+      if(!endpoint || !apikey){
+        if(testRes){ testRes.style.display = ""; testRes.innerHTML = "请先填写 API 端点与 API Key"; }
+        return;
+      }
+      testBtn.disabled = true;
+      const oldText = testBtn.textContent;
+      testBtn.textContent = "测试中…";
+      if(testRes) testRes.innerHTML = "正在连接 " + endpoint + " / " + mname + " …";
+      try{
+        const resp = await fetch(endpoint + "/chat/completions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apikey },
+          body: JSON.stringify({
+            model: mname,
+            messages: [{ role:"user", content:"请只回复两个字: 成功" }],
+            temperature: 0.1,
+            max_tokens: 20
+          })
+        });
+        if(resp.ok){
+          const data = await resp.json().catch(function(){ return null; });
+          const content = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
+          if(testRes) testRes.innerHTML = '<b style="color:#2e7d32;">连接成功 ✓</b> 模型回复: ' + (content || "(无内容)");
+          else toast("连接成功 ✓");
+        }else{
+          const errText = await resp.text().catch(function(){ return ""; });
+          let hint = "";
+          if(resp.status === 401) hint = " <b>密钥无效</b> — 请到 open.bigmodel.cn 重新复制整串密钥(格式 id.secret)";
+          else if(resp.status === 404) hint = " <b>模型名/地址不对</b> — 智谱模型名填 glm-4.7-flash,端点 https://open.bigmodel.cn/api/paas/v4";
+          else if(resp.status === 429) hint = " <b>限流</b> — 免费版同一时间仅1个并发,稍后重试";
+          if(testRes) testRes.innerHTML = '<b style="color:#c0392b;">连接失败</b> HTTP ' + resp.status + hint + (errText ? " <span style=\"color:var(--ink-mute);\">" + errText.substring(0, 100) + "</span>" : "");
+          else toast("连接失败 HTTP " + resp.status);
+        }
+      }catch(e){
+        if(testRes) testRes.innerHTML = '<b style="color:#c0392b;">网络错误</b> — ' + (e.message || "未知") + "。请检查网络/端点地址";
+        else toast("网络错误: " + (e.message || "未知"));
+      }
+      testBtn.disabled = false;
+      testBtn.textContent = oldText;
+    };
   }
 }
 /* 导航栏 ⚙ AI 按钮状态: 已配置显示 ✓ */
