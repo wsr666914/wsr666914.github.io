@@ -3541,14 +3541,19 @@ const DEFAULT_BEV_BRANDS = [
 ];
 let beverageBrands = []; /* 运行期品牌列表 */
 function loadBeverageBrands(){
+  const raw = localStorage.getItem(BEV_BRANDS_KEY);
+  if(raw === null){
+    /* 首次使用: 用预置品牌初始化 */
+    beverageBrands = DEFAULT_BEV_BRANDS.slice();
+    return;
+  }
   let saved = [];
   try{
-    const s = JSON.parse(localStorage.getItem(BEV_BRANDS_KEY) || "[]");
+    const s = JSON.parse(raw);
     if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
   }catch(e){}
-  const set = new Set(saved);
-  for(let i=0; i<DEFAULT_BEV_BRANDS.length; i++) set.add(DEFAULT_BEV_BRANDS[i]);
-  beverageBrands = Array.from(set);
+  /* 已保存过: 只用保存值, 不再合并预置(否则删掉的预置项会复活) */
+  beverageBrands = saved;
 }
 function saveBeverageBrands(){
   try{ localStorage.setItem(BEV_BRANDS_KEY, JSON.stringify(beverageBrands)); }catch(e){}
@@ -3583,14 +3588,19 @@ const DEFAULT_SKIN_FUNCS = [
 ];
 let skincareFuncs = [];
 function loadSkincareFuncs(){
+  const raw = localStorage.getItem(SKIN_FUNC_KEY);
+  if(raw === null){
+    /* 首次使用: 用预置功效初始化 */
+    skincareFuncs = DEFAULT_SKIN_FUNCS.slice();
+    return;
+  }
   let saved = [];
   try{
-    const s = JSON.parse(localStorage.getItem(SKIN_FUNC_KEY) || "[]");
+    const s = JSON.parse(raw);
     if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
   }catch(e){}
-  const set = new Set(saved);
-  for(let i=0; i<DEFAULT_SKIN_FUNCS.length; i++) set.add(DEFAULT_SKIN_FUNCS[i]);
-  skincareFuncs = Array.from(set);
+  /* 已保存过: 只用保存值, 不再合并预置(否则删掉的预置项会复活) */
+  skincareFuncs = saved;
 }
 function saveSkincareFuncs(){
   try{ localStorage.setItem(SKIN_FUNC_KEY, JSON.stringify(skincareFuncs)); }catch(e){}
