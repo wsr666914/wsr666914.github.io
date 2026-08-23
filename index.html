@@ -5285,7 +5285,17 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt){
   /* 提取标题:用户指定 > 首个"真实标题行"(跳过作者名/学校/文献编号等噪声行) > 前40字
      ppLooksLikeTitle: 排除元信息行(文章编号/DOI/分类号/基金/收稿)、纯作者行、单位行 */
   let paperTitle = (title || "").trim();
-  if(!paperTitle){
+  if(isEssay){
+    /* 随笔: 以写作日期作为标题显示, 不从正文自行提取文字作标题 */
+    if(writtenAt){
+      const wd = new Date(writtenAt);
+      if(!isNaN(wd.getTime())){
+        paperTitle = wd.getFullYear() + "年" + (wd.getMonth()+1) + "月" + wd.getDate() + "日";
+      }
+    }
+    if(!paperTitle) paperTitle = "无期随笔";
+  }
+  if(!isEssay && !paperTitle){
     const lines = trimmedText.split(/\r?\n/);
     for(let i=0; i<lines.length && i<8; i++){
       const lt = lines[i].trim();
@@ -5302,13 +5312,13 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt){
     const cleanedTitle = ppCleanTitle(paperTitle, trimmedText);
     if(cleanedTitle && cleanedTitle.length >= 3) paperTitle = cleanedTitle;
   }
-  /* 同分类同名去重 (随笔: 同名但不同写作时间视为不同篇) */
+  /* 去重: 论文按同名; 随笔按正文内容(允许同一天录入多篇不同随笔) */
   const low = paperTitle.toLowerCase();
   const writtenAtIso = (isEssay && writtenAt) ? new Date(writtenAt).toISOString() : null;
   const dup = state.items.find(function(i){
-    if(i.name.trim().toLowerCase() !== low || i.category !== category) return false;
-    if(isEssay) return (i.writtenAt || null) === (writtenAtIso || null);
-    return true;
+    if(i.category !== category) return false;
+    if(isEssay) return (i.fullText || "").trim() === trimmedText;
+    return i.name.trim().toLowerCase() === low;
   });
   if(dup) return { error:"duplicate", existing:dup };
 
@@ -5389,7 +5399,15 @@ function openPaperReader(itemId){
   /* 标题 + 元信息 */
   const prTitle = document.getElementById("prTitle");
   const prMeta = document.getElementById("prMeta");
-  if(prTitle) prTitle.textContent = item.name;
+  if(prTitle){
+    /* 随笔: 查看器标题同样显示写作日期, 不显示正文文字 */
+    let _t = item.name;
+    if(item.category === "essay" && item.writtenAt){
+      const _wd = new Date(item.writtenAt);
+      if(!isNaN(_wd.getTime())) _t = _wd.getFullYear() + "年" + (_wd.getMonth()+1) + "月" + _wd.getDate() + "日";
+    }
+    prTitle.textContent = _t;
+  }
   if(prMeta){
     const d = new Date(item.writtenAt || item.addedAt);
     const pad = function(n){ return String(n).padStart(2,"0"); };
@@ -9508,7 +9526,13 @@ function renderGallery(){
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
     html += '</div>';
-    html += '<div class="card-title">' + escapeHtml(it.name) + '</div>';
+    /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
+    let _dispTitle = it.name;
+    if(it.category === "essay" && it.writtenAt){
+      const _wd = new Date(it.writtenAt);
+      if(!isNaN(_wd.getTime())) _dispTitle = _wd.getFullYear() + "年" + (_wd.getMonth()+1) + "月" + _wd.getDate() + "日";
+    }
+    html += '<div class="card-title">' + escapeHtml(_dispTitle) + '</div>';
     html += ratingHtml;
     html += descHtml;
     html += note;
