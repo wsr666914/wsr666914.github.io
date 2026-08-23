@@ -1985,9 +1985,10 @@
       <button class="sync-copy-btn" id="syncCopyBtn">复制</button>
     </div>
     <div class="sync-note">
-      · 请将身份码妥善保存(记在备忘录/密码管理器),丢失后无法在其他设备恢复<br>
-      · 身份码与暗语同等重要,请勿泄露给他人<br>
-      · 数据经云端KV暂存(每日自动同步),本机存储仍为主数据
+      · 下方为<b>今日身份码</b>(末尾4位每日自动更换),仅在当日有效,次日零点失效,防盗号<br>
+      · 在其他设备登录页名号栏输入今日身份码 + 暗语,即可同步全部志录<br>
+      · 昨日码已失效;若今日码未刷新,重新打开本弹窗即取最新值<br>
+      · 身份码与暗语同等重要,请勿泄露给他人;数据经云端KV暂存,本机存储为主
     </div>
     <div class="modal-row">
       <button class="modal-btn" id="syncCodeCloseBtn">我已保存,关闭</button>
@@ -3020,9 +3021,10 @@ function doRegister(){
   const users = getUsers();
   if(users[u]){ hint.textContent = "此名号已被取用,请换一名"; return; }
   const isFirstUser = (Object.keys(users).length === 0);
-  /* 生成身份码(多设备同步凭证,云端存储key) */
+  /* 生成身份码(多设备同步凭证,云端存储key) + 每日动态种子(防盗号) */
   const syncCode = genSyncCode();
-  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode };
+  const secret = genSecret();
+  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode, sec: secret };
   saveUsers(users);
   hint.textContent = "";
   // 注册成功直接登录
@@ -3053,8 +3055,11 @@ function doLogin(){
   if(p.length < 1){ hint.textContent = "请输入暗语"; return; }
   /* 身份码登录: 新设备凭身份码+暗语从云端拉取账号数据 */
   if(isSyncCode(u)){
+    const sp = splitSyncCode(u); /* 拆出真实云端码 + 今日校验后缀 */
+    if(!sp){ hint.textContent = "身份码格式有误"; return; }
+    const realCode = sp.code, suffix = sp.suffix;
     hint.textContent = "身份码识别中,正在连接云端…";
-    syncPull(u).then(function(r){
+    syncPull(realCode).then(function(r){
       if(!r.ok){
         hint.textContent = r.reason || "身份码登录失败";
         return;
@@ -3064,12 +3069,29 @@ function doLogin(){
         hint.textContent = "暗语有误(与身份码绑定的暗语不一致)";
         return;
       }
-      /* 落地账号(本地没有则建立,含身份码) */
+      /* 日历校验位(防盗号): 账号已启用动态码时,必须输入今日后缀;昨日码今日失效 */
+      const sec = d.sec || null;
+      let finalSec = sec;
+      if(sec){
+        if(!suffix){
+          hint.textContent = "该身份码已启用每日动态码:请输入今日身份码(末尾4位每日更换,见身份码弹窗今日值)";
+          return;
+        }
+        if(suffix !== dailySuffix(sec, todayStr())){
+          hint.textContent = "今日校验位不匹配:身份码每日更换,请获取今日身份码(昨日码已失效)";
+          return;
+        }
+      } else {
+        /* 老账号无种子: 兼容放行一次,并生成种子补存(本地+云端)以启用动态码 */
+        finalSec = genSecret();
+      }
+      /* 落地账号(本地没有则建立,含身份码+种子) */
       const users = getUsers();
       if(!users[d.u]){
-        users[d.u] = { pass: d.ph, createdAt: Date.now(), code: u };
-      }else if(!users[d.u].code){
-        users[d.u].code = u;
+        users[d.u] = { pass: d.ph, createdAt: Date.now(), code: realCode, sec: finalSec };
+      }else{
+        if(!users[d.u].code) users[d.u].code = realCode;
+        if(!users[d.u].sec) users[d.u].sec = finalSec;
       }
       saveUsers(users);
       setSession(d.u);
@@ -3085,6 +3107,8 @@ function doLogin(){
       hideLoginScreen();
       afterLogin();
       toast("云端登录成功 · " + d.u + "(已同步 " + (d.items ? d.items.length : 0) + " 条志录)");
+      /* 老账号补种子后推送云端,使其他设备也能获取今日动态码 */
+      if(!sec){ scheduleSyncPush(); }
     });
     return;
   }
@@ -3119,9 +3143,42 @@ function genSyncCode(){
   for(let i=0; i<24; i++) s += chars.charAt(Math.floor(Math.random() * chars.length));
   return "SY-" + s;
 }
-/* 身份码格式校验 */
+/* 身份码格式校验: 接受纯身份码 SY-xxxx 或 今日动态码 SY-xxxx-aaaa(4位日历校验位) */
 function isSyncCode(s){
-  return /^SY-[0-9a-zA-Z]{16,40}$/.test((s || "").trim());
+  return /^SY-[0-9a-zA-Z]{16,40}(-[0-9a-z]{4})?$/.test((s || "").trim());
+}
+/* 拆分身份码: 返回 {code: 真实云端key, suffix: 后缀或null} */
+function splitSyncCode(s){
+  const t = (s || "").trim();
+  const m = t.match(/^(SY-[0-9a-zA-Z]{16,40})(?:-([0-9a-z]{4}))?$/);
+  return m ? { code: m[1], suffix: m[2] || null } : null;
+}
+/* 每日动态种子(防盗号: 身份码本体不变, 仅末尾4位随日期更换, 昨日码今日失效) */
+function genSecret(){
+  const ch = "abcdefghijkmnpqrstuvwxyz23456789";
+  let s = ""; for(let i=0;i<16;i++) s += ch.charAt(Math.floor(Math.random()*ch.length));
+  return s;
+}
+function todayStr(){
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+/* 日历校验位: 按(种子+今日日期)算4位, 每日不同; 字符集避开易混(0/o/1/l/i) */
+function dailySuffix(sec, dateStr){
+  const ch = "23456789abcdefghjkmnpqrstuvwxyz";
+  const s = sec + "|" + dateStr;
+  let out = "";
+  for(let i=0;i<4;i++){
+    let h = 5381; const ss = s + "|" + i;
+    for(let j=0;j<ss.length;j++){ h = ((h*33) ^ ss.charCodeAt(j)) >>> 0; }
+    out += ch.charAt(h % ch.length);
+  }
+  return out;
+}
+/* 今日完整身份码(真实码 + 今日校验位) */
+function todaySyncCode(realCode, sec){
+  if(!sec) return realCode; /* 老账号无种子: 返回纯身份码(兼容) */
+  return realCode + "-" + dailySuffix(sec, todayStr());
 }
 
 /* 推送当前账号全部数据到云端(防抖合并)
@@ -3136,9 +3193,22 @@ function scheduleSyncPush(){
 }
 /* 单条写(textdb): POST + query参数 */
 async function syncWriteOne(key, valueStr){
-  const res = await fetch(SYNC_BASE + "/update/?key=" + encodeURIComponent(key) + "&value=" + encodeURIComponent(valueStr), { method: "POST" });
+  const res = await fetchWithTimeout(SYNC_BASE + "/update/?key=" + encodeURIComponent(key) + "&value=" + encodeURIComponent(valueStr), { method: "POST" }, 15000);
   const j = await res.json().catch(function(){ return null; });
   return !!(j && j.status === 1);
+}
+/* 带超时的 fetch: 避免云端无响应时永久卡在"识别中" */
+async function fetchWithTimeout(url, opts, ms){
+  const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
+  let to = null;
+  if(ctl){ to = setTimeout(function(){ try{ ctl.abort(); }catch(e){} }, ms || 12000); }
+  try{
+    const o = Object.assign({}, opts || {});
+    if(ctl) o.signal = ctl.signal;
+    return await fetch(url, o);
+  }finally{
+    if(to) clearTimeout(to);
+  }
 }
 async function syncPushNow(){
   if(!currentUser) return;
@@ -3151,6 +3221,7 @@ async function syncPushNow(){
     v: 1,
     u: currentUser,
     ph: acc.pass,
+    sec: acc.sec || null, /* 每日动态种子(防盗号),随数据同步到云端 */
     ts: Date.now(),
     items: state.items,
     pendingReview: state.pendingReview || [],
@@ -3194,7 +3265,7 @@ async function syncPushNow(){
    分块协议: 主key为 {chunked,n,ts} 时逐块读 key_p1..n 拼接 */
 async function syncPull(code){
   try{
-    const res = await fetch(SYNC_BASE + "/" + encodeURIComponent(code), { cache: "no-store" });
+    const res = await fetchWithTimeout(SYNC_BASE + "/" + encodeURIComponent(code), { cache: "no-store" }, 12000);
     const txt = await res.text();
     if(!txt || !txt.trim()) return { ok: false, reason: "云端无此身份码的数据" };
     let main;
@@ -3203,7 +3274,7 @@ async function syncPull(code){
     if(main && main.chunked && main.n > 0){
       let full = "";
       for(let i=0; i<main.n; i++){
-        const r2 = await fetch(SYNC_BASE + "/" + encodeURIComponent(code + "_p" + (i+1)), { cache: "no-store" });
+        const r2 = await fetchWithTimeout(SYNC_BASE + "/" + encodeURIComponent(code + "_p" + (i+1)), { cache: "no-store" }, 12000);
         const piece = await r2.text();
         if(!piece){ return { ok: false, reason: "云端数据块缺失(同步中,请稍后重试)" }; }
         full += piece;
@@ -3216,6 +3287,7 @@ async function syncPull(code){
     if(!main || !main.u || !main.ph) return { ok: false, reason: "身份码数据格式异常" };
     return { ok: true, data: main };
   }catch(e){
+    if(e && e.name === "AbortError") return { ok: false, reason: "云端连接超时(12秒),请检查网络;或用名号+暗语本地登录" };
     return { ok: false, reason: "云端连接失败,请检查网络" };
   }
 }
@@ -3260,7 +3332,17 @@ function showSyncCodeModal(){
     toast("该账号无身份码:重新注册可获取");
     return;
   }
-  codeEl.textContent = code;
+  const users = getUsers();
+  let sec = (users[currentUser] && users[currentUser].sec) || null;
+  /* 老账号无种子: 补生成并推送云端,之后即可每日动态更换 */
+  if(!sec){
+    sec = genSecret();
+    if(users[currentUser]) users[currentUser].sec = sec;
+    saveUsers(users);
+    scheduleSyncPush();
+  }
+  /* 显示今日身份码: 真实码 + 今日4位校验位(每日不同, 昨日码失效) */
+  codeEl.textContent = todaySyncCode(code, sec);
   modal.classList.add("show");
 }
 
