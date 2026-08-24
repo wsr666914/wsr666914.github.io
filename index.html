@@ -7472,12 +7472,12 @@ function rebuildFromDom(item){
         /* 用户编辑块文字后写回item.layout(坐标不变,仅更新文字,使标注重建不丢编辑) */
         if(Array.isArray(item.layout)){
           for(let i=0;i<blks.length && i<item.layout.length;i++){
-            item.layout[i].str = (blks[i].textContent || "").replace(/\u00A0/g, " ");
+            item.layout[i].str = (blks[i].textContent || "").replace(/\u00A0/g, " ").replace(/\u200B/g, "");
           }
         }
         const arr = blks.map(function(el){
           return {
-            text: (el.textContent || "").replace(/\u00A0/g, " "),
+            text: (el.textContent || "").replace(/\u00A0/g, " ").replace(/\u200B/g, ""),
             page: parseInt(el.getAttribute("data-page") || "1", 10),
             x: parseFloat(el.getAttribute("data-x") || "0"),
             top: parseFloat(el.getAttribute("data-top") || "0")
@@ -7669,6 +7669,51 @@ const KB_HIST_PAUSE = 800;
     /* 标志: 本次input是否由Backspace/Delete触发(在keydown中设置,input中消费)
        作用: 防止删除键的input事件覆盖_lastCustomOpAt,确保撤销走自定义栈(按次撤回) */
     let _kbDelJustPushed = false;
+    /* ====== layout模式: beforeinput拦截跨block操作 ======
+       absolute定位的contenteditable span在编辑时,浏览器会尝试把相邻block的内容
+       合并到当前block(尤其是block变空或删除到边界时),导致后面行跳到上一行+
+       与右栏重叠。beforeinput在DOM修改前触发,可精确拦截跨block操作。 */
+    prText.addEventListener("beforeinput", function(e){
+      if(!prText.classList.contains("pr-layout-mode")) return;
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0) return;
+      const range = sel.getRangeAt(0);
+      const sNode = range.startContainer;
+      const eNode = range.endContainer;
+      const sBlock = (sNode.nodeType === 1 ? sNode : sNode.parentElement).closest(".pr-layout-block");
+      const eBlock = (eNode.nodeType === 1 ? eNode : eNode.parentElement).closest(".pr-layout-block");
+      /* 1) 选区跨越了多个block → 阻止(防止合并多block内容) */
+      if(sBlock && eBlock && sBlock !== eBlock){
+        e.preventDefault();
+        return;
+      }
+      /* 2) 折叠选区(光标)+删除操作 → 检测block边界,边界处阻止 */
+      if(sel.isCollapsed && sBlock){
+        const offset = sel.anchorOffset;
+        const textLen = (sBlock.textContent || "").length;
+        const it = e.inputType || "";
+        /* Backspace在block开头 → 阻止(防止与前一个block合并) */
+        if(it === "deleteContentBackward" && offset === 0){
+          e.preventDefault();
+          return;
+        }
+        /* Delete在block末尾 → 阻止(防止与下一个block合并) */
+        if(it === "deleteContentForward" && offset >= textLen){
+          e.preventDefault();
+          return;
+        }
+        /* block只剩1个字且要删它 → 允许删除但阻止后续合并:
+           删除后block变空,浏览器可能pull下一个block内容 → 放一个零宽空格占位 */
+        if((it === "deleteContentBackward" || it === "deleteContentForward") && textLen <= 1){
+          /* 不阻止删除,但在删除后通过input事件补零宽空格防合并 */
+          setTimeout(function(){
+            if(sBlock && !sBlock.textContent){
+              sBlock.textContent = "\u200B";
+            }
+          }, 0);
+        }
+      }
+    });
     /* 键盘事件: Backspace/Delete 每次按下推自定义快照(不走原生undo,避免连续删除合并)
        Ctrl+Z/Y 走双通道撤销; 其他键走原生 */
     prText.addEventListener("keydown", function(e){
@@ -7676,6 +7721,31 @@ const KB_HIST_PAUSE = 800;
       const mod = e.ctrlKey || e.metaKey;
       if(!mod){
         if(k === "Backspace" || k === "Delete"){
+          /* === layout模式: 阻止跨block删除,防止后面行跳到上一行和右栏重叠 ===
+             absolute定位的block在删除到边界时,浏览器会合并相邻block内容,
+             导致下一行的文字"流"到当前block位置,视觉上跳行+与右栏重叠。
+             方案: 检测光标是否在block边界(第一个字/最后一个字),边界处阻止删除。 */
+          if(prText.classList.contains("pr-layout-mode")){
+            const sel = window.getSelection();
+            if(sel && sel.isCollapsed && sel.rangeCount > 0){
+              const node = sel.anchorNode;
+              const block = (node.nodeType === 1 ? node : node.parentElement).closest(".pr-layout-block");
+              if(block){
+                const offset = sel.anchorOffset;
+                const textLen = (block.textContent || "").length;
+                if(k === "Backspace" && offset === 0){
+                  /* 光标在block开头 → 阻止Backspace(防止与前一个block合并) */
+                  e.preventDefault();
+                  return;
+                }
+                if(k === "Delete" && offset >= textLen){
+                  /* 光标在block末尾 → 阻止Delete(防止与下一个block合并) */
+                  e.preventDefault();
+                  return;
+                }
+              }
+            }
+          }
           /* 每次按删除键前推一次自定义快照 → 撤销时按"次"粒度回退(不合并) */
           const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
           if(kbItem){
