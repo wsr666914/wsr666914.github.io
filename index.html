@@ -1280,6 +1280,13 @@
     cursor:pointer; transition:filter .15s;
   }
   mark.hl:hover{ filter:brightness(.92); }
+  /* AI解读选中的临时高亮(非永久标注,关闭/下次解读时自动移除) */
+  mark.pr-ai-selection{
+    background:linear-gradient(180deg, rgba(100,150,255,.22), rgba(100,150,255,.32));
+    border-bottom:2px solid rgba(80,120,200,.6);
+    border-radius:2px; padding:1px 2px; color:inherit;
+    cursor:default; pointer-events:none;
+  }
 
   /* ===== 格式按钮 + 备注样式 ===== */
   .pr-hl-sep{ width:1px; height:20px; background:var(--line); margin:0 3px; flex-shrink:0; }
@@ -7316,6 +7323,7 @@ function redoLastAction(){
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 function closePaperReader(){
+  clearAiSelectionMark();  /* 移除AI解读临时高亮(非永久标注) */
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
@@ -8918,6 +8926,43 @@ function applyDeletionToStructured(item, removedTexts){
 }
 
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
+let _aiSelMark = null;  /* 上次AI解读选中的临时高亮mark元素(非永久,下次解读/关闭时移除) */
+function clearAiSelectionMark(){
+  if(_aiSelMark && _aiSelMark.parentNode){
+    /* 移除mark,保留内部文字 */
+    const parent = _aiSelMark.parentNode;
+    while(_aiSelMark.firstChild) parent.insertBefore(_aiSelMark.firstChild, _aiSelMark);
+    parent.removeChild(_aiSelMark);
+    parent.normalize && parent.normalize();  /* 合并相邻文本节点 */
+  }
+  _aiSelMark = null;
+}
+/* 给选区加临时高亮标识(非永久标注,仅用于AI解读时视觉提示) */
+function markAiSelection(range){
+  clearAiSelectionMark();
+  if(!range || range.collapsed) return null;
+  try{
+    /* 尝试surroundContents(选区在同一文本节点内时可用) */
+    const mark = document.createElement("mark");
+    mark.className = "pr-ai-selection";
+    mark.setAttribute("contenteditable", "false");
+    range.surroundContents(mark);
+    _aiSelMark = mark;
+    return mark;
+  }catch(_){
+    /* surroundContents失败(选区跨多节点) → 用extractContents+insertNode */
+    try{
+      const mark = document.createElement("mark");
+      mark.className = "pr-ai-selection";
+      mark.setAttribute("contenteditable", "false");
+      const frag = range.extractContents();
+      mark.appendChild(frag);
+      range.insertNode(mark);
+      _aiSelMark = mark;
+      return mark;
+    }catch(_2){ return null; }
+  }
+}
 async function runAiRead(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.fullText){ toast("当前无全文"); return; }
@@ -8927,7 +8972,9 @@ async function runAiRead(){
   /* 获取当前选中的文字 */
   const sel = window.getSelection();
   let selectedText = "";
+  let selRange = null;
   if(sel && !sel.isCollapsed && sel.rangeCount > 0){
+    selRange = sel.getRangeAt(0).cloneRange();
     selectedText = sel.toString().replace(/\u00A0/g, "\n").trim();
   }
   if(!selectedText){
@@ -8938,6 +8985,11 @@ async function runAiRead(){
   if(selectedText.length < 4){
     toast("选中文字过短,请选择更完整的一段");
     return;
+  }
+  /* 给选中文字加临时高亮标识(非永久,关闭/下次解读时自动移除) */
+  if(selRange){
+    markAiSelection(selRange);
+    sel.removeAllRanges();  /* 清除浏览器选区,让mark显示高亮 */
   }
   const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
   resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
