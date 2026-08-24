@@ -7525,44 +7525,172 @@ function domToPlainText(root){
 /* input 防抖同步: Word式编辑时每700ms把DOM变化写回数据(不写localStorage,点保存才写) */
 let _prEditSyncTimer = null;
 let _prKbHistTimer = null;
+let _prKbChars = 0;       /* 累计输入字符数(达到字数阈值强制推一次快照,细化撤销粒度) */
+const KB_HIST_CHARS = 40; /* 每输入40字推一次历史快照 */
+const KB_HIST_PAUSE = 800;/* 停止输入0.8s即算一个编辑段,下一次输入推新快照(原2.5s) */
 (function initWordEditSync(){
   function hook(){
     const prText = document.getElementById("prText");
     if(!prText) return;
-    prText.addEventListener("input", function(){
+    prText.addEventListener("input", function(e){
       prState.dirty = true;
       updateSaveBtnState();
-      /* 键盘编辑撤销: 每个编辑"突发"的首次输入前推一次快照
-         (此时 item 数据仍是编辑前状态——防抖同步尚未执行) */
       const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
-      if(kbItem && !prState.kbHistPushed){
+      /* 细粒度撤销快照触发:
+         1) 编辑段首次输入(长停顿后)  2) 累计输入≥40字  3) 换行(Enter, e.inputType=insertParagraph)
+         4) 大规模删除(Backspace/Delete删除超过5字或整块) —— keydown 里单独处理 */
+      const needPush = !prState.kbHistPushed
+                    || _prKbChars >= KB_HIST_CHARS
+                    || (e && e.inputType && e.inputType === "insertParagraph");
+      if(kbItem && needPush){
         pushTextHistory(kbItem);
         prState.kbHistPushed = true;
+        _prKbChars = 0;
       }
-      /* 停止输入2.5s后重置标记 → 下一段编辑产生新的撤销粒度 */
+      /* 普通字符输入:累计字符数(合成/粘贴按实际增量估算) */
+      if(e && e.data && e.inputType && (e.inputType.startsWith("insert") || e.inputType === "insertText")){
+        _prKbChars += (e.data.length || 1);
+      }else if(e && e.inputType === "insertFromPaste"){
+        /* 粘贴按 40 字一格估算粒度(下一轮输入立即再推快照) */
+        _prKbChars += KB_HIST_CHARS + 1;
+      }
+      /* 停止输入0.8s后重置 → 下一段编辑产生新的撤销粒度 */
       if(_prKbHistTimer) clearTimeout(_prKbHistTimer);
-      _prKbHistTimer = setTimeout(function(){ prState.kbHistPushed = false; }, 2500);
+      _prKbHistTimer = setTimeout(function(){ prState.kbHistPushed = false; _prKbChars = 0; }, KB_HIST_PAUSE);
       if(_prEditSyncTimer) clearTimeout(_prEditSyncTimer);
       _prEditSyncTimer = setTimeout(function(){
         const item = state.items.find(function(x){ return x.id === prState.itemId; });
         if(item) rebuildFromDom(item);
       }, 700);
     });
-    /* 键盘快捷键: 撤销/重做走统一栈(与↶↷按钮同一历史)
-       复制Ctrl+C/粘贴Ctrl+V/剪切Ctrl+X/全选Ctrl+A为浏览器原生,粘贴自动转纯文本 */
+    /* 键盘事件: 删除/快捷键/Enter换行单独精细化 */
     prText.addEventListener("keydown", function(e){
+      const k = e.key || "";
       const mod = e.ctrlKey || e.metaKey;
+      /* 单独删除键:每段删除前推一次快照,撤销时整段恢复 */
+      if(!mod && (k === "Backspace" || k === "Delete")){
+        const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
+        if(kbItem){
+          /* 选区>0字符/连续删除超5字/删除前未推快照 → 都推快照 */
+          const sel = window.getSelection();
+          const selLen = sel ? (sel.toString().length || 0) : 0;
+          if(selLen > 0 || !prState.kbHistPushed || _prKbChars >= 10){
+            pushTextHistory(kbItem);
+            prState.kbHistPushed = true;
+            _prKbChars = 0;
+          }
+        }
+      }
+      /* Enter换行: 与input事件中的insertParagraph双重保障,即使浏览器不同也必推快照 */
+      if(!mod && k === "Enter"){
+        const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
+        if(kbItem && prState.kbHistPushed){
+          /* 已有快照(本次段首已推) → 换行前不重复推;但段中换行则需要推 */
+          if(_prKbChars >= 5){
+            pushTextHistory(kbItem);
+            _prKbChars = 0;
+          }
+        }
+      }
       if(!mod) return;
-      const k = (e.key || "").toLowerCase();
-      if(k === "z" && !e.shiftKey){ e.preventDefault(); undoLastAction(); }
-      else if(k === "z" && e.shiftKey){ e.preventDefault(); redoLastAction(); }
-      else if(k === "y"){ e.preventDefault(); redoLastAction(); }
+      const lk = k.toLowerCase();
+      if(lk === "z" && !e.shiftKey){ e.preventDefault(); undoLastAction(); }
+      else if(lk === "z" && e.shiftKey){ e.preventDefault(); redoLastAction(); }
+      else if(lk === "y"){ e.preventDefault(); redoLastAction(); }
     });
     /* 粘贴强制纯文本(防止富文本样式入侵) */
     prText.addEventListener("paste", function(e){
       e.preventDefault();
       const t = (e.clipboardData || window.clipboardData).getData("text/plain");
       if(t) document.execCommand("insertText", false, t);
+    });
+    /* ====== 版面保真模式选区校正 ======
+       layout 模式下所有 block 都在同一父容器下绝对定位,
+       浏览器默认视为同一文本流 → 拖选时会把相邻 x/y 的块(左侧栏/前一行末尾/不相邻块)
+       一并纳入选区。方案: mouseup 时检查选区内所有命中的 layout-block,
+       若 x 坐标跳变 > 栏间阈值(60px,双栏中分)或 block 不连续,则裁剪选区。 */
+    prText.addEventListener("mouseup", function(){
+      try{
+        if(!prState || !prState.itemId) return;
+        if(!prText.classList.contains("pr-layout-mode")) return;
+        const sel = window.getSelection();
+        if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+        const range = sel.getRangeAt(0);
+        /* 取选区覆盖的所有 layout-block 元素 */
+        const blocks = [];
+        const walker = document.createTreeWalker(prText, NodeFilter.SHOW_ELEMENT, {
+          acceptNode: function(n){
+            if(n.nodeType !== 1) return NodeFilter.FILTER_REJECT;
+            if(!n.classList || !n.classList.contains("pr-layout-block")) return NodeFilter.FILTER_REJECT;
+            return range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+          }
+        }, false);
+        let bn;
+        while((bn = walker.nextNode())){
+          /* 直接读 dataset.x/data-top(渲染时写入,单位pt),避免style.left带单位解析错 */
+          const x = parseFloat(bn.getAttribute("data-x") || "");
+          const y = parseFloat(bn.getAttribute("data-top") || "");
+          blocks.push({ el: bn, x: isNaN(x) ? -1 : x, y: isNaN(y) ? -1 : y });
+        }
+        if(blocks.length <= 1) return;
+        /* 按 y 降序(上→下)再按 x 排序,得到视觉顺序(坐标单位统一为pt) */
+        blocks.sort(function(a,b){
+          if(Math.abs(a.y - b.y) > 3) return b.y - a.y;
+          return a.x - b.x;
+        });
+        /* 相邻块的 x/ y 跳变阈值(单位pt, 60px ≈ 45pt 为双栏栏间距典型值) */
+        const COL_GAP_PT = 45;
+        const PAGE_Y_JUMP_PT = 30;
+        /* 计算相邻块间的 x/y 跳跃: >阈值 = 跨栏或不连续,裁剪到跳跃之前 */
+        let splitIdx = -1;
+        for(let i=1; i<blocks.length; i++){
+          const prev = blocks[i-1], cur = blocks[i];
+          /* y 在同一行(<=3pt差)的前提下 x 跳变>COL_GAP = 中间有大间距(双栏中分/断行留白) */
+          if(Math.abs(prev.y - cur.y) <= 3 && (cur.x - prev.x) > COL_GAP_PT){
+            splitIdx = i; break;
+          }
+          /* 翻页/跳段检测: prev在页尾右栏,cur在下一页/下段左栏(x突然从大→小,y反向跳变大) */
+          if(prev.x > 150 && cur.x < 100 && (cur.y - prev.y) > PAGE_Y_JUMP_PT){
+            splitIdx = i; break;
+          }
+        }
+        if(splitIdx < 0) return;
+        /* 判断拖选方向: anchor 在视觉顺序中的位置 < focus 的位置 → 正向选,裁剪focus;否则裁剪anchor */
+        const startEl = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
+        const endEl = range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentElement;
+        const startBlock = blocks.find(function(b){ return b.el === startEl || b.el.contains(startEl); });
+        const endBlock = blocks.find(function(b){ return b.el === endEl || b.el.contains(endEl); });
+        const startIdx = startBlock ? blocks.indexOf(startBlock) : -1;
+        const endIdx = endBlock ? blocks.indexOf(endBlock) : -1;
+        /* splitIdx 是第一个非法块,用户若正向选(选到split之后)→ 裁到 splitIdx-1 末尾;反向选则裁到 splitIdx 开头 */
+        const forward = endIdx >= splitIdx;
+        if(forward){
+          const lastOk = blocks[splitIdx - 1];
+          if(lastOk && lastOk.el && lastOk.el.lastChild){
+            const endNode = lastOk.el.lastChild;
+            const endLen = endNode.nodeValue ? endNode.nodeValue.length : 0;
+            try{
+              const newRange = document.createRange();
+              newRange.setStart(range.startContainer, range.startOffset);
+              newRange.setEnd(endNode, endLen);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }catch(_){}
+          }
+        }else{
+          const firstBad = blocks[splitIdx];
+          if(firstBad && firstBad.el && firstBad.el.firstChild){
+            const startNode = firstBad.el.firstChild;
+            try{
+              const newRange = document.createRange();
+              newRange.setStart(startNode, 0);
+              newRange.setEnd(range.endContainer, range.endOffset);
+              sel.removeAllRanges();
+              sel.addRange(newRange);
+            }catch(_){}
+          }
+        }
+      }catch(_){ /* 选区校正失败不报错,静默放弃裁剪 */ }
     });
   }
   if(document.readyState === "complete") hook();
