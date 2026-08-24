@@ -5840,13 +5840,14 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 /* 论文查看器状态 */
 let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, chat:[] };
 
-/* 推入操作历史(撤销用): 记录全文+结构化排版变更前的快照 */
+/* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照 */
 function pushTextHistory(item){
   if(!item) return;
   prState.history.push({
     type:"text",
     fullText:item.fullText,
-    structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
+    structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
+    layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
   });
   if(prState.history.length > 50) prState.history.shift();
   prState.redoHistory = [];   /* 产生新操作 → 重做链失效(标准undo语义) */
@@ -5877,7 +5878,8 @@ function openPaperReader(itemId){
     analysis: item.analysis,
     highlights: item.highlights,
     description: item.description,
-    structured: item.structured || null
+    structured: item.structured || null,
+    layout: item.layout || null
   }));
   updateSaveBtnState();
 
@@ -6850,12 +6852,14 @@ function undoLastAction(){
     prState.redoHistory.push({
       type:"text",
       fullText:item.fullText,
-      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
+      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
+      layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
     });
     if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-    /* 回退全文+结构化排版(撤销键盘编辑/删除/排版/清理) */
+    /* 回退全文+结构化排版+版面保真块(撤销键盘编辑/删除/排版/清理) */
     item.fullText = op.fullText;
     item.structured = op.structured || null;
+    if(op.layout) item.layout = op.layout;  /* 恢layout blocks,避免与fullText不一致导致乱码 */
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
@@ -6888,11 +6892,13 @@ function redoLastAction(){
     prState.history.push({
       type:"text",
       fullText:item.fullText,
-      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null
+      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
+      layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
     });
     if(prState.history.length > 50) prState.history.shift();
     item.fullText = op.fullText;
     item.structured = op.structured || null;
+    if(op.layout) item.layout = op.layout;  /* 恢复layout blocks,与fullText保持一致 */
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
@@ -6929,6 +6935,7 @@ function closePaperReader(){
         item.highlights = prState.snapshot.highlights;
         item.description = prState.snapshot.description;
         item.structured = prState.snapshot.structured || null;
+        item.layout = prState.snapshot.layout || null;
         saveState();
         render();
       }
