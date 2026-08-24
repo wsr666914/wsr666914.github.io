@@ -1082,6 +1082,7 @@
   .pr-text .pr-layout-block{
     position:absolute; white-space:pre; line-height:1.32; color:#111;
     transform-origin:top left; user-select:text; letter-spacing:-0.01em;
+    display:inline-block;  /* 防止 block 内容为空时浏览器合并相邻 block 文字导致跳行 */
   }
   /* 版面保真模式下的参考文献检索列表(双栏坐标提取右栏条目,显示在PDF页之后) */
   .pr-text .pr-layout-refs-title{ margin-top:40px; }
@@ -7648,8 +7649,13 @@ const KB_HIST_PAUSE = 800;
       updateSaveBtnState();
       /* ====== 键盘编辑走浏览器原生 undo 栈 —— 不再推自定义快照 ======
          只需记录最近一次编辑时间戳,供撤销通道选择用;
-         Word效果: 打1字撤销1字,粘贴100字撤销100字,删除整段恢复整段。 */
-      _lastKbEditAt = Date.now();
+         Word效果: 打1字撤销1字,粘贴100字撤销100字,删除整段恢复整段。
+         但 Backspace/Delete 不走原生 undo(浏览器会合并连续删除),
+         改由 keydown 推自定义快照 → 每按一次撤销只撤一次删除。 */
+      if(!_kbDelJustPushed){
+        _lastKbEditAt = Date.now();
+      }
+      _kbDelJustPushed = false;  /* 消费标志,后续普通输入正常更新时间戳 */
       /* 0.8s后仍未输入 → 算一个编辑段结束(仅作通道判断,不影响原生撤销粒度) */
       if(_prKbHistTimer) clearTimeout(_prKbHistTimer);
       _prKbHistTimer = setTimeout(function(){ prState.kbHistPushed = false; _prKbChars = 0; }, KB_HIST_PAUSE);
@@ -7660,14 +7666,33 @@ const KB_HIST_PAUSE = 800;
         if(item) rebuildFromDom(item);
       }, 700);
     });
-    /* 键盘快捷键 Ctrl+Z/Y 仍走我们的双通道撤销(正确区分K类/C类)
-       复制/粘贴/剪切/全选 等全部浏览器原生(原生undo栈已记录) */
+    /* 标志: 本次input是否由Backspace/Delete触发(在keydown中设置,input中消费)
+       作用: 防止删除键的input事件覆盖_lastCustomOpAt,确保撤销走自定义栈(按次撤回) */
+    let _kbDelJustPushed = false;
+    /* 键盘事件: Backspace/Delete 每次按下推自定义快照(不走原生undo,避免连续删除合并)
+       Ctrl+Z/Y 走双通道撤销; 其他键走原生 */
     prText.addEventListener("keydown", function(e){
       const k = e.key || "";
       const mod = e.ctrlKey || e.metaKey;
-      /* Backspace/Delete/Enter 也属于K类(写时间戳即可,原生undo记录) */
       if(!mod){
-        if(k === "Backspace" || k === "Delete" || k === "Enter" || k === "Tab"){
+        if(k === "Backspace" || k === "Delete"){
+          /* 每次按删除键前推一次自定义快照 → 撤销时按"次"粒度回退(不合并) */
+          const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
+          if(kbItem){
+            /* 先同步当前DOM到item(确保快照捕获最新状态) */
+            try{ rebuildFromDom(kbItem); }catch(_){}
+            pushCustomSnapshot("text", {
+              type:"text",
+              fullText:kbItem.fullText,
+              structured: kbItem.structured ? JSON.parse(JSON.stringify(kbItem.structured)) : null,
+              layout: Array.isArray(kbItem.layout) ? JSON.parse(JSON.stringify(kbItem.layout)) : null
+            });
+          }
+          /* 标记: 本次input是删除键触发的,不更新_lastKbEditAt(保持_lastCustomOpAt最新) */
+          _kbDelJustPushed = true;
+          return;
+        }
+        if(k === "Enter" || k === "Tab"){
           _lastKbEditAt = Date.now();
         }
         return;
