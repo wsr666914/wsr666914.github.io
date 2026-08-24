@@ -1016,6 +1016,19 @@
   }
   .sync-copy-btn:hover{ background:var(--teal); color:#fff; border-color:var(--teal); }
   .sync-note{ font-size:11px; color:var(--ink-mute); line-height:2; margin-bottom:14px; }
+  /* 容量信息面板(身份码弹窗内) */
+  .storage-info-panel{
+    margin:14px 0 8px; padding:12px 14px; border-radius:10px;
+    background:linear-gradient(135deg, rgba(47,93,98,.05), rgba(214,147,85,.05));
+    border:1px solid rgba(47,93,98,.16);
+  }
+  .storage-info-row{ font-size:12.5px; line-height:1.75; margin-bottom:10px; }
+  .storage-info-label{ color:var(--ink-soft); font-weight:600; }
+  .storage-info-value{ color:var(--ink-body); font-family:"JetBrains Mono",monospace; font-size:11.5px; }
+  .storage-info-actions{ display:flex; flex-wrap:wrap; gap:8px; margin-bottom:8px; }
+  .storage-info-actions .modal-btn{ flex:1; min-width:130px; padding:7px 10px; font-size:12.5px; }
+  .storage-info-tip{ font-size:10.5px; color:var(--ink-mute); line-height:1.85; }
+  .storage-info-tip b{ color:var(--teal); }
   .nav-code-btn{
     color:var(--teal); font-weight:600; text-decoration:none;
     border:1px solid rgba(47,93,98,.28); border-radius:7px; padding:1px 9px;
@@ -2012,6 +2025,20 @@
       · 在其他设备登录页名号栏输入今日身份码 + 暗语,即可同步全部志录<br>
       · 昨日码已失效;若今日码未刷新,重新打开本弹窗即取最新值<br>
       · 身份码与暗语同等重要,请勿泄露给他人;数据经云端KV暂存,本机存储为主
+    </div>
+    <!-- 容量显示 + 数据导入导出 -->
+    <div class="storage-info-panel">
+      <div class="storage-info-row" id="storageInfoRow">
+        <span class="storage-info-label">💾 本机存储：</span>
+        <span class="storage-info-value">计算中…</span>
+      </div>
+      <div class="storage-info-actions">
+        <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
+        <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
+        <input type="file" id="importDataInput" accept="application/json" style="display:none;">
+      </div>
+      <div class="storage-info-tip">导出 JSON 文件到本地(双保险),浏览器换电脑时导入即可恢复全部志录+版面。<br>
+      <b>本地容量</b>: 元数据 localStorage 5MB/账号,版面/图片存 IndexedDB 可达数百 MB,基本无限。</div>
     </div>
     <div class="modal-row">
       <button class="modal-btn" id="syncCodeCloseBtn">我已保存,关闭</button>
@@ -3252,9 +3279,9 @@ async function syncPushNow(){
   };
   let bodyStr = "";
   try{ bodyStr = JSON.stringify(payload); }catch(e){ return; }
-  if(bodyStr.length > 195000){
-    toast("数据总量超云端单条上限(20万字符),本次未同步", 5000);
-    return;
+  /* 超大数据(>80万字符/约2000页论文): 提醒压缩,但仍尝试分块同步 */
+  if(bodyStr.length > 800000){
+    toast("数据量较大,同步中(~" + Math.ceil(bodyStr.length/2800) + "块分块上传),请勿关闭页面", 5000);
   }
   try{
     if(bodyStr.length <= SYNC_CHUNK){
@@ -3367,6 +3394,118 @@ function showSyncCodeModal(){
   /* 显示今日身份码: 真实码 + 今日4位校验位(每日不同, 昨日码失效) */
   codeEl.textContent = todaySyncCode(code, sec);
   modal.classList.add("show");
+  /* 刷新本机容量显示 */
+  refreshStorageInfo();
+}
+
+/* ===== 容量/导入导出 工具函数 ===== */
+function _fmtKB(n){
+  if(n < 1024) return n + " B";
+  if(n < 1024*1024) return (n/1024).toFixed(1) + " KB";
+  return (n/1024/1024).toFixed(2) + " MB";
+}
+async function refreshStorageInfo(){
+  const row = document.getElementById("storageInfoRow");
+  if(!row) return;
+  const valEl = row.querySelector(".storage-info-value");
+  /* 元数据大小 */
+  const lsRaw = localStorage.getItem(STORAGE_KEY) || "";
+  const lsBak = localStorage.getItem(STORAGE_KEY + "_bak") || "";
+  const lsPen = localStorage.getItem(STORAGE_KEY + "_pending") || "";
+  const lsTra = localStorage.getItem(STORAGE_KEY + "_trash") || "";
+  const lsSize = (new Blob([lsRaw + lsBak + lsPen + lsTra]).size);
+  /* items + layout + images 总大小 (同时算 IDB 估算量) */
+  let itemsTotal = 0;
+  let layoutTotal = 0;
+  let imgTotal = 0;
+  for(let i=0; i<state.items.length; i++){
+    const it = state.items[i];
+    try{ itemsTotal += new Blob([JSON.stringify(it)]).size; }catch(_){}
+    if(Array.isArray(it.layout)){ try{ layoutTotal += new Blob([JSON.stringify(it.layout)]).size; }catch(_){} }
+    if(Array.isArray(it.images)){
+      for(let j=0; j<it.images.length; j++){
+        try{ imgTotal += new Blob([it.images[j]]).size; }catch(_){}
+      }
+    }
+  }
+  /* IDB 可用: 查存储配额 */
+  let quotaTxt = "";
+  try{
+    if(navigator.storage && navigator.storage.estimate){
+      const est = await navigator.storage.estimate();
+      const pct = est.quota ? (est.usage / est.quota * 100).toFixed(1) : "?";
+      quotaTxt = " · 系统配额 " + _fmtKB(est.usage || 0) + " / " + _fmtKB(est.quota || 0) + " (" + pct + "%)";
+    }
+  }catch(_){}
+  if(valEl){
+    valEl.innerHTML = state.items.length + " 条志录 · 元数据 " + _fmtKB(lsSize) + "<br>"
+      + "版面坐标 " + _fmtKB(layoutTotal) + " · 图片 " + _fmtKB(imgTotal) + " · 合计 " + _fmtKB(itemsTotal + imgTotal + layoutTotal)
+      + quotaTxt;
+  }
+}
+function exportAllData(){
+  if(!currentUser){ toast("请先登录"); return; }
+  const users = getUsers();
+  const acc = users[currentUser] || {};
+  const payload = {
+    exporter: "shuyingshidan_v2",
+    exportedAt: new Date().toISOString(),
+    user: { name: currentUser, pass: acc.pass || null, code: acc.code || null, sec: acc.sec || null },
+    items: state.items,
+    pendingReview: state.pendingReview || [],
+    trash: state.trash || [],
+    beverageBrands: (typeof beverageBrands !== "undefined") ? beverageBrands : [],
+    skincareFuncs: (typeof skincareFuncs !== "undefined") ? skincareFuncs : []
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const d = new Date();
+  const pad = function(n){ return String(n).padStart(2,"0"); };
+  a.href = url;
+  a.download = "志录备份_" + currentUser + "_" + d.getFullYear() + pad(d.getMonth()+1) + pad(d.getDate()) + "_" + pad(d.getHours()) + pad(d.getMinutes()) + ".json";
+  document.body.appendChild(a); a.click();
+  setTimeout(function(){ try{ document.body.removeChild(a); URL.revokeObjectURL(url); }catch(_){} }, 1000);
+  toast("已导出 " + _fmtKB(blob.size) + ",请妥善保存备份文件");
+}
+function triggerImportData(){
+  const inp = document.getElementById("importDataInput");
+  if(inp) inp.click();
+}
+function handleImportFile(f){
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = function(){
+    try{
+      const obj = JSON.parse(reader.result || "");
+      if(!obj || !obj.exporter || obj.exporter !== "shuyingshidan_v2"){ toast("文件格式不匹配"); return; }
+      const ok = confirm("即将导入 " + (obj.items ? obj.items.length : 0) + " 条志录\n\n【确定】覆盖当前账号全部数据\n【取消】放弃导入");
+      if(!ok) return;
+      if(Array.isArray(obj.items)) state.items = obj.items;
+      if(Array.isArray(obj.pendingReview)) state.pendingReview = obj.pendingReview;
+      if(Array.isArray(obj.trash)) state.trash = obj.trash;
+      if(Array.isArray(obj.beverageBrands)){ try{ saveBeverageBrands(obj.beverageBrands); }catch(_){} }
+      if(Array.isArray(obj.skincareFuncs)){ try{ saveSkincareFuncs(obj.skincareFuncs); }catch(_){} }
+      /* 导入的账号信息: 补填身份码/暗语 */
+      if(obj.user && currentUser){
+        const users = getUsers();
+        if(!users[currentUser]) users[currentUser] = {};
+        if(obj.user.pass) users[currentUser].pass = obj.user.pass;
+        if(obj.user.code) users[currentUser].code = obj.user.code;
+        if(obj.user.sec) users[currentUser].sec = obj.user.sec;
+        saveUsers(users);
+      }
+      saveState();
+      render();
+      /* 挂回IDB大字段 */
+      hydrateLargeFields().then(function(){ try{ render(); }catch(_){} });
+      setTimeout(function(){ toast("导入成功,共 " + state.items.length + " 条志录"); }, 400);
+    }catch(e){
+      console.warn(e);
+      toast("导入失败:文件格式错误或损坏");
+    }
+  };
+  reader.readAsText(f, "utf-8");
 }
 
 function doLogout(){
@@ -3419,6 +3558,11 @@ function afterLogin(){
   updatePredict();
   updateNavUser();
   updatePendingBtn();
+  /* 从 IndexedDB 挂回大字段(layout/images),完成后刷新渲染,确保PDF版面完整 */
+  hydrateLargeFields().then(function(){
+    try{ render(); }catch(_){}
+    try{ loadReading(); }catch(_){}
+  });
   if(state.items.length === 0){
     setTimeout(function(){ toast("点击「载入示例」可速览其效"); }, 600);
   }
@@ -3430,6 +3574,110 @@ function afterLogin(){
       if(it && it.fullText) setTimeout(function(){ openPaperReader(rid); }, 250);
     }
   }catch(e){ /* 静默 */ }
+}
+
+/* ============== IndexedDB 大字段存储 (突破 localStorage 5MB 上限) ==============
+   - localStorage 仅存元数据(name/category/fullText/highlights等, <5MB即可)
+   - item.layout (PDF版面坐标块数组,动辄数MB) 与 item.images (base64图片) 存 IndexedDB
+   - IDB 无硬上限(通常允许GB级),远大于 localStorage 的 5MB/域 */
+const IDB_NAME = "shuyingshidan_idb_v1";
+const IDB_STORE = "large_fields";
+let _idbPromise = null;
+function idbOpen(){
+  if(_idbPromise) return _idbPromise;
+  _idbPromise = new Promise(function(resolve, reject){
+    try{
+      const req = indexedDB.open(IDB_NAME, 1);
+      req.onupgradeneeded = function(){
+        const db = req.result;
+        if(!db.objectStoreNames.contains(IDB_STORE)) db.createObjectStore(IDB_STORE);
+      };
+      req.onsuccess = function(){ resolve(req.result); };
+      req.onerror = function(){ reject(req.error); _idbPromise = null; };
+    }catch(e){ reject(e); _idbPromise = null; }
+  });
+  return _idbPromise.catch(function(){ return null; });
+}
+function idbSet(k, v){ return idbOpen().then(function(db){
+  if(!db) return false;
+  return new Promise(function(resolve){
+    try{
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).put(v, k);
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = tx.onabort = function(){ resolve(false); };
+    }catch(e){ resolve(false); }
+  });
+}); }
+function idbGet(k){ return idbOpen().then(function(db){
+  if(!db) return null;
+  return new Promise(function(resolve){
+    try{
+      const tx = db.transaction(IDB_STORE, "readonly");
+      const req = tx.objectStore(IDB_STORE).get(k);
+      req.onsuccess = function(){ resolve(req.result === undefined ? null : req.result); };
+      req.onerror = function(){ resolve(null); };
+    }catch(e){ resolve(null); }
+  });
+}); }
+function idbDel(k){ return idbOpen().then(function(db){
+  if(!db) return false;
+  return new Promise(function(resolve){
+    try{
+      const tx = db.transaction(IDB_STORE, "readwrite");
+      tx.objectStore(IDB_STORE).delete(k);
+      tx.oncomplete = function(){ resolve(true); };
+      tx.onerror = function(){ resolve(false); };
+    }catch(e){ resolve(false); }
+  });
+}); }
+/* 将 items 中的 layout / images 拆分到 IDB,返回瘦身后的 items 副本 */
+async function splitLargeFieldsToIdb(items){
+  const slim = [];
+  for(let i=0; i<items.length; i++){
+    const it = items[i];
+    const id = String(it.id);
+    const cp = {};
+    for(const k in it){
+      if(k === "layout" || k === "images") continue;
+      cp[k] = it[k];
+    }
+    /* layout 存 IDB (失败不影响,会落在 localStorage 副本里) */
+    if(Array.isArray(it.layout) && it.layout.length){
+      try{ await idbSet(id + "|layout", it.layout); }catch(_){ cp.layout = it.layout; }
+    }else{
+      try{ await idbDel(id + "|layout"); }catch(_){}
+    }
+    /* images 存 IDB */
+    if(Array.isArray(it.images) && it.images.length){
+      try{ await idbSet(id + "|images", it.images); }catch(_){ cp.images = it.images; }
+    }else{
+      try{ await idbDel(id + "|images"); }catch(_){}
+    }
+    slim.push(cp);
+  }
+  return slim;
+}
+/* 从 IDB 读取 layout / images 挂回 state.items (失败则保留原值/未定义) */
+async function hydrateLargeFields(){
+  if(!Array.isArray(state.items)) return;
+  for(let i=0; i<state.items.length; i++){
+    const it = state.items[i];
+    const id = String(it.id);
+    /* 已有数据则跳过(老 localStorage 数据向后兼容) */
+    if(!Array.isArray(it.layout)){
+      try{
+        const lay = await idbGet(id + "|layout");
+        if(Array.isArray(lay) && lay.length) it.layout = lay;
+      }catch(_){}
+    }
+    if(!Array.isArray(it.images)){
+      try{
+        const imgs = await idbGet(id + "|images");
+        if(Array.isArray(imgs) && imgs.length) it.images = imgs;
+      }catch(_){}
+    }
+  }
 }
 
 function loadState(){
@@ -3470,7 +3718,34 @@ function loadState(){
 }
 function saveState(){
   try{
-    const main = JSON.stringify(state.items);
+    /* 1. 剥离大字段(layout/images)存IDB,瘦身后的副本写localStorage
+       (大幅降低5MB压力,使localStorage能容纳更多条目录) */
+    const slimItems = [];
+    for(let i=0; i<state.items.length; i++){
+      const it = state.items[i];
+      const cp = {};
+      for(const k in it){
+        if(k === "layout" || k === "images") continue;
+        cp[k] = it[k];
+      }
+      slimItems.push(cp);
+    }
+    /* 2. 异步写 IDB (不阻塞同步路径) */
+    try{
+      const arr = state.items;
+      Promise.resolve().then(function(){
+        for(let i=0; i<arr.length; i++){
+          (function(it){
+            const id = String(it.id);
+            if(Array.isArray(it.layout) && it.layout.length) idbSet(id + "|layout", it.layout);
+            else idbDel(id + "|layout");
+            if(Array.isArray(it.images) && it.images.length) idbSet(id + "|images", it.images);
+            else idbDel(id + "|images");
+          })(arr[i]);
+        }
+      });
+    }catch(_){}
+    const main = JSON.stringify(slimItems);
     /* 双写备份: 主key写入成功后,备份key同步一份(恢复用) */
     localStorage.setItem(STORAGE_KEY, main);
     try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){ /* 备份失败不影响主数据 */ }
@@ -3482,7 +3757,17 @@ function saveState(){
     const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
     if(isQuota && slimImagesForQuota()){
       try{
-        const main = JSON.stringify(state.items);
+        const slimItems = [];
+        for(let i=0; i<state.items.length; i++){
+          const it = state.items[i];
+          const cp = {};
+          for(const k in it){
+            if(k === "layout" || k === "images") continue;
+            cp[k] = it[k];
+          }
+          slimItems.push(cp);
+        }
+        const main = JSON.stringify(slimItems);
         localStorage.setItem(STORAGE_KEY, main);
         try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){}
         localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
@@ -12268,6 +12553,17 @@ function toast(msg, duration){
   if(syncCloseBtn) syncCloseBtn.onclick = function(){
     const m = document.getElementById("syncCodeModal");
     if(m) m.classList.remove("show");
+  };
+  /* 导出/导入数据(身份码弹窗内) */
+  const expBtn = document.getElementById("exportDataBtn");
+  if(expBtn) expBtn.onclick = exportAllData;
+  const impBtn = document.getElementById("importDataBtn");
+  if(impBtn) impBtn.onclick = triggerImportData;
+  const impInput = document.getElementById("importDataInput");
+  if(impInput) impInput.onchange = function(){
+    const f = this.files && this.files[0];
+    handleImportFile(f);
+    this.value = "";
   };
   const syncCopyBtn = document.getElementById("syncCopyBtn");
   if(syncCopyBtn) syncCopyBtn.onclick = function(){
