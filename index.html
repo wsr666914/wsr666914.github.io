@@ -6125,23 +6125,21 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 /* 论文查看器状态 */
 let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, chat:[] };
 
-/* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照 */
+/* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照。
+   注意: 键盘编辑不再调用此函数(改用浏览器原生undo)。
+   仅 C 类操作(颜色标注按钮/删除按钮/AI整理等代码触发的改动)调用本函数。 */
 function pushTextHistory(item){
   if(!item) return;
-  prState.history.push({
+  pushCustomSnapshot("text", {
     type:"text",
     fullText:item.fullText,
     structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
     layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
   });
-  if(prState.history.length > 50) prState.history.shift();
-  prState.redoHistory = [];   /* 产生新操作 → 重做链失效(标准undo语义) */
 }
 /* 推入标注操作历史 */
 function pushHlHistory(){
-  prState.history.push({ type:"hl" });
-  if(prState.history.length > 50) prState.history.shift();
-  prState.redoHistory = [];   /* 产生新操作 → 重做链失效 */
+  pushCustomSnapshot("hl");
 }
 
 /* 打开论文查看器 */
@@ -7111,69 +7109,174 @@ function prClearPendingSync(){
   prState.kbHistPushed = false;  /* 重渲染后重置键盘快照标记 */
 }
 
-/* 撤销最近一次操作: 键盘编辑/删除/排版(回退全文) 或 标注(移除最后标注) */
+/* ============= Word 级双通道撤销 =============
+   - K类(键盘输入/粘贴/剪切/删除): 完全走浏览器原生 undo/redo 栈( contenteditable 自带 )
+     → 打1字撤回1字,粘贴100字撤回这100字,行为与 Word 完全一致
+   - C类(代码触发DOM改动): 颜色标注/删除按钮/AI整理/排版/清理等 → 走自定义history栈
+   每次撤销按操作时间戳决定走哪条通道,并用 undoChannelLog 记录 → 重做时按记录对应 */
+let _lastCustomOpAt = 0;   /* 最近一次 C 类操作的时间戳(pushCustomSnapshot 时写入) */
+let _lastKbEditAt = 0;     /* 最近一次 K 类编辑的时间戳(input 时写入) */
+const _undoChannelLog = [];/* 每一步撤销的通道记录:"kb"|"custom"|"hl" → 重做对应查询 */
+
+function _domUndo(){
+  const prText = document.getElementById("prText");
+  if(!prText) return false;
+  try{
+    prText.focus();
+    document.execCommand("undo", false, null);
+    const item = state.items.find(function(i){ return i.id === prState.itemId; });
+    if(item) rebuildFromDom(item);
+    saveState();
+    markDirty();
+    return true;
+  }catch(_){ return false; }
+}
+function _domRedo(){
+  const prText = document.getElementById("prText");
+  if(!prText) return false;
+  try{
+    prText.focus();
+    document.execCommand("redo", false, null);
+    const item = state.items.find(function(i){ return i.id === prState.itemId; });
+    if(item) rebuildFromDom(item);
+    saveState();
+    markDirty();
+    return true;
+  }catch(_){ return false; }
+}
+/* C类操作推自定义快照(必须同时写入操作最近标记,确保撤销优先级正确) */
+function pushCustomSnapshot(type, payload){
+  if(type === "text" && payload) prState.history.push(payload);
+  else if(type === "hl") prState.history.push({ type:"hl" });
+  if(prState.history.length > 50) prState.history.shift();
+  prState.redoHistory = [];
+  _lastCustomOpAt = Date.now();
+}
+
+/* 撤销最近一次操作(Ctrl+Z / ↶ 按钮) —— 行为对齐Word: 撤销上一步,不恢复全文 */
 function undoLastAction(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item){ toast("无可撤销操作"); return; }
   prClearPendingSync();
-  /* 历史栈空时,兜底撤销最后标注 */
-  if(prState.history.length === 0){
-    if(item.highlights && item.highlights.length > 0){
+  /* 优先级1: 最近是 C 类操作 → 走自定义栈 */
+  if(prState.history.length > 0 && _lastCustomOpAt > _lastKbEditAt){
+    const op = prState.history.pop();
+    if(op.type === "text"){
+      prState.redoHistory.push({
+        type:"text",
+        fullText:item.fullText,
+        structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
+        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+      });
+      if(prState.redoHistory.length > 50) prState.redoHistory.shift();
+      item.fullText = op.fullText;
+      item.structured = op.structured || null;
+      if(op.layout) item.layout = op.layout;
+      item.outline = generateOutline(item.fullText);
+      item.analysis = analyzePaper(item.fullText);
+      item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+      saveState();
+      applyHighlightsToDom(item);
+      markDirty();
+      _undoChannelLog.push("custom");
+      toast("已撤销");
+      return;
+    }else if(op.type === "hl"){
+      if(item.highlights && item.highlights.length > 0){
+        prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
+        if(prState.redoHistory.length > 50) prState.redoHistory.shift();
+        item.highlights.pop();
+        saveState();
+        applyHighlightsToDom(item);
+        markDirty();
+        _undoChannelLog.push("hl");
+        toast("已撤销一处标注");
+        return;
+      }
+    }
+  }
+  /* 优先级2: 最近是键盘编辑 → 走浏览器原生undo(Word式: 一步一个动作) */
+  if(_lastKbEditAt >= _lastCustomOpAt || prState.history.length === 0){
+    if(_domUndo()){
+      _undoChannelLog.push("kb");
+      return;
+    }
+  }
+  /* 兜底: 自定义栈仍有内容就尝试 */
+  if(prState.history.length > 0){
+    const op = prState.history.pop();
+    if(op.type === "text"){
+      prState.redoHistory.push({
+        type:"text",
+        fullText:item.fullText,
+        structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
+        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+      });
+      if(prState.redoHistory.length > 50) prState.redoHistory.shift();
+      item.fullText = op.fullText;
+      item.structured = op.structured || null;
+      if(op.layout) item.layout = op.layout;
+      item.outline = generateOutline(item.fullText);
+      item.analysis = analyzePaper(item.fullText);
+      item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+      saveState();
+      applyHighlightsToDom(item);
+      markDirty();
+      _undoChannelLog.push("custom");
+      toast("已撤销");
+      return;
+    }else if(op.type === "hl" && item.highlights && item.highlights.length > 0){
       prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
       if(prState.redoHistory.length > 50) prState.redoHistory.shift();
       item.highlights.pop();
       saveState();
       applyHighlightsToDom(item);
       markDirty();
+      _undoChannelLog.push("hl");
       toast("已撤销一处标注");
-    }else{
-      toast("无可撤销操作");
+      return;
     }
-    return;
   }
-  const op = prState.history.pop();
-  if(op.type === "text"){
-    /* 撤销前记录当前状态 → 供重做 */
-    prState.redoHistory.push({
-      type:"text",
-      fullText:item.fullText,
-      structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-      layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
-    });
+  /* 双栈都空: 兜底 */
+  if(item.highlights && item.highlights.length > 0){
+    prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
     if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-    /* 回退全文+结构化排版+版面保真块(撤销键盘编辑/删除/排版/清理) */
-    item.fullText = op.fullText;
-    item.structured = op.structured || null;
-    if(op.layout) item.layout = op.layout;  /* 恢layout blocks,避免与fullText不一致导致乱码 */
-    item.outline = generateOutline(item.fullText);
-    item.analysis = analyzePaper(item.fullText);
-    item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+    item.highlights.pop();
     saveState();
     applyHighlightsToDom(item);
     markDirty();
-    toast("已撤销文字改动,全文恢复");
-  }else if(op.type === "hl"){
-    if(item.highlights && item.highlights.length > 0){
-      prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
-      if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-      item.highlights.pop();
-      saveState();
-      applyHighlightsToDom(item);
-      markDirty();
-      toast("已撤销一处标注");
-    }
+    _undoChannelLog.push("hl");
+    toast("已撤销一处标注");
+  }else{
+    toast("无可撤销操作");
   }
 }
 
-/* 重做最近一次被撤销的操作(Ctrl+Y / ↷ 按钮) */
+/* 重做最近一次被撤销的操作(Ctrl+Y / ↷ 按钮) —— 按 undoChannelLog 记录选通道 */
 function redoLastAction(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item){ toast("无可重做操作"); return; }
-  if(prState.redoHistory.length === 0){ toast("无可重做操作"); return; }
+  if(prState.redoHistory.length === 0 && _undoChannelLog.length === 0){ toast("无可重做操作"); return; }
   prClearPendingSync();
-  const op = prState.redoHistory.pop();
-  if(op.type === "text"){
-    /* 重做前记录当前状态 → 供再次撤销 */
+  /* 查询上一步撤销的通道:优先按 undoChannelLog 走(保证严格对应) */
+  let ch = _undoChannelLog.pop();
+  if((ch === "custom" || ch === "hl") && prState.redoHistory.length === 0){
+    /* custom/hl 有记录但 redoHistory 空 → 实际上是 kb 操作刚被撤销,改走 kb 重做 */
+    ch = "kb";
+  }
+  if(!ch) ch = prState.redoHistory.length > 0 ? (prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "hl") : "kb";
+
+  if(ch === "kb"){
+    if(_domRedo()) return;
+    if(prState.redoHistory.length === 0){ toast("无可重做操作"); return; }
+    /* 原生重做失败 fallback 到自定义通道 */
+    ch = prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "hl";
+    /* 刚才 pop 出的 kb 实际要走 custom/hl,把 log 记录补回去防错位 */
+    _undoChannelLog.push("kb");
+  }
+  if(ch === "custom"){
+    const op = prState.redoHistory.pop();
+    if(!op){ toast("无可重做操作"); return; }
     prState.history.push({
       type:"text",
       fullText:item.fullText,
@@ -7183,23 +7286,31 @@ function redoLastAction(){
     if(prState.history.length > 50) prState.history.shift();
     item.fullText = op.fullText;
     item.structured = op.structured || null;
-    if(op.layout) item.layout = op.layout;  /* 恢复layout blocks,与fullText保持一致 */
+    if(op.layout) item.layout = op.layout;
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
     saveState();
     applyHighlightsToDom(item);
     markDirty();
+    _lastCustomOpAt = Date.now();
     toast("已重做");
-  }else if(op.type === "hl" && op.hl){
-    prState.history.push({ type:"hl" });
-    if(prState.history.length > 50) prState.history.shift();
-    item.highlights.push(op.hl);
-    saveState();
-    applyHighlightsToDom(item);
-    markDirty();
-    toast("已重做一处标注");
+    return;
   }
+  if(ch === "hl"){
+    const op = prState.redoHistory.pop();
+    if(op && op.hl){
+      prState.history.push({ type:"hl" });
+      if(prState.history.length > 50) prState.history.shift();
+      item.highlights.push(op.hl);
+      saveState();
+      applyHighlightsToDom(item);
+      markDirty();
+      toast("已重做一处标注");
+      return;
+    }
+  }
+  toast("无可重做操作");
 }
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
@@ -7525,74 +7636,42 @@ function domToPlainText(root){
 /* input 防抖同步: Word式编辑时每700ms把DOM变化写回数据(不写localStorage,点保存才写) */
 let _prEditSyncTimer = null;
 let _prKbHistTimer = null;
-let _prKbChars = 0;       /* 累计输入字符数(达到字数阈值强制推一次快照,细化撤销粒度) */
-const KB_HIST_CHARS = 40; /* 每输入40字推一次历史快照 */
-const KB_HIST_PAUSE = 800;/* 停止输入0.8s即算一个编辑段,下一次输入推新快照(原2.5s) */
+let _prKbChars = 0;
+const KB_HIST_CHARS = 40;
+const KB_HIST_PAUSE = 800;
 (function initWordEditSync(){
   function hook(){
     const prText = document.getElementById("prText");
     if(!prText) return;
-    prText.addEventListener("input", function(e){
+    prText.addEventListener("input", function(){
       prState.dirty = true;
       updateSaveBtnState();
-      const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
-      /* 细粒度撤销快照触发:
-         1) 编辑段首次输入(长停顿后)  2) 累计输入≥40字  3) 换行(Enter, e.inputType=insertParagraph)
-         4) 大规模删除(Backspace/Delete删除超过5字或整块) —— keydown 里单独处理 */
-      const needPush = !prState.kbHistPushed
-                    || _prKbChars >= KB_HIST_CHARS
-                    || (e && e.inputType && e.inputType === "insertParagraph");
-      if(kbItem && needPush){
-        pushTextHistory(kbItem);
-        prState.kbHistPushed = true;
-        _prKbChars = 0;
-      }
-      /* 普通字符输入:累计字符数(合成/粘贴按实际增量估算) */
-      if(e && e.data && e.inputType && (e.inputType.startsWith("insert") || e.inputType === "insertText")){
-        _prKbChars += (e.data.length || 1);
-      }else if(e && e.inputType === "insertFromPaste"){
-        /* 粘贴按 40 字一格估算粒度(下一轮输入立即再推快照) */
-        _prKbChars += KB_HIST_CHARS + 1;
-      }
-      /* 停止输入0.8s后重置 → 下一段编辑产生新的撤销粒度 */
+      /* ====== 键盘编辑走浏览器原生 undo 栈 —— 不再推自定义快照 ======
+         只需记录最近一次编辑时间戳,供撤销通道选择用;
+         Word效果: 打1字撤销1字,粘贴100字撤销100字,删除整段恢复整段。 */
+      _lastKbEditAt = Date.now();
+      /* 0.8s后仍未输入 → 算一个编辑段结束(仅作通道判断,不影响原生撤销粒度) */
       if(_prKbHistTimer) clearTimeout(_prKbHistTimer);
       _prKbHistTimer = setTimeout(function(){ prState.kbHistPushed = false; _prKbChars = 0; }, KB_HIST_PAUSE);
+      /* 700ms防抖: DOM → 内存 item 同步(读DOM重建fullText/structured/layout,不重画DOM) */
       if(_prEditSyncTimer) clearTimeout(_prEditSyncTimer);
       _prEditSyncTimer = setTimeout(function(){
         const item = state.items.find(function(x){ return x.id === prState.itemId; });
         if(item) rebuildFromDom(item);
       }, 700);
     });
-    /* 键盘事件: 删除/快捷键/Enter换行单独精细化 */
+    /* 键盘快捷键 Ctrl+Z/Y 仍走我们的双通道撤销(正确区分K类/C类)
+       复制/粘贴/剪切/全选 等全部浏览器原生(原生undo栈已记录) */
     prText.addEventListener("keydown", function(e){
       const k = e.key || "";
       const mod = e.ctrlKey || e.metaKey;
-      /* 单独删除键:每段删除前推一次快照,撤销时整段恢复 */
-      if(!mod && (k === "Backspace" || k === "Delete")){
-        const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
-        if(kbItem){
-          /* 选区>0字符/连续删除超5字/删除前未推快照 → 都推快照 */
-          const sel = window.getSelection();
-          const selLen = sel ? (sel.toString().length || 0) : 0;
-          if(selLen > 0 || !prState.kbHistPushed || _prKbChars >= 10){
-            pushTextHistory(kbItem);
-            prState.kbHistPushed = true;
-            _prKbChars = 0;
-          }
+      /* Backspace/Delete/Enter 也属于K类(写时间戳即可,原生undo记录) */
+      if(!mod){
+        if(k === "Backspace" || k === "Delete" || k === "Enter" || k === "Tab"){
+          _lastKbEditAt = Date.now();
         }
+        return;
       }
-      /* Enter换行: 与input事件中的insertParagraph双重保障,即使浏览器不同也必推快照 */
-      if(!mod && k === "Enter"){
-        const kbItem = state.items.find(function(x){ return x.id === prState.itemId; });
-        if(kbItem && prState.kbHistPushed){
-          /* 已有快照(本次段首已推) → 换行前不重复推;但段中换行则需要推 */
-          if(_prKbChars >= 5){
-            pushTextHistory(kbItem);
-            _prKbChars = 0;
-          }
-        }
-      }
-      if(!mod) return;
       const lk = k.toLowerCase();
       if(lk === "z" && !e.shiftKey){ e.preventDefault(); undoLastAction(); }
       else if(lk === "z" && e.shiftKey){ e.preventDefault(); redoLastAction(); }
