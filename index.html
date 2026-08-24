@@ -7672,7 +7672,8 @@ const KB_HIST_PAUSE = 800;
     /* ====== layout模式: beforeinput拦截跨block操作 ======
        absolute定位的contenteditable span在编辑时,浏览器会尝试把相邻block的内容
        合并到当前block(尤其是block变空或删除到边界时),导致后面行跳到上一行+
-       与右栏重叠。beforeinput在DOM修改前触发,可精确拦截跨block操作。 */
+       与右栏重叠。beforeinput在DOM修改前触发,可精确拦截跨block操作。
+       block内部删除不受限制 → 后面的字自然往前移(补上空),只阻止跨block合并。 */
     prText.addEventListener("beforeinput", function(e){
       if(!prText.classList.contains("pr-layout-mode")) return;
       const sel = window.getSelection();
@@ -7687,30 +7688,26 @@ const KB_HIST_PAUSE = 800;
         e.preventDefault();
         return;
       }
-      /* 2) 折叠选区(光标)+删除操作 → 检测block边界,边界处阻止 */
+      /* 2) 折叠选区(光标)+删除操作 → 仅在block边界阻止,block内部正常删除 */
       if(sel.isCollapsed && sBlock){
         const offset = sel.anchorOffset;
         const textLen = (sBlock.textContent || "").length;
         const it = e.inputType || "";
-        /* Backspace在block开头 → 阻止(防止与前一个block合并) */
-        if(it === "deleteContentBackward" && offset === 0){
+        /* Backspace在block开头(offset=0) → 阻止(防止与前一个block合并)
+           block内部其他位置的Backspace不阻止 → 空格/文字正常删除 */
+        if(it === "deleteContentBackward" && offset === 0 && textLen > 0){
           e.preventDefault();
           return;
         }
-        /* Delete在block末尾 → 阻止(防止与下一个block合并) */
-        if(it === "deleteContentForward" && offset >= textLen){
+        /* Delete在block末尾(offset>=textLen) → 阻止(防止与下一个block合并) */
+        if(it === "deleteContentForward" && offset >= textLen && textLen > 0){
           e.preventDefault();
           return;
         }
-        /* block只剩1个字且要删它 → 允许删除但阻止后续合并:
-           删除后block变空,浏览器可能pull下一个block内容 → 放一个零宽空格占位 */
-        if((it === "deleteContentBackward" || it === "deleteContentForward") && textLen <= 1){
-          /* 不阻止删除,但在删除后通过input事件补零宽空格防合并 */
-          setTimeout(function(){
-            if(sBlock && !sBlock.textContent){
-              sBlock.textContent = "\u200B";
-            }
-          }, 0);
+        /* block已空(textLen=0)时,任何删除都阻止(防止对空block操作触发合并) */
+        if((it === "deleteContentBackward" || it === "deleteContentForward") && textLen === 0){
+          e.preventDefault();
+          return;
         }
       }
     });
