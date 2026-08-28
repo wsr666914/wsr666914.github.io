@@ -3726,19 +3726,44 @@ function loadState(){
 }
 function saveState(){
   try{
-    /* 1. 剥离大字段(layout/images)存IDB,瘦身后的副本写localStorage
-       (大幅降低5MB压力,使localStorage能容纳更多条目录) */
-    const slimItems = [];
-    for(let i=0; i<state.items.length; i++){
-      const it = state.items[i];
-      const cp = {};
-      for(const k in it){
-        if(k === "layout" || k === "images") continue;
-        cp[k] = it[k];
+    /* ============ 策略(双写优先,与上一版保持一致) ============
+       1. 先完整写 items(含layout/images)到 localStorage → 保证刷新/关页后版面保真不丢;
+       2. 若 localStorage Quota超限 → 剥离layout/images存IDB,只把瘦身版写 localStorage;
+       3. 不论成功与否,layout/images 都异步双写一份到 IDB 作冗余备份。 */
+    let fullStr = "";
+    let quotaOk = false;
+    try{
+      fullStr = JSON.stringify(state.items);
+      /* 先测试写,看 localStorage 装不装得下(不改主key) */
+      try{
+        localStorage.setItem(STORAGE_KEY + "_wtest", fullStr);
+        localStorage.removeItem(STORAGE_KEY + "_wtest");
+        quotaOk = true;
+      }catch(_t){ quotaOk = false; }
+    }catch(_s){ quotaOk = false; }
+    let slimItems = null;
+    if(quotaOk){
+      /* localStorage 装得下 → 完整存,跟 IndexedDB 升级之前完全一样 */
+      localStorage.setItem(STORAGE_KEY, fullStr);
+      try{ localStorage.setItem(STORAGE_KEY + "_bak", fullStr); }catch(_){}
+    }else{
+      /* localStorage 超限 → 剥离 layout/images,瘦身副本写 localStorage,
+         layout/images 只能靠 IDB 了 */
+      slimItems = [];
+      for(let i=0; i<state.items.length; i++){
+        const it = state.items[i];
+        const cp = {};
+        for(const k in it){
+          if(k === "layout" || k === "images") continue;
+          cp[k] = it[k];
+        }
+        slimItems.push(cp);
       }
-      slimItems.push(cp);
+      const main = JSON.stringify(slimItems);
+      localStorage.setItem(STORAGE_KEY, main);
+      try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(_){}
     }
-    /* 2. 异步写 IDB (不阻塞同步路径) */
+    /* layout/images 异步双写 IDB(作冗余,失败忽略) */
     try{
       const arr = state.items;
       Promise.resolve().then(function(){
@@ -3753,15 +3778,11 @@ function saveState(){
         }
       });
     }catch(_){}
-    const main = JSON.stringify(slimItems);
-    /* 双写备份: 主key写入成功后,备份key同步一份(恢复用) */
-    localStorage.setItem(STORAGE_KEY, main);
-    try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){ /* 备份失败不影响主数据 */ }
     localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
     try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(state.trash || [])); }catch(e2){}
   }
   catch(e){
-    /* 容量超限: 瘦身图片后重试 */
+    /* 首次写 localStorage 已经失败(哪怕用瘦身版也超) → 再极限压缩 images */
     const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
     if(isQuota && slimImagesForQuota()){
       try{
