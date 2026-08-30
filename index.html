@@ -11568,8 +11568,6 @@ function submit(){
   renderComposerCats();
   updatePredict();
   syncBeverageBrandComposer();
-  const archive = document.getElementById("archive");
-  if(archive) archive.scrollIntoView({behavior:"smooth"});
 }
 
 const searchInput = document.getElementById("searchInput");
@@ -12360,8 +12358,6 @@ if(batchCommitBtn){
     }
     batchModal.classList.remove("show");
     toast("已入册 " + added + " 项" + (skipped>0 ? " · 跳过 " + skipped + " 项已存" : "") + (pending>0 ? " · " + pending + " 项入识别列表" : ""));
-    const archive = document.getElementById("archive");
-    if(archive) archive.scrollIntoView({behavior:"smooth"});
   };
 }
 if(batchInput){
@@ -12559,8 +12555,6 @@ if(paperEntrySubmit){
     paperEntryFromPdf = false;
     closePaperEntryModal();
     toast(noun + "已入册 · 可点击「查看全文」阅读并标注");
-    const archive = document.getElementById("archive");
-    if(archive) archive.scrollIntoView({behavior:"smooth"});
   };
 }
 
