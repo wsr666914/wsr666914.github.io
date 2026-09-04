@@ -1108,27 +1108,27 @@
     transform-origin:top center; border:1px solid #eee;
   }
   .pr-text .pr-pdf-page canvas{ display:block; width:100%; height:100%; }
-  /* textLayer: pdf.js标准结构,这里加contenteditable支持编辑 */
-  .pr-text .pr-pdf-textLayer{
-    position:absolute; top:0; left:0; right:0; bottom:0;
-    overflow:hidden; opacity:.3; line-height:1; letter-spacing:0; z-index:2;
-    pointer-events:none;  /* 选中通过 canvas 的命中测试?不,需要文字可选中 → 重写为auto,让 textLayer 在上,canvas在下 */
-  }
-  /* 修正: textLayer在上(z-3)接受鼠标选中/编辑, canvas在下(z-1)负责显示, 两者像素坐标对齐让选中对应原PDF文字 */
-  .pr-text .pr-pdf-page{ position:relative; }
+  /* textLayer: pdf.js标准结构, 作为编辑层. 文字本身透明(color:transparent)让底层canvas显示, 光标/选中可见 */
   .pr-text .pr-pdf-page .pr-pdf-canvasWrap{ position:absolute; top:0; left:0; z-index:1; }
   .pr-text .pr-pdf-page .pr-pdf-textLayer{
     position:absolute; top:0; left:0; right:0; bottom:0; z-index:2;
     text-align:left; user-select:text; cursor:text;
-    color:transparent; caret-color:#111; /* 只让光标/选中可见,文字本身透明不遮挡canvas */
+    color:transparent; caret-color:#0b57d0; caret-shape:bar;
+    line-height:1; letter-spacing:0;
   }
+  /* 每个span独立可编辑(absolute脱离文本流 → 容器contenteditable无法在span之外建立插入点),点击空白时JS最近邻span定位 */
   .pr-text .pr-pdf-page .pr-pdf-textLayer > span{
     color:inherit; position:absolute; white-space:pre; transform-origin:0% 0%;
     padding:0; margin:0; pointer-events:auto;
+    outline:none;
   }
-  /* textLayer整体contenteditable=true, 支持键盘删除/输入 */
-  .pr-text .pr-pdf-page .pr-pdf-textLayer[contenteditable="true"]{ }
-  /* svgLayer: 颜色标注(SVG矩形半透明覆盖), AI解读临时标识蓝色边框矩形 */
+  /* 选中高亮与光标: 文字透明所以只让selection背景突出,不要被opacity压暗 */
+  .pr-text .pr-pdf-page .pr-pdf-textLayer::selection,
+  .pr-text .pr-pdf-page .pr-pdf-textLayer *::selection{
+    background: rgba(11,87,208,.36);
+    color:transparent; /* 保持文字透明不遮挡canvas */
+    caret-color:#0b57d0;
+  }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer{
     position:absolute; top:0; left:0; right:0; bottom:0; z-index:3;
     pointer-events:none;
@@ -7051,11 +7051,17 @@ async function renderPdfNative(item, prText){
             viewport: ptViewport
           });
           textLayer.render();
-          /* 给每个 span 加 data-x/data-top/data-str 方便后续定位选中坐标 */
+          /* 给每个 span 加 data-x/data-top/data-str 方便后续定位选中坐标
+             并把 span 独立置为contenteditable=true: 因为所有span都是absolute脱离文本流,容器contenteditable放不了光标 */
           setTimeout(function(){
             const spans = textLayerEl.querySelectorAll("span");
             for(let s=0; s<spans.length; s++){
               const sp = spans[s];
+              if((sp.textContent || "").replace(/\s+/, "").length === 0) continue; /* 纯空白span不编辑,留给排版 */
+              sp.setAttribute("contenteditable", "true");
+              sp.setAttribute("spellcheck", "false");
+              sp.setAttribute("autocorrect", "off");
+              sp.setAttribute("autocapitalize", "off");
               const r = sp.getBoundingClientRect();
               const pr = textLayerEl.getBoundingClientRect();
               /* 将 px 换算回 pt (1pt=1/72in, 浏览器1px=96dpi, 1pt=1.333px)
@@ -7106,6 +7112,64 @@ async function renderPdfNative(item, prText){
       }
     }
   }, 500);
+
+  /* ===== 事件增强: 点击textLayer空白(没点中span)时,把光标放到最近邻span的最近边界
+     解决: absolute span脱离文本流 → 点击两个字之间的空白区域/页边距/栏间距时浏览器无插入点 → 看起来"编辑不了" */
+  setTimeout(function(){
+    const allTextLayers = document.querySelectorAll(".pr-text.pr-pdf-native .pr-pdf-textLayer");
+    for(let ti=0; ti<allTextLayers.length; ti++){
+      allTextLayers[ti].addEventListener("mousedown", function(e){
+        /* 已点中某个span(contenteditable=true), 浏览器会自带放光标 → 不干预 */
+        const tgt = e.target;
+        if(tgt && (tgt.tagName === "SPAN" && tgt.closest && tgt.closest(".pr-pdf-textLayer > span"))) return;
+        /* 点在空白: 找当前textLayer里距离点击位置最近的span */
+        const tLayer = this;
+        const mx = e.clientX;
+        const my = e.clientY;
+        const spans = tLayer.querySelectorAll("span[contenteditable=\"true\"]");
+        if(!spans.length) return;
+        let best = null;
+        let bestDist = Infinity;
+        let bestSide = 0;  /* -1 放开头, 1 放末尾 */
+        for(let s=0; s<spans.length; s++){
+          const sp = spans[s];
+          const r = sp.getBoundingClientRect();
+          if(!r.width && !r.height) continue;
+          /* 距离: 如果点击位置在矩形内部直接0距离 */
+          let dx = 0, dy = 0;
+          if(mx < r.left) dx = r.left - mx;
+          else if(mx > r.right) dx = mx - r.right;
+          if(my < r.top) dy = r.top - my;
+          else if(my > r.bottom) dy = my - r.bottom;
+          const dist = dx*dx + dy*dy;
+          if(dist < bestDist){
+            bestDist = dist;
+            best = sp;
+            /* 在span内或右侧过半 → 放末尾, 否则开头 */
+            bestSide = (mx >= r.left + (r.right - r.left) * 0.5) ? 1 : -1;
+          }
+        }
+        if(!best) return;
+        /* 阻止默认: 默认浏览器在空白处尝试建立选择会失败且光标消失 */
+        try{
+          const sel = window.getSelection();
+          const range = document.createRange();
+          const node = best.firstChild || best;
+          const len = (node.nodeValue || (node.textContent || "")).length;
+          if(best.firstChild && best.firstChild.nodeType === 3){
+            range.setStart(best.firstChild, bestSide === 1 ? len : 0);
+          }else{
+            range.selectNodeContents(best);
+            range.collapse(bestSide !== 1);
+          }
+          sel.removeAllRanges();
+          sel.addRange(range);
+          best.focus && best.focus();
+          e.preventDefault();
+        }catch(_){}
+      }, true);
+    }
+  }, 600);
 
   return true;
 }
