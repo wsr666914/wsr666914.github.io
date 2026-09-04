@@ -1108,15 +1108,18 @@
     transform-origin:top center; border:1px solid #eee;
   }
   .pr-text .pr-pdf-page canvas{ display:block; width:100%; height:100%; }
-  /* textLayer: pdf.js标准结构, 作为编辑层. 文字本身透明(color:transparent)让底层canvas显示, 光标/选中可见 */
-  .pr-text .pr-pdf-page .pr-pdf-canvasWrap{ position:absolute; top:0; left:0; z-index:1; }
+  /* textLayer: 作为选中+编辑事件接收层. 文字透明不遮挡canvas; 必须有实色background才能接收鼠标事件(transparent容器无inline flow时hit box为0) */
+  .pr-text .pr-pdf-page .pr-pdf-canvasWrap{ position:absolute; top:0; left:0; z-index:1; pointer-events:none; }
+  .pr-text .pr-pdf-page .pr-pdf-canvasWrap canvas{ pointer-events:none; }
   .pr-text .pr-pdf-page .pr-pdf-textLayer{
     position:absolute; top:0; left:0; right:0; bottom:0; z-index:2;
     text-align:left; user-select:text; cursor:text;
     color:transparent; caret-color:#0b57d0; caret-shape:bar;
     line-height:1; letter-spacing:0;
+    /* 核心: 有实色背景容器才有hit box(0.0001不透明=视觉仍纯白,事件能被本层捕获不走canvas) */
+    background-color: rgba(255,255,255,0.0001);
+    pointer-events:auto;
   }
-  /* 每个span独立可编辑(absolute脱离文本流 → 容器contenteditable无法在span之外建立插入点),点击空白时JS最近邻span定位 */
   .pr-text .pr-pdf-page .pr-pdf-textLayer > span{
     color:inherit; position:absolute; white-space:pre; transform-origin:0% 0%;
     padding:0; margin:0; pointer-events:auto;
