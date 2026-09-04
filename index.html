@@ -6513,14 +6513,17 @@ function openPaperReader(itemId){
       prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(z*10)/10));
       const pt = document.getElementById("prText");
       if(pt){
-        if(pt.classList.contains("pr-pdf-native")){
-          /* PDF Canvas原生模式: 直接设置page的CSS transform scale,不碰pt.zoom
-             (zoom属性在新版浏览器对canvas缩放会模糊;用transform:scale保持canvas高清渲染) */
+        if(pt.classList.contains("pr-pdf-native") && prState.pdfNativeCssPx){
+          /* PDF Canvas原生CSS像素模式: 缩放通过改变renderScale + 重渲染完成.
+             保证canvas/textLayer/svgLayer/viewBox 同一scale, 坐标基准对齐, 光标选区不会偏移 */
+          const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+          if(cur) renderPdfNative(cur, pt);
+        }else if(pt.classList.contains("pr-pdf-native")){
+          /* 旧版(pt容器+transform, 已废弃但兼容): 直接改scale */
           const pages = pt.querySelectorAll(".pr-pdf-page");
           for(let i=0; i<pages.length; i++){
             pages[i].style.transform = "scale(" + prState.zoom + ")";
           }
-          prState.pdfNativeCssScale = prState.zoom;
         }else{
           pt.style.zoom = prState.zoom;
         }
@@ -6528,30 +6531,25 @@ function openPaperReader(itemId){
       prZoomPct.textContent = Math.round(prState.zoom*100) + "%";
       if(persist !== false){ try{ localStorage.setItem(STORAGE_KEY + "_zoom", String(prState.zoom)); }catch(e){} }
     }
-    /* 恢复上次缩放 */
+    /* 恢复上次缩放(PDF Canvas原生模式实际render时会按prState.zoom算renderScale,这里只更新按钮%) */
     let savedZoom = 1;
     try{ savedZoom = parseFloat(localStorage.getItem(STORAGE_KEY + "_zoom")); if(!(savedZoom>0)) savedZoom = 1; }catch(e){}
-    applyZoom(savedZoom);
-    /* 版面保真模式 / PDF Canvas原生模式: modal显示后按窗口宽度适配(让PDF页撑满可视区,左右栏完整可见不溢出)
-       仅当zoom为默认1(首次/reset)时适配,用户手动+/-后的缩放予以保留 */
+    prZoomPct.textContent = Math.round(savedZoom*100) + "%";
+    prState.zoom = savedZoom;
+    /* PDF Canvas原生模式: modal渲染时renderPdfNative已经按窗口fit或savedZoom计算了renderScale,
+       不需要再在140ms后按老方式二次设置。layout/fullText仍保留旧逻辑。 */
     setTimeout(function(){
       const cur = state.items.find(function(x){ return x.id === prState.itemId; });
       if(!cur) return;
       const ptEl = document.getElementById("prText");
       const nativeMode = ptEl && ptEl.classList.contains("pr-pdf-native");
-      if((nativeMode || (Array.isArray(cur.layout) && cur.layout.length)) && prState.zoom === 1){
+      if(!nativeMode && (Array.isArray(cur.layout) && cur.layout.length) && prState.zoom === 1){
         const w = document.getElementById("prTextWrap");
         if(w && w.clientWidth > 0){
           const availW = w.clientWidth - 112; /* 减去左右padding 56*2 */
           let pw = 595;
-          if(prState.pdfNativePageW) pw = prState.pdfNativePageW;
-          else if(cur.layout && cur.layout[0] && cur.layout[0].pageW) pw = cur.layout[0].pageW;
-          if(nativeMode){
-            /* 新模式 pageW = pt单位,与 px 换算比 72dpi → 浏览器 96dpi */
-            pw = pw * 96/72;
-          }else{
-            pw = pw * 96/72;
-          }
+          if(cur.layout && cur.layout[0] && cur.layout[0].pageW) pw = cur.layout[0].pageW;
+          pw = pw * 96/72;
           if(availW > 0 && pw > 0){
             const fit = Math.max(0.5, Math.min(2.5, Math.round((availW/pw)*10)/10));
             if(fit !== 1) applyZoom(fit, false);
@@ -6975,39 +6973,64 @@ async function renderPdfNative(item, prText){
   const cache = await _getPdfNativeDoc(item);
   if(!cache || !cache.pdf) return false;
   const pdf = cache.pdf;
-  /* 取zoom: 优先用户手动设置(prState.zoom),否则自动适配窗口宽 */
-  let zoom = prState.zoom || 1;
-  /* 模式标记: 与 pr-layout-mode 对称, CSS 取消 740px 限宽 + 其他对应样式 */
+  /* 模式标记 */
   prText.classList.add("pr-pdf-native");
   prText.classList.remove("pr-layout-mode");
 
-  /* 计算第一页的 pt 宽, 与 renderLayoutPaper 基准对齐,让zoom百分比一致 */
+  /* ===== 与PDF.js官方demo 100%对齐的坐标系方案: 只用CSS像素, 不混用pt + transform scale =====
+     - 页面容器的宽高 = CSS px = pageW/pt * CSS_PT_TO_PX(=96/72=1.333...) * renderScale
+     - canvas / textLayer / svgLayer 都用同一个 scale 的 getViewport() 渲染, span 的 transform/定位天然和canvas一致
+     - renderScale: 手动缩放或自动fit.  zoom按钮只改这个值后重渲染(不用transform), 不会造成坐标系错配
+     - 之前光标锁在左上角/选不中的根因: 容器用pt + transform scale缩放,而textLayer span的transform是pdf.js按ptViewport(scale=1)算的,
+       两者scale不一致导致span的真实可点击区域与canvas上的字在视觉位置不重合 → 点在字上但浏览器hit test判定位置偏了 → 光标落左上角(0,0)
+  */
+  const CSS_PT_TO_PX = 96/72;  /* 1pt = 96/72 px */
+  /* 计算第一页 pt 基准 */
   const firstPg = await pdf.getPage(1);
   const vp0 = firstPg.getViewport({ scale: 1 });
-  const pageW_pt = vp0.width;   /* 页宽 pt (A4: 595) */
-  const pageH_pt = vp0.height;  /* 页高 pt (A4: 842) */
-  /* 自动适配窗宽: 初次打开(zoom=1且没手动设置)时按内容区算scale 让PDF页刚好撑满可视宽 */
-  const autoFit = (!prState.zoom || Math.abs(prState.zoom - 1) < 0.001);
-  let cssScale = zoom;   /* CSS transform scale 作用于 .pr-pdf-page; 初始=zoom */
-  if(autoFit){
+  const pageW_pt = vp0.width;    /* A4=595 */
+  const pageH_pt = vp0.height;   /* A4=842 */
+  /* renderScale: CSS 像素= pt * renderScale (天然=CSS_PT_TO_PX * userZoomFactor) */
+  const needAutoFit = (!prState.zoom || Math.abs(prState.zoom - 1) < 0.001);
+  let renderScale;
+  if(needAutoFit){
     try{
       const boxW = (prText.parentElement || prText).clientWidth;
-      const fitScale = Math.max(0.4, Math.min(2.5, (boxW - 40) / pageW_pt));  /* 留40px边距 */
-      cssScale = fitScale;
-      prState.zoom = Math.round(cssScale * 10000) / 10000;
-    }catch(_){}
+      const availW = Math.max(200, (boxW - 40)); /* 左右各留20px边距 */
+      const pxPerPtAtZoom1 = CSS_PT_TO_PX;
+      const scale01 = availW / (pageW_pt * pxPerPtAtZoom1);   /* 刚好撑满的缩放因子 */
+      renderScale = Math.max(0.5, Math.min(2.5, scale01)) * pxPerPtAtZoom1;
+      /* 存入 zoom: zoom=1 表示 CSS_PT_TO_PX 基准; zoom>1 表示放大. 使+/-按钮对scale进行加减 */
+      prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(availW / (pageW_pt * pxPerPtAtZoom1) * 10)/10));
+    }catch(_){
+      renderScale = CSS_PT_TO_PX;
+      prState.zoom = 1;
+    }
+  }else{
+    renderScale = CSS_PT_TO_PX * prState.zoom;
+    renderScale = Math.max(0.5 * CSS_PT_TO_PX, Math.min(2.5 * CSS_PT_TO_PX, renderScale));
   }
-  /* 建立最外层容器 + 逐页容器(canvas + textLayer + svgLayer 叠加)
-     页面尺寸 = pageW_pt/pageH_pt, CSS transform scale=cssScale 缩放, 保留原生PDF坐标基准
-     → 所有 SVG 标注定位都按 pt 写, 不需要换算, 导出PDF时可直接套用 */
+  const pageW_px = Math.round(pageW_pt * renderScale / CSS_PT_TO_PX * 1000) / 1000 * CSS_PT_TO_PX / CSS_PT_TO_PX ? pageW_pt * renderScale : pageW_pt * renderScale;
+  /* 简化计算: pt * renderScale → CSS px (renderScale已含CSS_PT_TO_PX因子, 实际就是viewPort.width) */
+  const actualVp = firstPg.getViewport({ scale: renderScale });
+  const cssPageW = Math.round(actualVp.width);
+  const cssPageH = Math.round(actualVp.height);
+
+  prState.pdfNativeRenderScale = renderScale;
+  prState.pdfNativeCssPx = true;  /* 标记坐标系 */
+  prState.pdfNativePageW = pageW_pt;   /* 仍保留 pt 原值用于标注恢复逻辑换算 */
+  prState.pdfNativePageH = pageH_pt;
+  prState.pdfNativeNumPages = pdf.numPages;
+
+  /* 建立容器 + 每页(canvas + textLayer + svgLayer 叠加). 容器CSS尺寸直接=cssPageW/H, 不做transform缩放 */
   let pagesHtml = '<div class="pr-pdf-root" id="prPdfRoot">';
   for(let p=1; p<=pdf.numPages; p++){
-    pagesHtml += '<div class="pr-pdf-page" id="prPdfPage_' + p + '" data-page="' + p + '" style="width:' + pageW_pt + 'pt;height:' + pageH_pt + 'pt;transform:scale(' + cssScale + ');">'
-      + '<div class="pr-pdf-canvasWrap" style="width:100%;height:100%;">'
-      +   '<canvas id="prPdfCanvas_' + p + '"></canvas>'
+    pagesHtml += '<div class="pr-pdf-page pr-pdf-page-px" id="prPdfPage_' + p + '" data-page="' + p + '" style="width:' + cssPageW + 'px;height:' + cssPageH + 'px;">'
+      + '<div class="pr-pdf-canvasWrap" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;">'
+      +   '<canvas id="prPdfCanvas_' + p + '" style="display:block;width:100%;height:100%;"></canvas>'
       + '</div>'
-      + '<div class="pr-pdf-textLayer" id="prPdfText_' + p + '" contenteditable="true"></div>'
-      + '<svg class="pr-pdf-svgLayer" id="prPdfSvg_' + p + '" viewBox="0 0 ' + pageW_pt + ' ' + pageH_pt + '" preserveAspectRatio="none" style="width:100%;height:100%;">'
+      + '<div class="pr-pdf-textLayer" id="prPdfText_' + p + '" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>'
+      + '<svg class="pr-pdf-svgLayer" id="prPdfSvg_' + p + '" viewBox="0 0 ' + cssPageW + ' ' + cssPageH + '" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:3;pointer-events:none;">'
       +   '<defs><style>.hl-box{}</style></defs>'
       + '</svg>'
       + '</div>';
@@ -7015,75 +7038,57 @@ async function renderPdfNative(item, prText){
   pagesHtml += '</div>';
   prText.innerHTML = pagesHtml;
 
-  /* 保存当前 pdfDoc 引用到 prState 里给其他功能(缩放/翻页/重新渲染)使用 */
   prState.pdfNativeCacheKey = String(item.id);
-  prState.pdfNativeCssScale = cssScale;
-  prState.pdfNativePageW = pageW_pt;
-  prState.pdfNativePageH = pageH_pt;
-  prState.pdfNativeNumPages = pdf.numPages;
 
-  /* ===== 每一页: canvas render + textLayer 渲染 =====
-     canvas/textLayer 都用 pdf.js 的标准 TextLayerBuilder + getViewport 保证对齐 */
+  /* ===== 每页 canvas+textLayer 都用同一个 renderScale 的 viewport 渲染, span定位与canvas像素级对齐 ===== */
   for(let p=1; p<=pdf.numPages; p++){
     (function(pageNum){
       pdf.getPage(pageNum).then(function(page){
-        const scale = 2; /* canvas 2倍高清渲染, 通过CSS缩放到页面容器宽高, 避免模糊 */
-        const viewport = page.getViewport({ scale: scale });
+        const viewport = page.getViewport({ scale: renderScale });
         const canvas = document.getElementById("prPdfCanvas_" + pageNum);
         if(!canvas) return;
         const ctx = canvas.getContext("2d");
-        const outputScale = window.devicePixelRatio || 1;
-        canvas.width = Math.floor(viewport.width * outputScale);
-        canvas.height = Math.floor(viewport.height * outputScale);
-        canvas.style.width = "100%";
-        canvas.style.height = "100%";
-        const txf = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
-        page.render({ canvasContext: ctx, viewport: viewport, transform: txf });
-        /* textLayer 构造: pdf.js 自带 */
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(viewport.width * dpr);
+        canvas.height = Math.round(viewport.height * dpr);
+        const transform = (dpr !== 1) ? [dpr, 0, 0, dpr, 0, 0] : null;
+        page.render({ canvasContext: ctx, viewport: viewport, transform: transform });
+        /* textLayer 用同一 renderScale viewport → span 的 transform 与 canvas 完全对齐 → 光标/选区与字形同坐标 */
         page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).then(function(tc){
           const textLayerEl = document.getElementById("prPdfText_" + pageNum);
           if(!textLayerEl) return;
-          /* viewport 是 scale=1 的 pt 坐标,与页面容器的 pt 宽高一致 → 文字span坐标直接用pt */
-          const ptViewport = page.getViewport({ scale: 1 });
+          textLayerEl.innerHTML = "";
           const textLayer = new pdfjsLib.TextLayer({
             textContentSource: tc,
             container: textLayerEl,
-            viewport: ptViewport
+            viewport: viewport
           });
           textLayer.render();
-          /* 给每个 span 加 data-x/data-top/data-str 方便后续定位选中坐标
-             并把 span 独立置为contenteditable=true: 因为所有span都是absolute脱离文本流,容器contenteditable放不了光标 */
+          /* 每个文字span: contenteditable=true 独立编辑 + 记录 data-x/w/h(px) 供SVG标注/临时高亮定位 */
           setTimeout(function(){
             const spans = textLayerEl.querySelectorAll("span");
+            const layerRect = textLayerEl.getBoundingClientRect();
             for(let s=0; s<spans.length; s++){
               const sp = spans[s];
-              if((sp.textContent || "").replace(/\s+/, "").length === 0) continue; /* 纯空白span不编辑,留给排版 */
+              const txt = (sp.textContent || "").replace(/\u00A0/g, " ").replace(/\u200B/g, "");
+              if(txt.replace(/\s+/, "").length === 0) continue;
               sp.setAttribute("contenteditable", "true");
               sp.setAttribute("spellcheck", "false");
               sp.setAttribute("autocorrect", "off");
               sp.setAttribute("autocapitalize", "off");
               const r = sp.getBoundingClientRect();
-              const pr = textLayerEl.getBoundingClientRect();
-              /* 将 px 换算回 pt (1pt=1/72in, 浏览器1px=96dpi, 1pt=1.333px)
-                 更可靠: 直接用 textLayer 已应用的 transform 比例反推 */
-              const scaleX = pageW_pt / pr.width;
-              const scaleY = pageH_pt / pr.height;
-              sp.dataset.x = String(Math.round((r.left - pr.left) * scaleX));
-              sp.dataset.top = String(Math.round((r.top - pr.top) * scaleY));
-              sp.dataset.w = String(Math.max(2, Math.round(r.width * scaleX)));
-              sp.dataset.h = String(Math.max(6, Math.round(r.height * scaleY)));
+              sp.dataset.x = String(Math.round((r.left - layerRect.left) * 100) / 100);
+              sp.dataset.top = String(Math.round((r.top - layerRect.top) * 100) / 100);
+              sp.dataset.w = String(Math.max(2, Math.round(r.width * 100) / 100));
+              sp.dataset.h = String(Math.max(6, Math.round(r.height * 100) / 100));
             }
-          }, 30);
+          }, 40);
         });
       });
     })(p);
   }
 
-  /* ===== 颜色标注恢复: item.highlights 数组 → 在对应页 svgLayer 上画矩形
-     highlight 在旧系统里存的是 {type, text, color, ...} 纯文本匹配,但这里我们需要页码+坐标.
-     兼容方案: 对每个hl 遍历 textLayer span 的 data-str 做文本匹配 → 取第一个命中span的x/top/w/h作为矩形坐标,
-     跨span的hl在同一行内时扩张矩形到最后一个命中span的右端. */
-  setTimeout(function(){ renderHighlightsAsSvg(item); }, 350);
+  setTimeout(function(){ renderHighlightsAsSvg(item); }, 500);
 
   /* ===== 参考文献(基于layout坐标提取的右栏条目)仍追加到 PDF页之后, 保持检索功能不变
      (回退: layout blocks中提取,和renderLayoutPaper同款逻辑) */
