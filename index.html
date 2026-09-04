@@ -1090,6 +1090,53 @@
   /* Word流式版面保真: 富文本段落(字号/缩进/对齐/加粗内联style,分栏用column-count) */
   .pr-text .pr-docflow{ column-gap:28px; }
   .pr-text .pr-docflow-p{ margin:0 0 0.55em; break-inside:avoid; }
+  /* ===== PDF原生渲染: canvas + textLayer(可编辑) + svgLayer(标注) =====
+     - 与Adobe阅读器像素级一致, 不再自己重建HTML版面, 从根上消除双栏重叠/删字跳行/错位重叠
+     - canvas 层: pdf.js 绘制原PDF, 不可编辑(只读)
+     - textLayer 层: pdf.js生成的文字span (PDF规范, 与canvas像素对齐), 开启contenteditable做编辑
+     - svgLayer 层: 颜色标注/临时高亮/AI解读标识都画SVG矩形在文字上方, 不破坏原DOM  */
+  .pr-text.pr-pdf-native{ max-width:none; text-indent:0; }
+  .pr-text .pr-pdf-root{ padding:8px 0; text-align:center; overflow-x:auto; }
+  .pr-text .pr-pdf-root::before{
+    content:"PDF 阅读器 · 与Adobe阅读器像素级一致(可编辑·可标注·原PDF原貌)";
+    display:block; margin:0 0 12px; font-size:12px; color:#2e7d32; background:#e8f5e9;
+    border:1px solid #a5d6a7; border-radius:6px; padding:6px 10px; text-align:center;
+  }
+  .pr-text .pr-pdf-page{
+    position:relative; margin:0 auto 18px; background:#fff;
+    box-shadow:0 1px 8px rgba(0,0,0,.14); overflow:visible;
+    transform-origin:top center; border:1px solid #eee;
+  }
+  .pr-text .pr-pdf-page canvas{ display:block; width:100%; height:100%; }
+  /* textLayer: pdf.js标准结构,这里加contenteditable支持编辑 */
+  .pr-text .pr-pdf-textLayer{
+    position:absolute; top:0; left:0; right:0; bottom:0;
+    overflow:hidden; opacity:.3; line-height:1; letter-spacing:0; z-index:2;
+    pointer-events:none;  /* 选中通过 canvas 的命中测试?不,需要文字可选中 → 重写为auto,让 textLayer 在上,canvas在下 */
+  }
+  /* 修正: textLayer在上(z-3)接受鼠标选中/编辑, canvas在下(z-1)负责显示, 两者像素坐标对齐让选中对应原PDF文字 */
+  .pr-text .pr-pdf-page{ position:relative; }
+  .pr-text .pr-pdf-page .pr-pdf-canvasWrap{ position:absolute; top:0; left:0; z-index:1; }
+  .pr-text .pr-pdf-page .pr-pdf-textLayer{
+    position:absolute; top:0; left:0; right:0; bottom:0; z-index:2;
+    text-align:left; user-select:text; cursor:text;
+    color:transparent; caret-color:#111; /* 只让光标/选中可见,文字本身透明不遮挡canvas */
+  }
+  .pr-text .pr-pdf-page .pr-pdf-textLayer > span{
+    color:inherit; position:absolute; white-space:pre; transform-origin:0% 0%;
+    padding:0; margin:0; pointer-events:auto;
+  }
+  /* textLayer整体contenteditable=true, 支持键盘删除/输入 */
+  .pr-text .pr-pdf-page .pr-pdf-textLayer[contenteditable="true"]{ }
+  /* svgLayer: 颜色标注(SVG矩形半透明覆盖), AI解读临时标识蓝色边框矩形 */
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer{
+    position:absolute; top:0; left:0; right:0; bottom:0; z-index:3;
+    pointer-events:none;
+  }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer rect{ pointer-events:auto; }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-box{ cursor:pointer; }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-ai{ fill:rgba(100,150,255,.22); stroke:rgba(80,120,200,.6); stroke-width:1px; }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-box:hover{ filter:brightness(.92); }
   .pr-text > p, .pr-text > div{
     margin:0 0 14px; text-indent:0;
   }
@@ -3666,7 +3713,7 @@ async function splitLargeFieldsToIdb(items){
   }
   return slim;
 }
-/* 从 IDB 读取 layout / images 挂回 state.items (失败则保留原值/未定义) */
+/* 从 IDB 读取 layout / images / pdfBytes 挂回 state.items (失败则保留原值/未定义) */
 async function hydrateLargeFields(){
   if(!Array.isArray(state.items)) return;
   for(let i=0; i<state.items.length; i++){
@@ -3685,6 +3732,12 @@ async function hydrateLargeFields(){
         if(Array.isArray(imgs) && imgs.length) it.images = imgs;
       }catch(_){}
     }
+    /* PDF原始字节(Uint8Array) - 存在则能走Canvas原生渲染,与Adobe阅读器一致
+       (PDF字节不写localStorage, 只在IDB内存态, 内存挂到it._pdfBytes, 供_getPdfNativeDoc快速查找) */
+    try{
+      const pb = await idbGet(id + "|pdfBytes");
+      if(pb && (pb instanceof Uint8Array || Array.isArray(pb))) it._pdfBytes = pb;
+    }catch(_){}
   }
 }
 
@@ -6183,6 +6236,11 @@ function openPaperReader(itemId){
   prState.history = [];   /* 操作历史(撤销删除/排版/标注/键盘编辑) */
   prState.redoHistory = [];  /* 重做栈 */
   prState.kbHistPushed = false;
+  /* PDF Canvas原生模式 渲染状态标志(每次打开重置,避免上次回退标志残留) */
+  prState._pdfRendered = false;
+  prState._pdfRenderFallback = false;
+  prState.pdfNativeCacheKey = null;
+  prState.pdfNativeNumPages = 0;
   /* 快照: 打开时的原始数据副本,退出选「取消」时恢复 */
   prState.snapshot = JSON.parse(JSON.stringify({
     fullText: item.fullText,
@@ -6273,8 +6331,12 @@ function openPaperReader(itemId){
   function prApplyOrToggleAnnotation(selText, type, color){
     const cur = state.items.find(function(x){ return x.id === prState.itemId; });
     if(!cur) return false;
-    if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
-    rebuildFromDom(cur);
+    const prTextEl = document.getElementById("prText");
+    const isPdfNativeMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
+    if(!isPdfNativeMode){
+      if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+      rebuildFromDom(cur);
+    }
     if(!cur.highlights) cur.highlights = [];
     /* 完全匹配的同款标注 → 取消(Word式toggle) */
     const idx = cur.highlights.findIndex(function(h){
@@ -6285,7 +6347,19 @@ function openPaperReader(itemId){
       pushHlHistory();
       saveState();
       markDirty();
-      applyHighlightsToDom(cur);
+      if(isPdfNativeMode){
+        /* PDF Canvas原生模式: 重画整个svgLayer,不重建DOM(重建会丢canvas和textLayer状态) */
+        for(let p=1; p<=prState.pdfNativeNumPages; p++){
+          const svg = document.getElementById("prPdfSvg_" + p);
+          if(svg){
+            const olds = svg.querySelectorAll("rect.hl-box");
+            for(let k=0; k<olds.length; k++) olds[k].parentNode && olds[k].parentNode.removeChild(olds[k]);
+          }
+        }
+        renderHighlightsAsSvg(cur);
+      }else{
+        applyHighlightsToDom(cur);
+      }
       toast("已取消「" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"备注") + "」");
       return true;
     }
@@ -6296,7 +6370,11 @@ function openPaperReader(itemId){
     pushHlHistory();
     saveState();
     markDirty();
-    applyHighlightsToDom(cur);
+    if(isPdfNativeMode){
+      drawHighlightInSvg(entry, cur.highlights.length - 1);
+    }else{
+      applyHighlightsToDom(cur);
+    }
     toast("已" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"添加备注"));
     return true;
   }
@@ -6434,7 +6512,19 @@ function openPaperReader(itemId){
     function applyZoom(z, persist){
       prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(z*10)/10));
       const pt = document.getElementById("prText");
-      if(pt) pt.style.zoom = prState.zoom;
+      if(pt){
+        if(pt.classList.contains("pr-pdf-native")){
+          /* PDF Canvas原生模式: 直接设置page的CSS transform scale,不碰pt.zoom
+             (zoom属性在新版浏览器对canvas缩放会模糊;用transform:scale保持canvas高清渲染) */
+          const pages = pt.querySelectorAll(".pr-pdf-page");
+          for(let i=0; i<pages.length; i++){
+            pages[i].style.transform = "scale(" + prState.zoom + ")";
+          }
+          prState.pdfNativeCssScale = prState.zoom;
+        }else{
+          pt.style.zoom = prState.zoom;
+        }
+      }
       prZoomPct.textContent = Math.round(prState.zoom*100) + "%";
       if(persist !== false){ try{ localStorage.setItem(STORAGE_KEY + "_zoom", String(prState.zoom)); }catch(e){} }
     }
@@ -6442,18 +6532,29 @@ function openPaperReader(itemId){
     let savedZoom = 1;
     try{ savedZoom = parseFloat(localStorage.getItem(STORAGE_KEY + "_zoom")); if(!(savedZoom>0)) savedZoom = 1; }catch(e){}
     applyZoom(savedZoom);
-    /* 版面保真模式: modal显示后按窗口宽度适配(让PDF页撑满可视区,左右栏完整可见不溢出)
+    /* 版面保真模式 / PDF Canvas原生模式: modal显示后按窗口宽度适配(让PDF页撑满可视区,左右栏完整可见不溢出)
        仅当zoom为默认1(首次/reset)时适配,用户手动+/-后的缩放予以保留 */
     setTimeout(function(){
       const cur = state.items.find(function(x){ return x.id === prState.itemId; });
-      if(cur && Array.isArray(cur.layout) && cur.layout.length && prState.zoom === 1){
+      if(!cur) return;
+      const ptEl = document.getElementById("prText");
+      const nativeMode = ptEl && ptEl.classList.contains("pr-pdf-native");
+      if((nativeMode || (Array.isArray(cur.layout) && cur.layout.length)) && prState.zoom === 1){
         const w = document.getElementById("prTextWrap");
         if(w && w.clientWidth > 0){
           const availW = w.clientWidth - 112; /* 减去左右padding 56*2 */
-          const pw = (cur.layout[0].pageW || 595) * 96/72; /* pt→px */
+          let pw = 595;
+          if(prState.pdfNativePageW) pw = prState.pdfNativePageW;
+          else if(cur.layout && cur.layout[0] && cur.layout[0].pageW) pw = cur.layout[0].pageW;
+          if(nativeMode){
+            /* 新模式 pageW = pt单位,与 px 换算比 72dpi → 浏览器 96dpi */
+            pw = pw * 96/72;
+          }else{
+            pw = pw * 96/72;
+          }
           if(availW > 0 && pw > 0){
             const fit = Math.max(0.5, Math.min(2.5, Math.round((availW/pw)*10)/10));
-            if(fit !== 1) applyZoom(fit, false); /* 适配不持久,避免窗口变化后失效 */
+            if(fit !== 1) applyZoom(fit, false);
           }
         }
       }
@@ -6531,6 +6632,40 @@ function openPaperReader(itemId){
       /* 存储标注 */
       const item2 = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!item2) return;
+      const prTextEl = document.getElementById("prText");
+      const isPdfNativeMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
+      if(isPdfNativeMode){
+        /* PDF Canvas原生模式: 走SVG画矩形标注,不重建DOM(重建会破坏canvas/textLayer) */
+        if(!item2.highlights) item2.highlights = [];
+        let hlType = "highlight";
+        let hlColor = prState.activeColor || null;
+        if(prState.activeFmt === "bold"){ hlType = "bold"; }
+        else if(prState.activeFmt === "underline"){ hlType = "underline"; }
+        else if(prState.activeFmt === "note"){
+          const noteText = prompt("为选中文字添加备注:");
+          if(!noteText || !noteText.trim()) return;
+          hlType = "note";
+          item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
+          drawHighlightInSvg({ text: selectedText, type:"note", color:"#FFF1A8" }, item2.highlights.length - 1);
+          pushHlHistory(); saveState(); markDirty(); sel.removeAllRanges();
+          toast("备注已添加");
+          return;
+        }
+        var exists2 = item2.highlights.some(function(h){
+          return h.text === selectedText && h.type === hlType && h.color === hlColor;
+        });
+        if(!exists2){
+          var entry2 = { text: selectedText, type: hlType };
+          if(hlColor) entry2.color = hlColor;
+          else if(hlType === "bold") entry2.color = "#D7F0FF";
+          else if(hlType === "underline") entry2.color = "#E7D8FF";
+          item2.highlights.push(entry2);
+          drawHighlightInSvg(entry2, item2.highlights.length - 1);
+          pushHlHistory();
+        }
+        saveState(); markDirty(); sel.removeAllRanges();
+        return;
+      }
       /* Word式编辑可能有未同步内容 → 先把DOM同步到数据,防止标注重建DOM时丢失编辑 */
       if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
       rebuildFromDom(item2);
@@ -6806,6 +6941,279 @@ function extractLayoutRefs(blocks){
 
 /* 版面保真渲染: 用PDF文字块坐标字号,绝对定位1:1还原原版面
    (双栏天然还原/字号大小关系保真/文字位置保真) —— 像一张可读的PDF照片 */
+/* ==============================================================
+   PDF 原生渲染 (Canvas + pdf.js textLayer + svgLayer)
+   - Canvas 绘制原PDF(与Adobe阅读器像素级一致,消除所有重建版式bug)
+   - textLayer 透明文字在上, 提供选中文本+contenteditable编辑
+   - svgLayer 画颜色标注矩形 / AI解读临时标识
+   - 老论文(无pdfBytes, 仅有layout/fullText) 自动回退 renderPaperText
+   ============================================================== */
+/* 全局PDF原生渲染文档实例缓存(itemId → {pdf, bytes, pages}),避免每次打开都重新解码PDF字节 */
+let _pdfNativeCache = {};
+async function _getPdfNativeDoc(item){
+  if(!item) return null;
+  const key = String(item.id);
+  if(_pdfNativeCache[key]) return _pdfNativeCache[key];
+  /* 优先读hydrateLargeFields挂好的 item._pdfBytes, 省一次IDB round-trip */
+  let bytes = null;
+  if(item._pdfBytes && (item._pdfBytes instanceof Uint8Array || Array.isArray(item._pdfBytes))){
+    bytes = item._pdfBytes;
+  }else{
+    try{ bytes = await idbGet(key + "|pdfBytes"); }catch(_){ bytes = null; }
+  }
+  if(!bytes || !bytes.length) return null;
+  if(!window.pdfjsLib) return null;
+  try{
+    const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    _pdfNativeCache[key] = { pdf: pdf, bytes: bytes, pages: [] };
+    return _pdfNativeCache[key];
+  }catch(_){ return null; }
+}
+/* 主入口: 返回true=走了Canvas渲染,false=回退到旧renderLayoutPaper/fullText */
+async function renderPdfNative(item, prText){
+  if(!window.pdfjsLib || !item) return false;
+  const cache = await _getPdfNativeDoc(item);
+  if(!cache || !cache.pdf) return false;
+  const pdf = cache.pdf;
+  /* 取zoom: 优先用户手动设置(prState.zoom),否则自动适配窗口宽 */
+  let zoom = prState.zoom || 1;
+  /* 模式标记: 与 pr-layout-mode 对称, CSS 取消 740px 限宽 + 其他对应样式 */
+  prText.classList.add("pr-pdf-native");
+  prText.classList.remove("pr-layout-mode");
+
+  /* 计算第一页的 pt 宽, 与 renderLayoutPaper 基准对齐,让zoom百分比一致 */
+  const firstPg = await pdf.getPage(1);
+  const vp0 = firstPg.getViewport({ scale: 1 });
+  const pageW_pt = vp0.width;   /* 页宽 pt (A4: 595) */
+  const pageH_pt = vp0.height;  /* 页高 pt (A4: 842) */
+  /* 自动适配窗宽: 初次打开(zoom=1且没手动设置)时按内容区算scale 让PDF页刚好撑满可视宽 */
+  const autoFit = (!prState.zoom || Math.abs(prState.zoom - 1) < 0.001);
+  let cssScale = zoom;   /* CSS transform scale 作用于 .pr-pdf-page; 初始=zoom */
+  if(autoFit){
+    try{
+      const boxW = (prText.parentElement || prText).clientWidth;
+      const fitScale = Math.max(0.4, Math.min(2.5, (boxW - 40) / pageW_pt));  /* 留40px边距 */
+      cssScale = fitScale;
+      prState.zoom = Math.round(cssScale * 10000) / 10000;
+    }catch(_){}
+  }
+  /* 建立最外层容器 + 逐页容器(canvas + textLayer + svgLayer 叠加)
+     页面尺寸 = pageW_pt/pageH_pt, CSS transform scale=cssScale 缩放, 保留原生PDF坐标基准
+     → 所有 SVG 标注定位都按 pt 写, 不需要换算, 导出PDF时可直接套用 */
+  let pagesHtml = '<div class="pr-pdf-root" id="prPdfRoot">';
+  for(let p=1; p<=pdf.numPages; p++){
+    pagesHtml += '<div class="pr-pdf-page" id="prPdfPage_' + p + '" data-page="' + p + '" style="width:' + pageW_pt + 'pt;height:' + pageH_pt + 'pt;transform:scale(' + cssScale + ');">'
+      + '<div class="pr-pdf-canvasWrap" style="width:100%;height:100%;">'
+      +   '<canvas id="prPdfCanvas_' + p + '"></canvas>'
+      + '</div>'
+      + '<div class="pr-pdf-textLayer" id="prPdfText_' + p + '" contenteditable="true"></div>'
+      + '<svg class="pr-pdf-svgLayer" id="prPdfSvg_' + p + '" viewBox="0 0 ' + pageW_pt + ' ' + pageH_pt + '" preserveAspectRatio="none" style="width:100%;height:100%;">'
+      +   '<defs><style>.hl-box{}</style></defs>'
+      + '</svg>'
+      + '</div>';
+  }
+  pagesHtml += '</div>';
+  prText.innerHTML = pagesHtml;
+
+  /* 保存当前 pdfDoc 引用到 prState 里给其他功能(缩放/翻页/重新渲染)使用 */
+  prState.pdfNativeCacheKey = String(item.id);
+  prState.pdfNativeCssScale = cssScale;
+  prState.pdfNativePageW = pageW_pt;
+  prState.pdfNativePageH = pageH_pt;
+  prState.pdfNativeNumPages = pdf.numPages;
+
+  /* ===== 每一页: canvas render + textLayer 渲染 =====
+     canvas/textLayer 都用 pdf.js 的标准 TextLayerBuilder + getViewport 保证对齐 */
+  for(let p=1; p<=pdf.numPages; p++){
+    (function(pageNum){
+      pdf.getPage(pageNum).then(function(page){
+        const scale = 2; /* canvas 2倍高清渲染, 通过CSS缩放到页面容器宽高, 避免模糊 */
+        const viewport = page.getViewport({ scale: scale });
+        const canvas = document.getElementById("prPdfCanvas_" + pageNum);
+        if(!canvas) return;
+        const ctx = canvas.getContext("2d");
+        const outputScale = window.devicePixelRatio || 1;
+        canvas.width = Math.floor(viewport.width * outputScale);
+        canvas.height = Math.floor(viewport.height * outputScale);
+        canvas.style.width = "100%";
+        canvas.style.height = "100%";
+        const txf = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+        page.render({ canvasContext: ctx, viewport: viewport, transform: txf });
+        /* textLayer 构造: pdf.js 自带 */
+        page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).then(function(tc){
+          const textLayerEl = document.getElementById("prPdfText_" + pageNum);
+          if(!textLayerEl) return;
+          /* viewport 是 scale=1 的 pt 坐标,与页面容器的 pt 宽高一致 → 文字span坐标直接用pt */
+          const ptViewport = page.getViewport({ scale: 1 });
+          const textLayer = new pdfjsLib.TextLayer({
+            textContentSource: tc,
+            container: textLayerEl,
+            viewport: ptViewport
+          });
+          textLayer.render();
+          /* 给每个 span 加 data-x/data-top/data-str 方便后续定位选中坐标 */
+          setTimeout(function(){
+            const spans = textLayerEl.querySelectorAll("span");
+            for(let s=0; s<spans.length; s++){
+              const sp = spans[s];
+              const r = sp.getBoundingClientRect();
+              const pr = textLayerEl.getBoundingClientRect();
+              /* 将 px 换算回 pt (1pt=1/72in, 浏览器1px=96dpi, 1pt=1.333px)
+                 更可靠: 直接用 textLayer 已应用的 transform 比例反推 */
+              const scaleX = pageW_pt / pr.width;
+              const scaleY = pageH_pt / pr.height;
+              sp.dataset.x = String(Math.round((r.left - pr.left) * scaleX));
+              sp.dataset.top = String(Math.round((r.top - pr.top) * scaleY));
+              sp.dataset.w = String(Math.max(2, Math.round(r.width * scaleX)));
+              sp.dataset.h = String(Math.max(6, Math.round(r.height * scaleY)));
+            }
+          }, 30);
+        });
+      });
+    })(p);
+  }
+
+  /* ===== 颜色标注恢复: item.highlights 数组 → 在对应页 svgLayer 上画矩形
+     highlight 在旧系统里存的是 {type, text, color, ...} 纯文本匹配,但这里我们需要页码+坐标.
+     兼容方案: 对每个hl 遍历 textLayer span 的 data-str 做文本匹配 → 取第一个命中span的x/top/w/h作为矩形坐标,
+     跨span的hl在同一行内时扩张矩形到最后一个命中span的右端. */
+  setTimeout(function(){ renderHighlightsAsSvg(item); }, 350);
+
+  /* ===== 参考文献(基于layout坐标提取的右栏条目)仍追加到 PDF页之后, 保持检索功能不变
+     (回退: layout blocks中提取,和renderLayoutPaper同款逻辑) */
+  setTimeout(function(){
+    const refList = extractLayoutRefs(item.layout);
+    if(refList && refList.length){
+      const root = document.getElementById("prPdfRoot");
+      if(root){
+        let refsHtml = '<h4 class="pr-section-title pr-layout-refs-title">参考文献</h4><ol class="pp-refs pr-layout-refs">';
+        for(let r=0; r<refList.length; r++){
+          const txt = refList[r].replace(/^\[?\d{1,3}(?:[-,，]\d{1,3})*[\]、.．)]\s*/, "").trim();
+          const sl = buildRefSearchLinks(txt);
+          refsHtml += '<li class="pp-ref" contenteditable="false"><span class="pp-ref-text">' + escapeHtml(txt) + '</span>';
+          if(sl){
+            refsHtml += '<span class="pp-ref-links" contenteditable="false">' +
+              '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G</a>' +
+              '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2</a>' +
+              '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知</a>' +
+              '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻</a>' +
+              '</span>';
+          }
+          refsHtml += '</li>';
+        }
+        refsHtml += '</ol>';
+        root.insertAdjacentHTML("afterend", refsHtml);
+      }
+    }
+  }, 500);
+
+  return true;
+}
+/* 将 item.highlights(文本匹配式的) → 绘制到各页 svgLayer 为矩形, 并把 hl 转换为带坐标的格式以便后续取消/保存 */
+function renderHighlightsAsSvg(item){
+  if(!item || !item.highlights || !item.highlights.length) return;
+  for(let h=0; h<item.highlights.length; h++){
+    const hl = item.highlights[h];
+    drawHighlightInSvg(hl, h);
+  }
+}
+/* 根据 hl.text 在 textLayer span 中顺序匹配 → 在 svgLayer 画对应矩形; 支持跨span同一行合并矩形 */
+function drawHighlightInSvg(hl, hlIdx){
+  const searchText = (hl.text || "").trim();
+  if(!searchText) return;
+  const numPages = prState.pdfNativeNumPages || 0;
+  if(!numPages) return;
+  const pageW = prState.pdfNativePageW;
+  const pageH = prState.pdfNativePageH;
+  /* 在所有 textLayer span 内按顺序拼接文本找连续段等于searchText */
+  let accum = "";   /* 当前拼接文本(加空格) */
+  let hitSpans = []; /* 命中的 span 列表 */
+  let found = false;
+  for(let p=1; p<=numPages && !found; p++){
+    const tEl = document.getElementById("prPdfText_" + p);
+    if(!tEl) continue;
+    const spans = tEl.querySelectorAll("span");
+    for(let s=0; s<spans.length; s++){
+      const sp = spans[s];
+      const txt = (sp.textContent || "").replace(/\u200B/g, "").replace(/\u00A0/g, " ");
+      if(!txt) continue;
+      accum += txt;
+      hitSpans.push({ page:p, el:sp, text:txt });
+      /* 累加文本末尾匹配 searchText? */
+      if(accum.length >= searchText.length){
+        const tail = accum.substring(accum.length - searchText.length);
+        if(tail === searchText){
+          /* 命中 → 从 hitSpans 末尾向前回溯,直到累计覆盖searchText长度 */
+          let need = searchText.length;
+          const finalArr = [];
+          for(let k=hitSpans.length-1; k>=0 && need>0; k--){
+            const obj = hitSpans[k];
+            const tk = obj.text.length;
+            finalArr.unshift(obj);
+            need -= tk;
+          }
+          /* 合并矩形: 按行(y差<=3pt)合并,跨行画多个矩形 */
+          if(finalArr.length){
+            const rows = [];  /* 每行一行矩形:{page, y, x1, x2, h} */
+            for(let k=0; k<finalArr.length; k++){
+              const sp = finalArr[k].el;
+              const x = parseFloat(sp.dataset.x || "0");
+              const y = parseFloat(sp.dataset.top || "0");
+              const w = parseFloat(sp.dataset.w || "8");
+              const h = parseFloat(sp.dataset.h || "12");
+              let row = null;
+              for(let ri=rows.length-1; ri>=0; ri--){
+                if(rows[ri].page === finalArr[k].page && Math.abs(rows[ri].y - y) <= 3){ row = rows[ri]; break; }
+              }
+              if(!row){ row = { page:finalArr[k].page, y:y, x1:x, x2:x+w, h:h }; rows.push(row); }
+              else{ row.x1 = Math.min(row.x1, x); row.x2 = Math.max(row.x2, x+w); row.h = Math.max(row.h, h); }
+            }
+            /* 把矩形画到对应页svgLayer */
+            for(let ri=0; ri<rows.length; ri++){
+              const row = rows[ri];
+              const svg = document.getElementById("prPdfSvg_" + row.page);
+              if(!svg) continue;
+              const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+              rect.setAttribute("x", String(Math.max(0, row.x1 - 1)));
+              rect.setAttribute("y", String(Math.max(0, row.y - 1)));
+              rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1 + 2)));
+              rect.setAttribute("height", String(Math.max(8, row.h + 2)));
+              rect.setAttribute("fill", hl.color || "#FFE08A");
+              rect.setAttribute("fill-opacity", "0.75");
+              rect.setAttribute("rx", "2");
+              rect.setAttribute("class", "hl-box");
+              rect.setAttribute("data-hl-idx", String(hlIdx));
+              rect.setAttribute("data-hl-color", hl.color || "#FFE08A");
+              /* 点击选中该标注 → 可通过颜色按钮取消(toggleHighlight逻辑) */
+              (function(r){
+                rect.addEventListener("mousedown", function(ev){
+                  ev.stopPropagation(); ev.preventDefault();
+                  try{
+                    const sel = window.getSelection();
+                    sel.removeAllRanges();
+                    /* 模拟"选中这段文本"供旧toggleHighlight消费:从第一个span末尾到最后一个span开头建一个range */
+                    const range = document.createRange();
+                    const firstSp = finalArr[0] ? finalArr[0].el : null;
+                    const lastSp = finalArr[finalArr.length-1] ? finalArr[finalArr.length-1].el : null;
+                    if(firstSp && firstSp.firstChild){ range.setStart(firstSp.firstChild, 0); }
+                    if(lastSp && lastSp.firstChild){ range.setEnd(lastSp.firstChild, lastSp.firstChild.nodeValue ? lastSp.firstChild.nodeValue.length : 0); }
+                    sel.addRange(range);
+                    prState.activeHlIdx = hlIdx;
+                  }catch(_){}
+                });
+              })(rect);
+              svg.appendChild(rect);
+            }
+            found = true;
+          }
+          break;
+        }
+      }
+    }
+  }
+  return found;
+}
+
 function renderLayoutPaper(item, prText){
   const blocks = item.layout;
   if(!Array.isArray(blocks) || !blocks.length) return false;
@@ -6866,12 +7274,33 @@ function renderPaperText(item){
   if(!prText) return;
   /* 重置版面保真类: 仅layout模式添加,普通/随笔模式移除,恢复单栏740px限宽 */
   prText.classList.remove("pr-layout-mode");
+  prText.classList.remove("pr-pdf-native");
   /* 随笔: 纯文章展示 —— 无标题层级/无结构化/无参考文献, 仅按段落渲染正文 */
   if(item.category === "essay"){
     renderEssayText(item, prText);
     return;
   }
-  /* 版面保真: 有layout坐标字号时,绝对定位逐块1:1还原原PDF版面(字号/双栏/位置保真) */
+  /* 优先: PDF原始字节在IDB中 → Canvas原生渲染(pdf.js)+textLayer透明层可编辑+svg层标注
+     与Adobe阅读器像素级一致,消除双栏删字跳行/文字错位等重建版式bug */
+  if(!item.html){
+    /* 异步尝试; 若500ms内未渲染成功 → 回退旧renderLayoutPaper/fullText(老论文兜底) */
+    let fallbackTimer = setTimeout(function(){
+      if(prState._pdfRendered) return;
+      prState._pdfRenderFallback = true;
+      renderPaperTextLegacy(item, prText);
+    }, 500);
+    renderPdfNative(item, prText).then(function(ok){
+      if(ok){ clearTimeout(fallbackTimer); prState._pdfRendered = true; return; }
+      /* 失败 → 立即回退 */
+      clearTimeout(fallbackTimer);
+      if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
+    });
+    return;
+  }
+  renderPaperTextLegacy(item, prText);
+}
+/* 老链路(Word/html、老论文layout/fullText): 从原renderPaperText中剥离 */
+function renderPaperTextLegacy(item, prText){
   /* Word流式版面保真: 有html(带字号/缩进/对齐/加粗/分栏的富文本)时直接渲染,浏览器自动排版换行 */
   if(item.html){
     prText.innerHTML = item.html;
@@ -7127,7 +7556,7 @@ function clearAllHighlights(){
   if(!item || !item.highlights || item.highlights.length === 0) return;
   item.highlights = [];
   saveState();
-  applyHighlightsToDom(item);
+  refreshHighlightsRender(item);
   markDirty();
   toast("已清除全部标注(高亮/加粗/划线/备注)");
 }
@@ -7183,6 +7612,27 @@ function pushCustomSnapshot(type, payload){
 }
 
 /* 撤销最近一次操作(Ctrl+Z / ↶ 按钮) —— 行为对齐Word: 撤销上一步,不恢复全文 */
+/* 根据当前渲染模式重绘标注(兼容native/layou/fullText三种模式) */
+function refreshHighlightsRender(item){
+  if(!item) return;
+  const prTextEl = document.getElementById("prText");
+  if(!prTextEl) return;
+  if(prTextEl.classList.contains("pr-pdf-native")){
+    /* 清空每页 svgLayer 的 hl-box rect, 重新从 item.highlights 画 */
+    const n = prState.pdfNativeNumPages || 0;
+    for(let p=1; p<=n; p++){
+      const svg = document.getElementById("prPdfSvg_" + p);
+      if(!svg) continue;
+      const olds = svg.querySelectorAll("rect.hl-box");
+      for(let k=0; k<olds.length; k++){
+        if(olds[k].parentNode) olds[k].parentNode.removeChild(olds[k]);
+      }
+    }
+    renderHighlightsAsSvg(item);
+  }else{
+    applyHighlightsToDom(item);
+  }
+}
 function undoLastAction(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item){ toast("无可撤销操作"); return; }
@@ -7205,7 +7655,7 @@ function undoLastAction(){
       item.analysis = analyzePaper(item.fullText);
       item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
       saveState();
-      applyHighlightsToDom(item);
+      refreshHighlightsRender(item);
       markDirty();
       _undoChannelLog.push("custom");
       toast("已撤销");
@@ -7216,7 +7666,7 @@ function undoLastAction(){
         if(prState.redoHistory.length > 50) prState.redoHistory.shift();
         item.highlights.pop();
         saveState();
-        applyHighlightsToDom(item);
+        refreshHighlightsRender(item);
         markDirty();
         _undoChannelLog.push("hl");
         toast("已撤销一处标注");
@@ -7249,7 +7699,7 @@ function undoLastAction(){
       item.analysis = analyzePaper(item.fullText);
       item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
       saveState();
-      applyHighlightsToDom(item);
+      refreshHighlightsRender(item);
       markDirty();
       _undoChannelLog.push("custom");
       toast("已撤销");
@@ -7259,7 +7709,7 @@ function undoLastAction(){
       if(prState.redoHistory.length > 50) prState.redoHistory.shift();
       item.highlights.pop();
       saveState();
-      applyHighlightsToDom(item);
+      refreshHighlightsRender(item);
       markDirty();
       _undoChannelLog.push("hl");
       toast("已撤销一处标注");
@@ -7272,7 +7722,7 @@ function undoLastAction(){
     if(prState.redoHistory.length > 50) prState.redoHistory.shift();
     item.highlights.pop();
     saveState();
-    applyHighlightsToDom(item);
+    refreshHighlightsRender(item);
     markDirty();
     _undoChannelLog.push("hl");
     toast("已撤销一处标注");
@@ -7320,7 +7770,7 @@ function redoLastAction(){
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
     saveState();
-    applyHighlightsToDom(item);
+    refreshHighlightsRender(item);
     markDirty();
     _lastCustomOpAt = Date.now();
     toast("已重做");
@@ -7333,7 +7783,7 @@ function redoLastAction(){
       if(prState.history.length > 50) prState.history.shift();
       item.highlights.push(op.hl);
       saveState();
-      applyHighlightsToDom(item);
+      refreshHighlightsRender(item);
       markDirty();
       toast("已重做一处标注");
       return;
@@ -8947,21 +9397,114 @@ function applyDeletionToStructured(item, removedTexts){
 }
 
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
-let _aiSelMark = null;  /* 上次AI解读选中的临时高亮mark元素(非永久,下次解读/关闭时移除) */
+/* AI解读选中文字后临时高亮(非永久).  _aiSelMark 在旧模式=mark DOM元素, 新模式=SVG rect元素数组
+   兼容两种渲染模式: pr-layout-mode / fullText 走 DOM mark; pr-pdf-native 走 SVG 矩形 */
+let _aiSelMark = null;  /* 可能是 DOM mark 元素 或 SVG rect 的数组 */
 function clearAiSelectionMark(){
-  if(_aiSelMark && _aiSelMark.parentNode){
-    /* 移除mark,保留内部文字 */
+  if(!_aiSelMark) return;
+  if(Array.isArray(_aiSelMark)){
+    /* pr-pdf-native 模式: SVG rect数组,逐个移除 */
+    for(let i=0; i<_aiSelMark.length; i++){
+      const r = _aiSelMark[i];
+      if(r && r.parentNode) r.parentNode.removeChild(r);
+    }
+  }else if(_aiSelMark.parentNode){
+    /* 旧模式: mark元素 */
     const parent = _aiSelMark.parentNode;
     while(_aiSelMark.firstChild) parent.insertBefore(_aiSelMark.firstChild, _aiSelMark);
     parent.removeChild(_aiSelMark);
-    parent.normalize && parent.normalize();  /* 合并相邻文本节点 */
+    parent.normalize && parent.normalize();
   }
   _aiSelMark = null;
 }
-/* 给选区加临时高亮标识(非永久标注,仅用于AI解读时视觉提示) */
+/* 根据range在textLayer中命中的span,并在svgLayer画蓝色临时标识(pr-pdf-native模式) */
+function _markAiSelNative(range, searchText){
+  if(!range || !searchText) return null;
+  /* 收集 range 内的 span, 并定位页码 + 矩形坐标(pt) */
+  const startEl = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement).closest(".pr-pdf-textLayer > span");
+  const endEl   = (range.endContainer.nodeType   === 1 ? range.endContainer   : range.endContainer.parentElement  ).closest(".pr-pdf-textLayer > span");
+  if(!startEl || !endEl) return null;
+  const p1 = parseInt((startEl.closest(".pr-pdf-page").dataset.page) || "1");
+  const p2 = parseInt((endEl.closest(".pr-pdf-page").dataset.page) || "1");
+  const rows = [];  /* {page, x1, x2, y, h} */
+  const pushSpan = function(sp, pg){
+    const x = parseFloat(sp.dataset.x || "0");
+    const y = parseFloat(sp.dataset.top || "0");
+    const w = parseFloat(sp.dataset.w || "8");
+    const h = parseFloat(sp.dataset.h || "12");
+    let row = null;
+    for(let ri=rows.length-1; ri>=0; ri--){
+      if(rows[ri].page === pg && Math.abs(rows[ri].y - y) <= 3){ row = rows[ri]; break; }
+    }
+    if(!row){ row = { page:pg, y:y, x1:x, x2:x+w, h:h }; rows.push(row); }
+    else{ row.x1 = Math.min(row.x1, x); row.x2 = Math.max(row.x2, x+w); row.h = Math.max(row.h, h); }
+  };
+  /* 遍历 startEl → endEl 之间所有 span(含) */
+  if(p1 === p2){
+    const tLayer = startEl.parentElement;
+    const spans = tLayer.querySelectorAll("span");
+    let inR = false;
+    for(let i=0; i<spans.length; i++){
+      const sp = spans[i];
+      if(sp === startEl) inR = true;
+      if(inR) pushSpan(sp, p1);
+      if(sp === endEl) break;
+    }
+  }else{
+    for(let p=p1; p<=p2; p++){
+      const tLayer = document.getElementById("prPdfText_" + p);
+      if(!tLayer) continue;
+      const spans = tLayer.querySelectorAll("span");
+      for(let i=0; i<spans.length; i++){
+        const sp = spans[i];
+        if(p === p1 && sp === startEl.previousSibling) continue; /* 从startEl开始 */
+        if(p === p1){
+          if(!containsInOrder(sp, startEl)) continue;
+          pushSpan(sp, p);
+          if(sp === endEl && p === p2) break;
+        }else if(p === p2){
+          pushSpan(sp, p);
+          if(sp === endEl) break;
+        }else{
+          pushSpan(sp, p);
+        }
+      }
+    }
+  }
+  if(!rows.length) return null;
+  /* 逐页画 SVG rect(蓝色渐变+边框), 保存到数组供clearAiSel移除 */
+  const rects = [];
+  for(let ri=0; ri<rows.length; ri++){
+    const row = rows[ri];
+    const svg = document.getElementById("prPdfSvg_" + row.page);
+    if(!svg) continue;
+    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    rect.setAttribute("x", String(Math.max(0, row.x1 - 1)));
+    rect.setAttribute("y", String(Math.max(0, row.y - 1)));
+    rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1 + 2)));
+    rect.setAttribute("height", String(Math.max(8, row.h + 2)));
+    rect.setAttribute("class", "hl-ai");
+    rect.setAttribute("rx", "2");
+    svg.appendChild(rect);
+    rects.push(rect);
+  }
+  return rects;
+}
+/* 判断a在DOM顺序中是否等于b或在b之后 (辅助函数) */
+function containsInOrder(a, b){
+  if(a === b) return true;
+  return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
+}
 function markAiSelection(range){
   clearAiSelectionMark();
   if(!range || range.collapsed) return null;
+  const prTextEl = document.getElementById("prText");
+  const isPdfNativeMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
+  if(isPdfNativeMode){
+    const rects = _markAiSelNative(range, range.toString().trim());
+    if(rects && rects.length){ _aiSelMark = rects; return rects; }
+    return null;
+  }
   try{
     /* 尝试surroundContents(选区在同一文本节点内时可用) */
     const mark = document.createElement("mark");
@@ -11271,7 +11814,10 @@ function renderGallery(){
             toast("正在并行解析PDF……", 2000);
             const reader = new FileReader();
             reader.onload = function(){
-              pdfjsLib.getDocument({data:new Uint8Array(this.result)}).promise.then(function(pdf){
+              const pdfBytes = new Uint8Array(this.result);
+              /* 保存原始PDF字节到IDB,供阅读器canvas原生渲染使用 */
+              try{ idbSet(String(target.id) + "|pdfBytes", pdfBytes.slice(0)); }catch(_){}
+              pdfjsLib.getDocument({data: pdfBytes.slice(0)}).promise.then(function(pdf){
                 ppProgressShow("正在并行解析 PDF(" + pdf.numPages + " 页)…");
                 return extractPdfTextEnhanced(pdf, function(d, t){
                   ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
@@ -12441,7 +12987,7 @@ function openPaperEntryModal(category){
   paperEntryFromPdf = false;
   paperEntryImages = null;
   paperEntryStructured = null;
-  paperEntryHtml = null; paperEntryLayout = null;
+  paperEntryHtml = null; paperEntryLayout = null; paperEntryPdfBytes = null;
   updatePaperEntryStats();
   /* 随笔: 仅文字粘贴,隐藏 PDF 导入按钮与转换提示; 论文: 还原显示 */
   const pdfBtn = document.getElementById("paperPdfBtn");
@@ -12508,6 +13054,7 @@ let paperEntryImages = null;  /* PDF导入提取的图片 */
 let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:导入时已完成,直接入册 */
 let paperEntryLayout = null;  /* PDF导入的文字块坐标字号(版面保真还原用,渲染层启用后1:1还原版面) */
 let paperEntryHtml = null;   /* Word导入的流式版面保真HTML(字号/缩进/对齐/加粗/分栏) */
+let paperEntryPdfBytes = null; /* PDF原始字节(Uint8Array),Canvas原生渲染用,与Adobe阅读器像素级一致,入册时存IDB */
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
@@ -12548,11 +13095,18 @@ if(paperEntrySubmit){
     /* PDF导入的图片保存到条目 */
     if(result && paperEntryImages && paperEntryImages.length){
       result.images = paperEntryImages;
-      saveState();
-      render();
     }
+    /* 原始PDF字节存IDB(key=id|pdfBytes),供阅读器canvas原生渲染,不进localStorage(5MB小得可怜) */
+    if(result && paperEntryPdfBytes && paperEntryPdfBytes.length){
+      try{
+        idbSet(String(result.id) + "|pdfBytes", paperEntryPdfBytes.slice(0));
+      }catch(_){}
+    }
+    saveState();
+    render();
     paperEntryImages = null;
     paperEntryFromPdf = false;
+    paperEntryPdfBytes = null;
     closePaperEntryModal();
     toast(noun + "已入册 · 可点击「查看全文」阅读并标注");
   };
@@ -12648,6 +13202,8 @@ if(paperPdfBtn){
             return;
           }
           const pdfBytes = buf.slice(pdfOff);
+          /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
+          paperEntryPdfBytes = pdfBytes.slice(0);
           /* CAJ双引擎赛马(与PDF一致): 本地几何 + GROBID云端(Zotero同款) */
           ppProgressShow("检测到内嵌PDF · 双引擎解析中(Zotero同款GROBID + 本地几何)…");
           const localP = pdfjsLib.getDocument({data: pdfBytes.slice(0)}).promise.then(function(pdf){
@@ -12711,6 +13267,8 @@ if(paperPdfBtn){
       const reader = new FileReader();
       reader.onload = function(){
         const rawBytes = new Uint8Array(this.result);
+        /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
+        paperEntryPdfBytes = rawBytes.slice(0);
         /* 本地路: pdf.js几何解析(需副本,pdf.js会消耗buffer) */
         const localP = pdfjsLib.getDocument({data: rawBytes.slice(0)}).promise.then(function(pdf){
           /* 读取PDF元数据标题(知网论文通常嵌入真实标题) */
