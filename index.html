@@ -698,7 +698,41 @@
     font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.14em;
     color:var(--ink-mute); white-space:nowrap;
   }
-  .pr-tools{ display:flex; align-items:center; gap:14px; flex-wrap:wrap; max-width:100%; }
+  .pr-tools{ display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap; max-width:100%; flex-direction:column; }
+  .pr-tools > *:first-child{ width:100%; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+  /* 编辑模式面板(工具栏下一行): 避开所有inline光标/selection错位问题,用纯按钮+文本框驱动编辑 */
+  .pr-edit-panel{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    width:100%;
+    padding:8px 12px; border:1px solid #e0c36a; border-radius:8px;
+    background:linear-gradient(180deg,#fffbe8,#fff);
+    box-shadow: 0 1px 4px rgba(192,59,43,.06);
+  }
+  .pr-edit-panel textarea#prEditInput{
+    flex: 1 1 300px; min-width: 260px;
+    resize: vertical; min-height: 38px; max-height: 180px;
+    font-size:15px; padding:6px 10px; line-height:1.5;
+    border:1px solid #e0c36a; border-radius:6px;
+    background:#fff; outline:none; font-family:inherit;
+  }
+  .pr-edit-panel textarea#prEditInput:focus{ box-shadow: 0 0 0 2px rgba(246,195,67,.28); }
+  .pr-edit-apply, .pr-edit-del, .pr-edit-add, .pr-edit-close{
+    padding:6px 12px; height:38px; border-radius:6px;
+    font-size:13px; border:1px solid #e0c36a;
+    cursor:pointer; white-space:nowrap;
+    font-family: inherit;
+  }
+  .pr-edit-apply{ background:#f6c343; color:#4a2900; border-color:#d69e12; font-weight:600; }
+  .pr-edit-apply:hover{ background:#eab42c; }
+  .pr-edit-del{ background:#fce4dc; color:#b3261e; border-color:#e8a598; }
+  .pr-edit-del:hover{ background:#f9cfc1; }
+  .pr-edit-add{ background:#e6f0fa; color:#174ea6; border-color:#a9c3e8; }
+  .pr-edit-add:hover{ background:#cfdff3; }
+  .pr-edit-close{ background:#f1f3f4; color:#5f6368; border-color:#dadce0; }
+  .pr-edit-close:hover{ background:#e1e4e6; }
+  .pr-editmode-btn{ background:#fff7e0 !important; border-color:#f6c343 !important; color:#8a5a00 !important; font-weight:600 !important; }
+  .pr-editmode-btn.active{ background:#f6c343 !important; color:#4a2900 !important; }
+  .pr-edit-hint{ font-size:12px; color:#b06000; margin-left:8px; }
   /* 一键重新排版按钮 */
   .pr-reformat-btn{
     margin:0; padding:5px 14px; border:1px solid var(--line);
@@ -2017,6 +2051,18 @@
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色/加粗/划线/备注">✕ 取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
+          <span class="pr-hl-sep"></span>
+          <button class="pr-hl-fmt pr-editmode-btn" id="prEditModeBtn" title="编辑模式:选中PDF文字后,在工具栏面板里直接替换/删除/新增,无光标错位问题">✎ 编辑</button>
+        </div>
+        <div class="pr-edit-panel" id="prEditPanel" style="display:none;">
+          <span class="pr-hl-label" style="color:#c0392b;">编辑选中</span>
+          <textarea id="prEditInput" rows="1" placeholder="选中 PDF 中的文字后,此处会显示原字,直接改字/加字/删除后点「应用」"></textarea>
+          <button class="pr-edit-apply" id="prEditApply">✓ 应用替换</button>
+          <button class="pr-edit-del" id="prEditDelete">✂ 删除选字</button>
+          <button class="pr-edit-add" id="prEditAddBefore">← 在前面加字</button>
+          <button class="pr-edit-add" id="prEditAddAfter">在后面加字 →</button>
+          <button class="pr-edit-close" id="prEditClose">关闭</button>
+          <span class="pr-edit-hint" id="prEditHint">请先用鼠标在 PDF 上拖选要修改的文字（蓝色选区）</span>
         </div>
         <div class="pr-zoom-ctl">
           <button class="pr-zoom-btn" id="prZoomOut" title="缩小 (Ctrl+-)">−</button>
@@ -6718,17 +6764,147 @@ function openPaperReader(itemId){
       if(prState.delMode){
         deactivateAllColor();
         deactivateAllFmt();
-        toast("删除模式:选中文字后确认删除(平时可直接用 Delete 键光标删除)");
+        toast("删除模式:选中文字后确认删除(平时可直接用 编辑 面板删除)");
       }else{
         toast("已退出删除模式");
       }
     };
   }
 
-  /* ===== 检查按钮已按需求移除 ===== */
+  /* ===== PDF Canvas原生模式的编辑面板(工具栏):无inline光标/selection错位,纯按钮+selection驱动,100%可靠 ===== */
+  (function(){
+    const editBtn = document.getElementById("prEditModeBtn");
+    const editPanel = document.getElementById("prEditPanel");
+    const editInput = document.getElementById("prEditInput");
+    const applyBtn = document.getElementById("prEditApply");
+    const delBtn = document.getElementById("prEditDelete");
+    const addBeforeBtn = document.getElementById("prEditAddBefore");
+    const addAfterBtn = document.getElementById("prEditAddAfter");
+    const closeBtn = document.getElementById("prEditClose");
+    const editHint = document.getElementById("prEditHint");
+    if(!editBtn || !editPanel) return;
+    let lastLiveRange = null;
 
-  /* ===== 键盘删除已由 contenteditable 原生支持(Word式:光标处直接删/选中删) =====
-     原 onkeydown 拦截删除逻辑已移除,避免与原生编辑冲突 */
+    function syncInputFromSelection(){
+      if(!editPanel || editPanel.style.display === "none") return;
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0 || sel.isCollapsed){
+        if(!sel || sel.rangeCount === 0) editHint.textContent = "请先用鼠标在 PDF 上拖选要修改的文字（蓝色选区）";
+        else editHint.textContent = "选区已取消,请重新拖选";
+        return;
+      }
+      const range = sel.getRangeAt(0);
+      const tLayer = document.querySelector(".pr-text.pr-pdf-native .pr-pdf-textLayer");
+      if(tLayer && (tLayer.contains(range.startContainer) || (range.commonAncestorContainer && (range.commonAncestorContainer.nodeType===1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement).closest && (range.commonAncestorContainer.nodeType===1 ? range.commonAncestorContainer : range.commonAncestorContainer.parentElement).closest(".pr-pdf-textLayer")))){
+        const txt = sel.toString();
+        if(txt){
+          editInput.value = txt;
+          editHint.textContent = "选区内有 " + txt.length + " 字,直接修改文本框后点「应用替换」";
+          lastLiveRange = range.cloneRange();
+          return;
+        }
+      }
+      editHint.textContent = "请在 PDF Canvas 原生模式的页面里拖选文字";
+    }
+
+    editBtn.onclick = function(){
+      const ptEl = document.getElementById("prText");
+      const isNative = ptEl && ptEl.classList.contains("pr-pdf-native");
+      if(!isNative){
+        toast("提示:「编辑」面板仅用于 PDF 原生阅读模式。非PDF的普通文本可直接在页面上点击编辑(Word式)。");
+        return;
+      }
+      const visible = editPanel.style.display !== "none";
+      if(visible){
+        editPanel.style.display = "none";
+        editBtn.classList.remove("active");
+      }else{
+        editPanel.style.display = "flex";
+        editBtn.classList.add("active");
+        syncInputFromSelection();
+      }
+    };
+    closeBtn.onclick = function(){ editPanel.style.display = "none"; editBtn.classList.remove("active"); };
+
+    /* 每次selection变化 → 自动把选中文字放进编辑框;这样用户拖选就能看见,不需要点任何别的 */
+    document.addEventListener("selectionchange", function(){
+      if(editPanel.style.display === "none") return;
+      try{ syncInputFromSelection(); }catch(_){}
+    });
+
+    /* 应用替换: 选中一段文字 → 用编辑框内文字替换 */
+    applyBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    applyBtn.onclick = function(){
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0){
+        toast("请先在PDF上拖选要替换的文字");
+        return;
+      }
+      const range = sel.getRangeAt(0).cloneRange();
+      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(!cur) return;
+      const replacement = editInput.value;
+      pushCustomSnapshot("text");
+      _deleteRange(range);
+      /* 删除后第一个受影响的span就是range.startContainer所在span,在其位置插入新字 */
+      const startSpan = (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest &&
+                        (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest(".pr-pdf-textLayer > span");
+      if(startSpan){
+        if(startSpan.firstChild && startSpan.firstChild.nodeType === 3){
+          /* 删除时 range.startOffset 前半保留, 后半部分+range.endOffset后全删掉了 → startOffset位置就是插入点 */
+          const beforeTxt = startSpan.firstChild.nodeValue.substring(0, range.startOffset);
+          const afterTxt = startSpan.firstChild.nodeValue.substring(range.startOffset);
+          startSpan.firstChild.nodeValue = beforeTxt + replacement + afterTxt;
+        }else{
+          startSpan.textContent = (startSpan.textContent || "") + replacement;
+        }
+        markDirty();
+      }
+      saveState();
+      toast("已替换 " + sel.toString().length + " 字 → " + replacement.length + " 字");
+    };
+    /* 删除选字:选中后直接清空范围 */
+    delBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    delBtn.onclick = function(){
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0 || sel.isCollapsed){
+        toast("请先在PDF上拖选要删除的文字");
+        return;
+      }
+      const range = sel.getRangeAt(0).cloneRange();
+      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(!cur) return;
+      pushCustomSnapshot("text");
+      _deleteRange(range);
+      saveState();
+      markDirty();
+      editInput.value = "";
+      toast("已删除选中文字");
+    };
+    /* 在前面加字: 找到选区起点span,在startOffset位置插入编辑框文字 */
+    function addAt(where){
+      const sel = window.getSelection();
+      if(!sel || sel.rangeCount === 0){ toast("请先在PDF上选择插入位置(只需点一下出现光标或拖选均可)"); return; }
+      const range = sel.getRangeAt(0).cloneRange();
+      const spanEl = (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest &&
+                      (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest(".pr-pdf-textLayer > span");
+      if(!spanEl){ toast("插入点不在PDF文字上,请重新定位"); return; }
+      if(!editInput.value.trim() && where !== 0){ toast("请先在编辑框内输入要加的字"); return; }
+      pushCustomSnapshot("text");
+      if(spanEl.firstChild && spanEl.firstChild.nodeType === 3){
+        const off = (where === -1) ? range.startOffset : (where === 1 ? range.endOffset : range.startOffset);
+        const insTxt = editInput.value;
+        const old = spanEl.firstChild.nodeValue;
+        spanEl.firstChild.nodeValue = old.substring(0, off) + insTxt + old.substring(off);
+        markDirty(); saveState();
+        toast("已在" + (where === -1 ? "前面" : where === 1 ? "后面" : "位置") + "加字");
+      }
+    }
+    addBeforeBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    addAfterBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    addBeforeBtn.onclick = function(){ addAt(-1); };
+    addAfterBtn.onclick = function(){ addAt(1); };
+  })();
 
   /* ===== AI 按钮组 ===== */
   const prAiReadBtn = document.getElementById("prAiRead");
