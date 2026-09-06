@@ -732,6 +732,12 @@
   .pr-editmode-btn{ background:#fff7e0 !important; border-color:#f6c343 !important; color:#8a5a00 !important; font-weight:600 !important; }
   .pr-editmode-btn.active{ background:#f6c343 !important; color:#4a2900 !important; }
   .pr-edit-hint{ font-size:12px; color:#b06000; margin-left:8px; }
+  /* PDF原生模式: textLayer可聚焦,聚焦时显示微弱边框提示可编辑 */
+  .pr-pdf-native .pr-pdf-textLayer:focus{
+    box-shadow: inset 0 0 0 1.5px rgba(246,195,67,.35);
+    cursor: text;
+  }
+  .pr-pdf-native .pr-pdf-textLayer span{ cursor: text; }
   /* 一键重新排版按钮 */
   .pr-reformat-btn{
     margin:0; padding:5px 14px; border:1px solid var(--line);
@@ -2051,7 +2057,7 @@
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色/加粗/划线/备注">✕ 取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
           <span class="pr-hl-sep"></span>
-          <button class="pr-hl-fmt pr-editmode-btn" id="prEditModeBtn" title="编辑模式:选中PDF文字后,在工具栏面板里直接替换/删除/新增,无光标错位问题">✎ 编辑</button>
+          <button class="pr-hl-fmt pr-editmode-btn" id="prEditModeBtn" title="提示:直接在PDF文字上点击即可编辑,无需打开面板">✎ 可直接编辑</button>
         </div>
         <div class="pr-edit-panel" id="prEditPanel" style="display:none;">
           <span class="pr-hl-label" style="color:#c0392b;">编辑选中</span>
@@ -6837,18 +6843,10 @@ function openPaperReader(itemId){
       const ptEl = document.getElementById("prText");
       const isNative = ptEl && ptEl.classList.contains("pr-pdf-native");
       if(!isNative){
-        toast("提示:「编辑」面板仅用于 PDF 原生阅读模式。非PDF的普通文本可直接在页面上点击编辑(Word式)。");
+        toast("非PDF的普通文本可直接在页面上点击编辑(Word式)");
         return;
       }
-      const visible = editPanel.style.display !== "none";
-      if(visible){
-        editPanel.style.display = "none";
-        editBtn.classList.remove("active");
-      }else{
-        editPanel.style.display = "flex";
-        editBtn.classList.add("active");
-        syncInputFromSelection();
-      }
+      toast("直接在PDF文字上点击→出现光标→即可打字/删除,无需面板");
     };
     closeBtn.onclick = function(){ editPanel.style.display = "none"; editBtn.classList.remove("active"); };
 
@@ -6857,8 +6855,6 @@ function openPaperReader(itemId){
       if(editPanel.style.display === "none") return;
       try{ syncInputFromSelection(); }catch(_){}
     });
-
-    /* 应用替换: 选中一段文字 → 用编辑框内文字替换 */
     applyBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
     applyBtn.onclick = function(){
       const sel = window.getSelection();
@@ -7348,6 +7344,9 @@ function _attachPdfNativeEditHandlers(){
   const all = document.querySelectorAll(".pr-text.pr-pdf-native .pr-pdf-textLayer");
   for(let ti=0; ti<all.length; ti++){
     const tLayer = all[ti];
+    /* 关键: 让textLayer可获得焦点,这样keydown才能持续触发 */
+    tLayer.setAttribute("tabindex", "-1");
+    tLayer.style.outline = "none";
     /* A. 双击 → 弹出浮动编辑框,就地编辑(覆盖目标span,字号/字色/位置视觉对齐) */
     tLayer.addEventListener("dblclick", function(e){
       const span = e.target && e.target.closest && e.target.closest(".pr-pdf-textLayer > span");
@@ -7356,12 +7355,12 @@ function _attachPdfNativeEditHandlers(){
       e.stopPropagation();
       _openPdfFloatEditor(span, tLayer);
     });
-    /* B. 点击空白 → 把浏览器的 selection/caret 放到最近 span 的边界(供先选中再标注/AI解读用)
-       这一步不创建 contenteditable 光标(为了选中文本),使用普通 selection */
+    /* B. 点击 → 把光标(selection)放到最近的span上 + 聚焦textLayer(让keydown持续工作) */
     tLayer.addEventListener("mousedown", function(e){
       const span = e.target && e.target.closest && e.target.closest(".pr-pdf-textLayer > span");
-      if(span) return; /* 点在span上 → 浏览器默认行为selection正常 */
-      const tLayer = this;
+      /* 点在span上 → 浏览器默认selection正常,但也要聚焦textLayer */
+      setTimeout(function(){ try{ tLayer.focus({preventScroll:true}); }catch(_){} }, 0);
+      if(span) return;
       const mx = e.clientX, my = e.clientY;
       const spans = tLayer.querySelectorAll("span");
       if(!spans.length) return;
@@ -7398,27 +7397,89 @@ function _attachPdfNativeEditHandlers(){
         e.preventDefault();
       }catch(_){}
     }, true);
-    /* C. keydown Backspace/Delete: 若selection有范围就删范围内字;若折叠就在光标位置删前/后1字符,直接改span.textContent,
-       避免走浏览器contenteditable(因为span不是contenteditable=true) */
+    /* C. keydown: 直接在PDF文字上打字/删除 —— 完全手动处理,不用contenteditable(避免光标锁左上角)
+       - 打字: 在光标位置插入字符,选区有范围则先删再插
+       - Backspace/Delete: 删前/后1字或删选区
+       - Ctrl+Z/Y: 撤销/重做
+       - 方向键/复制粘贴: 放行浏览器默认 */
     tLayer.addEventListener("keydown", function(e){
-      if(e.key !== "Backspace" && e.key !== "Delete") return;
       const sel = window.getSelection();
       if(!sel || sel.rangeCount === 0) return;
       const range = sel.getRangeAt(0);
-      /* 确认选区在当前 textLayer 内部 */
       if(!tLayer.contains(range.startContainer) || !tLayer.contains(range.endContainer)) return;
-      e.preventDefault();
-      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
-      if(cur){ rebuildFromDom(cur); pushTextHistory(cur); }
-      if(!range.collapsed){
-        _deleteRange(range);
-      }else{
-        _deleteAtCaret(range, e.key === "Backspace" ? -1 : 1);
+      /* Ctrl+Z / Ctrl+Y / Ctrl+Shift+Z */
+      if(e.ctrlKey || e.metaKey){
+        const k = e.key.toLowerCase();
+        if(k === "z" && !e.shiftKey){ e.preventDefault(); undoLastAction(); return; }
+        if((k === "z" && e.shiftKey) || k === "y"){ e.preventDefault(); redoLastAction(); return; }
+        return; /* 其他Ctrl组合(复制/粘贴/全选)放行 */
       }
-      if(cur) rebuildFromDom(cur);
-      markDirty();
+      /* Backspace/Delete */
+      if(e.key === "Backspace" || e.key === "Delete"){
+        e.preventDefault();
+        const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+        if(cur){ rebuildFromDom(cur); pushTextHistory(cur); }
+        if(!range.collapsed){
+          _deleteRange(range);
+          try{ sel.removeAllRanges(); }catch(_){}
+        }else{
+          _deleteAtCaret(range, e.key === "Backspace" ? -1 : 1);
+        }
+        if(cur) rebuildFromDom(cur);
+        markDirty();
+        return;
+      }
+      /* 可打印字符: 在光标位置插入(选区有范围则替换) */
+      if(e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey){
+        e.preventDefault();
+        const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+        if(cur){ rebuildFromDom(cur); pushTextHistory(cur); }
+        if(!range.collapsed){
+          _deleteRange(range);
+        }
+        _insertAtCaret(sel, e.key);
+        if(cur) rebuildFromDom(cur);
+        markDirty();
+        return;
+      }
+      /* Enter → 忽略(PDF文字不换行,防止破坏排版) */
+      if(e.key === "Enter"){ e.preventDefault(); return; }
+      /* 方向键/End/Home等 → 放行,让浏览器移动光标 */
     });
   }
+}
+/* 在光标位置插入一个字符(span文本节点内) */
+function _insertAtCaret(sel, ch){
+  if(!sel || sel.rangeCount === 0) return;
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  const off = range.startOffset;
+  if(node.nodeType !== 3){
+    /* 光标不在文本节点上 → 尝试找最近的span插入 */
+    const span = (node.nodeType === 1 ? node : node.parentElement).closest && (node.nodeType === 1 ? node : node.parentElement).closest(".pr-pdf-textLayer > span");
+    if(span){
+      if(!span.firstChild || span.firstChild.nodeType !== 3){
+        span.textContent = ch;
+      }else{
+        span.firstChild.nodeValue += ch;
+      }
+      try{
+        const r2 = document.createRange();
+        r2.setStart(span.firstChild, span.firstChild.nodeValue.length);
+        r2.collapse(true);
+        sel.removeAllRanges(); sel.addRange(r2);
+      }catch(_){}
+    }
+    return;
+  }
+  const txt = node.nodeValue;
+  node.nodeValue = txt.substring(0, off) + ch + txt.substring(off);
+  try{
+    const r2 = document.createRange();
+    r2.setStart(node, off + 1);
+    r2.collapse(true);
+    sel.removeAllRanges(); sel.addRange(r2);
+  }catch(_){}
 }
 /* 在浮动编辑框未打开的情况下,selection删除范围内字符(跨span) */
 function _deleteRange(range){
