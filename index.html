@@ -698,27 +698,26 @@
     font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.14em;
     color:var(--ink-mute); white-space:nowrap;
   }
-  .pr-tools{ display:flex; align-items:flex-start; gap:14px; flex-wrap:wrap; max-width:100%; flex-direction:column; }
-  .pr-tools > *:first-child{ width:100%; display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
-  /* 编辑模式面板(工具栏下一行): 避开所有inline光标/selection错位问题,用纯按钮+文本框驱动编辑 */
+  .pr-tools{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; max-width:100%; }
+  .pr-tools > *:first-child{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  /* 编辑模式面板(紧凑内联): 避开所有inline光标/selection错位问题,用纯按钮+文本框驱动编辑 */
   .pr-edit-panel{
-    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
-    width:100%;
-    padding:8px 12px; border:1px solid #e0c36a; border-radius:8px;
+    display:flex; align-items:center; gap:6px; flex-wrap:wrap;
+    padding:4px 8px; border:1px solid #e0c36a; border-radius:6px;
     background:linear-gradient(180deg,#fffbe8,#fff);
-    box-shadow: 0 1px 4px rgba(192,59,43,.06);
+    box-shadow: 0 1px 3px rgba(192,59,43,.05);
   }
   .pr-edit-panel textarea#prEditInput{
-    flex: 1 1 300px; min-width: 260px;
-    resize: vertical; min-height: 38px; max-height: 180px;
-    font-size:15px; padding:6px 10px; line-height:1.5;
-    border:1px solid #e0c36a; border-radius:6px;
+    flex: 1 1 200px; min-width: 180px;
+    resize: none; min-height: 30px; max-height: 60px;
+    font-size:13px; padding:4px 8px; line-height:1.4;
+    border:1px solid #e0c36a; border-radius:4px;
     background:#fff; outline:none; font-family:inherit;
   }
   .pr-edit-panel textarea#prEditInput:focus{ box-shadow: 0 0 0 2px rgba(246,195,67,.28); }
   .pr-edit-apply, .pr-edit-del, .pr-edit-add, .pr-edit-close{
-    padding:6px 12px; height:38px; border-radius:6px;
-    font-size:13px; border:1px solid #e0c36a;
+    padding:4px 10px; height:30px; border-radius:4px;
+    font-size:12px; border:1px solid #e0c36a;
     cursor:pointer; white-space:nowrap;
     font-family: inherit;
   }
@@ -6261,12 +6260,39 @@ let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snap
    仅 C 类操作(颜色标注按钮/删除按钮/AI整理等代码触发的改动)调用本函数。 */
 function pushTextHistory(item){
   if(!item) return;
+  /* PDF native模式: 同时保存DOM span文本快照,撤销时直接恢复DOM(避免重渲染PDF) */
+  let pdfNativeDom = null;
+  const prTextEl = document.getElementById("prText");
+  if(prTextEl && prTextEl.classList.contains("pr-pdf-native")){
+    const spans = prTextEl.querySelectorAll(".pr-pdf-textLayer > span");
+    if(spans.length){
+      pdfNativeDom = [];
+      for(let i=0; i<spans.length; i++) pdfNativeDom.push(spans[i].textContent || "");
+    }
+  }
   pushCustomSnapshot("text", {
     type:"text",
     fullText:item.fullText,
     structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-    layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+    layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null,
+    pdfNativeDom: pdfNativeDom
   });
+}
+/* 恢复PDF native模式DOM span文本(撤销/重做时调用) */
+function restorePdfNativeDom(texts){
+  if(!texts || !texts.length) return false;
+  const prTextEl = document.getElementById("prText");
+  if(!prTextEl || !prTextEl.classList.contains("pr-pdf-native")) return false;
+  const spans = prTextEl.querySelectorAll(".pr-pdf-textLayer > span");
+  if(!spans.length) return false;
+  for(let i=0; i<spans.length && i<texts.length; i++){
+    if(spans[i].firstChild && spans[i].firstChild.nodeType === 3){
+      spans[i].firstChild.nodeValue = texts[i];
+    }else{
+      spans[i].textContent = texts[i];
+    }
+  }
+  return true;
 }
 /* 推入标注操作历史 */
 function pushHlHistory(){
@@ -6844,22 +6870,23 @@ function openPaperReader(itemId){
       const cur = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!cur) return;
       const replacement = editInput.value;
-      pushCustomSnapshot("text");
+      rebuildFromDom(cur);   /* 编辑前:同步当前DOM→数据,确保快照准确 */
+      pushTextHistory(cur);  /* 保存含PDF native DOM span文本的完整快照 */
       _deleteRange(range);
       /* 删除后第一个受影响的span就是range.startContainer所在span,在其位置插入新字 */
       const startSpan = (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest &&
                         (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest(".pr-pdf-textLayer > span");
       if(startSpan){
         if(startSpan.firstChild && startSpan.firstChild.nodeType === 3){
-          /* 删除时 range.startOffset 前半保留, 后半部分+range.endOffset后全删掉了 → startOffset位置就是插入点 */
           const beforeTxt = startSpan.firstChild.nodeValue.substring(0, range.startOffset);
           const afterTxt = startSpan.firstChild.nodeValue.substring(range.startOffset);
           startSpan.firstChild.nodeValue = beforeTxt + replacement + afterTxt;
         }else{
           startSpan.textContent = (startSpan.textContent || "") + replacement;
         }
-        markDirty();
       }
+      rebuildFromDom(cur);   /* 编辑后:同步修改后的DOM→数据 */
+      markDirty();
       saveState();
       toast("已替换 " + sel.toString().length + " 字 → " + replacement.length + " 字");
     };
@@ -6874,8 +6901,10 @@ function openPaperReader(itemId){
       const range = sel.getRangeAt(0).cloneRange();
       const cur = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!cur) return;
-      pushCustomSnapshot("text");
+      rebuildFromDom(cur);
+      pushTextHistory(cur);
       _deleteRange(range);
+      rebuildFromDom(cur);
       saveState();
       markDirty();
       editInput.value = "";
@@ -6890,12 +6919,16 @@ function openPaperReader(itemId){
                       (range.startContainer.nodeType === 3 ? range.startContainer.parentElement : range.startContainer).closest(".pr-pdf-textLayer > span");
       if(!spanEl){ toast("插入点不在PDF文字上,请重新定位"); return; }
       if(!editInput.value.trim() && where !== 0){ toast("请先在编辑框内输入要加的字"); return; }
-      pushCustomSnapshot("text");
+      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(!cur) return;
+      rebuildFromDom(cur);
+      pushTextHistory(cur);
       if(spanEl.firstChild && spanEl.firstChild.nodeType === 3){
         const off = (where === -1) ? range.startOffset : (where === 1 ? range.endOffset : range.startOffset);
         const insTxt = editInput.value;
         const old = spanEl.firstChild.nodeValue;
         spanEl.firstChild.nodeValue = old.substring(0, off) + insTxt + old.substring(off);
+        rebuildFromDom(cur);
         markDirty(); saveState();
         toast("已在" + (where === -1 ? "前面" : where === 1 ? "后面" : "位置") + "加字");
       }
@@ -7375,14 +7408,14 @@ function _attachPdfNativeEditHandlers(){
       /* 确认选区在当前 textLayer 内部 */
       if(!tLayer.contains(range.startContainer) || !tLayer.contains(range.endContainer)) return;
       e.preventDefault();
-      pushCustomSnapshot("text");
+      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(cur){ rebuildFromDom(cur); pushTextHistory(cur); }
       if(!range.collapsed){
-        /* 删除选区内容: 对 startContainer/endContainer 截字符串,中间span清空 */
         _deleteRange(range);
       }else{
-        /* 光标位置: Backspace删前1,Delete删后1 → 在光标所在的文本节点操作 */
         _deleteAtCaret(range, e.key === "Backspace" ? -1 : 1);
       }
+      if(cur) rebuildFromDom(cur);
       markDirty();
     });
   }
@@ -7509,7 +7542,8 @@ function _openPdfFloatEditor(span, tLayer){
   const commit = function(cancel){
     if(!_pdfEditFloatBox) return;
     if(!cancel){
-      pushCustomSnapshot("text");
+      const cur = state.items.find(function(i){ return i.id === prState.itemId; });
+      if(cur){ rebuildFromDom(cur); pushTextHistory(cur); }
       const newText = _pdfEditFloatBox.textContent.replace(/\n/g, "");
       if(_pdfEditTargetSpan){
         if(_pdfEditTargetSpan.firstChild && _pdfEditTargetSpan.firstChild.nodeType === 3){
@@ -7517,6 +7551,7 @@ function _openPdfFloatEditor(span, tLayer){
         }else{
           _pdfEditTargetSpan.textContent = newText;
         }
+        if(cur) rebuildFromDom(cur);
         markDirty();
       }
     }
@@ -8071,11 +8106,19 @@ function undoLastAction(){
   if(prState.history.length > 0 && _lastCustomOpAt > _lastKbEditAt){
     const op = prState.history.pop();
     if(op.type === "text"){
+      /* 保存当前DOM状态到redo栈(含PDF native span文本) */
+      let curPdfDom = null;
+      const prTextEl = document.getElementById("prText");
+      if(prTextEl && prTextEl.classList.contains("pr-pdf-native")){
+        const sps = prTextEl.querySelectorAll(".pr-pdf-textLayer > span");
+        if(sps.length){ curPdfDom = []; for(let i=0; i<sps.length; i++) curPdfDom.push(sps[i].textContent || ""); }
+      }
       prState.redoHistory.push({
         type:"text",
         fullText:item.fullText,
         structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null,
+        pdfNativeDom: curPdfDom
       });
       if(prState.redoHistory.length > 50) prState.redoHistory.shift();
       item.fullText = op.fullText;
@@ -8084,6 +8127,8 @@ function undoLastAction(){
       item.outline = generateOutline(item.fullText);
       item.analysis = analyzePaper(item.fullText);
       item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+      /* PDF native: 直接恢复DOM span文本,无需重渲染PDF */
+      restorePdfNativeDom(op.pdfNativeDom);
       saveState();
       refreshHighlightsRender(item);
       markDirty();
@@ -8115,11 +8160,18 @@ function undoLastAction(){
   if(prState.history.length > 0){
     const op = prState.history.pop();
     if(op.type === "text"){
+      let curPdfDom = null;
+      const prTextEl = document.getElementById("prText");
+      if(prTextEl && prTextEl.classList.contains("pr-pdf-native")){
+        const sps = prTextEl.querySelectorAll(".pr-pdf-textLayer > span");
+        if(sps.length){ curPdfDom = []; for(let i=0; i<sps.length; i++) curPdfDom.push(sps[i].textContent || ""); }
+      }
       prState.redoHistory.push({
         type:"text",
         fullText:item.fullText,
         structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+        layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null,
+        pdfNativeDom: curPdfDom
       });
       if(prState.redoHistory.length > 50) prState.redoHistory.shift();
       item.fullText = op.fullText;
@@ -8128,6 +8180,7 @@ function undoLastAction(){
       item.outline = generateOutline(item.fullText);
       item.analysis = analyzePaper(item.fullText);
       item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+      restorePdfNativeDom(op.pdfNativeDom);
       saveState();
       refreshHighlightsRender(item);
       markDirty();
@@ -8186,11 +8239,19 @@ function redoLastAction(){
   if(ch === "custom"){
     const op = prState.redoHistory.pop();
     if(!op){ toast("无可重做操作"); return; }
+    /* 保存当前DOM状态到history栈(含PDF native span文本) */
+    let curPdfDom = null;
+    const prTextEl = document.getElementById("prText");
+    if(prTextEl && prTextEl.classList.contains("pr-pdf-native")){
+      const sps = prTextEl.querySelectorAll(".pr-pdf-textLayer > span");
+      if(sps.length){ curPdfDom = []; for(let i=0; i<sps.length; i++) curPdfDom.push(sps[i].textContent || ""); }
+    }
     prState.history.push({
       type:"text",
       fullText:item.fullText,
       structured: item.structured ? JSON.parse(JSON.stringify(item.structured)) : null,
-      layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null
+      layout: Array.isArray(item.layout) ? JSON.parse(JSON.stringify(item.layout)) : null,
+      pdfNativeDom: curPdfDom
     });
     if(prState.history.length > 50) prState.history.shift();
     item.fullText = op.fullText;
@@ -8199,6 +8260,7 @@ function redoLastAction(){
     item.outline = generateOutline(item.fullText);
     item.analysis = analyzePaper(item.fullText);
     item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
+    restorePdfNativeDom(op.pdfNativeDom);
     saveState();
     refreshHighlightsRender(item);
     markDirty();
@@ -8373,6 +8435,48 @@ function rebuildFromDom(item){
   const prText = document.getElementById("prText");
   if(!prText || !item) return;
   try{
+    /* PDF Canvas原生模式: 从textLayer span按阅读顺序(页→top→x)重建fullText */
+    if(prText.classList.contains("pr-pdf-native")){
+      const textLayers = prText.querySelectorAll(".pr-pdf-textLayer");
+      const allSpans = [];
+      for(let t=0; t<textLayers.length; t++){
+        const tl = textLayers[t];
+        const pageEl = tl.closest(".pr-pdf-page");
+        const page = pageEl ? parseInt(pageEl.getAttribute("data-page") || "1", 10) : (t+1);
+        const spans = tl.querySelectorAll("span");
+        for(let s=0; s<spans.length; s++){
+          const sp = spans[s];
+          const txt = (sp.textContent || "").replace(/\u00A0/g, " ").replace(/\u200B/g, "");
+          if(!txt.trim()) continue;
+          const x = parseFloat(sp.dataset.x || "0");
+          const top = parseFloat(sp.dataset.top || "0");
+          allSpans.push({ text: txt, page: page, x: x, top: top });
+        }
+      }
+      allSpans.sort(function(a, b){
+        if(a.page !== b.page) return a.page - b.page;
+        if(Math.abs(a.top - b.top) > 3) return a.top - b.top;
+        return a.x - b.x;
+      });
+      const lines = [];
+      let cur = null, curTop = null;
+      for(let i=0; i<allSpans.length; i++){
+        const s = allSpans[i];
+        if(cur === null || Math.abs(s.top - curTop) > 3){
+          if(cur !== null) lines.push(cur);
+          cur = s.text; curTop = s.top;
+        }else{
+          cur += s.text;
+        }
+      }
+      if(cur !== null) lines.push(cur);
+      item.fullText = lines.join("\n");
+      item.highlights = extractHighlightsFromDom(prText);
+      item.outline = generateOutline(item.fullText);
+      item.analysis = analyzePaper(item.fullText);
+      item.description = "全文 " + item.fullText.length + " 字 · " + lines.length + " 行";
+      return;
+    }
     /* 版面保真模式: 从绝对定位块按阅读顺序(页→上→左)重建fullText,保留layout坐标不变 */
     const layoutRoot = prText.querySelector(".pr-layout-root");
     if(layoutRoot){
@@ -8657,12 +8761,7 @@ const KB_HIST_PAUSE = 800;
           if(kbItem){
             /* 先同步当前DOM到item(确保快照捕获最新状态) */
             try{ rebuildFromDom(kbItem); }catch(_){}
-            pushCustomSnapshot("text", {
-              type:"text",
-              fullText:kbItem.fullText,
-              structured: kbItem.structured ? JSON.parse(JSON.stringify(kbItem.structured)) : null,
-              layout: Array.isArray(kbItem.layout) ? JSON.parse(JSON.stringify(kbItem.layout)) : null
-            });
+            pushTextHistory(kbItem);
           }
           /* 标记: 本次input是删除键触发的,不更新_lastKbEditAt(保持_lastCustomOpAt最新) */
           _kbDelJustPushed = true;
