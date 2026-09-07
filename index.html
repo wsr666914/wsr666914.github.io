@@ -2221,9 +2221,9 @@ const CATEGORIES = {
     patterns:[]
   },
   movie: {
-    name:"电影", color:"#9B7B33", icon:"✦",
+    name:"影视", color:"#9B7B33", icon:"✦",
     svg:'<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/>',
-    keywords:["电影","movie","film","cinema","导演","主演","imax","蓝光","dvd","剧场版","续集"],
+    keywords:["电影","影视","movie","film","cinema","导演","主演","imax","蓝光","dvd","剧场版","续集","电视剧","连续剧","网剧","剧","韩剧","美剧","日剧","泰剧","综艺","纪录片"],
     patterns:[]
   },
   literature: {
@@ -2267,6 +2267,13 @@ const CATEGORIES = {
       /* 地名 + 食物常用 */
       "兰州","重庆","四川","广东","港式","台式","日式","韩式","泰式","越式","印度","墨西哥","意大利","法式"
     ],
+    patterns:[]
+  },
+  food: {
+    name:"美食", color:"#C44536", icon:"♨",
+    svg:'<path d="M5 11h14l-1 9a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 11z"/><path d="M5 11a7 7 0 0 1 14 0"/><path d="M12 4v4"/><path d="M8 6c0 1 .5 2 2 2M16 6c0 1-.5 2-2 2"/>',
+    /* 美食/餐厅: 按城市分类的探店记录, 小门类=城市 */
+    keywords:["美食","餐厅","饭馆","菜馆","餐馆","食府","酒楼","饭店","探店","打卡","美食店","面馆","火锅店","烧烤店","日料店","韩餐","泰餐","法餐","意餐","brunch","自助餐","烤肉","寿司","拉面","居酒屋","烧鸟","omakase","fine dining"],
     patterns:[]
   },
   skincare: {
@@ -3594,6 +3601,7 @@ function afterLogin(){
   loadState();
   loadBeverageBrands();
   loadSkincareFuncs();
+  loadFoodCities();
   migrateItems();
   /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
   try{
@@ -4158,25 +4166,76 @@ function removeSkincareFunc(name){
   skincareFuncs = skincareFuncs.filter(function(b){ return b !== n; });
   saveSkincareFuncs();
 }
+
+/* ============================================================
+   美食城市小门类 —— 按城市分类(北京/上海/成都…), 可自建
+   录入美食时选择城市, 存入 item.subCategory; 美食门类下可按城市筛选
+   ============================================================ */
+const FOOD_CITIES_KEY = "wsr_food_cities_v1";
+const DEFAULT_FOOD_CITIES = [
+  "北京","上海","广州","深圳","杭州","成都","重庆","南京","苏州","武汉",
+  "西安","长沙","厦门","青岛","天津","宁波","无锡","福州","济南","郑州",
+  "合肥","南昌","昆明","贵阳","南宁","海口","三亚","兰州","乌鲁木齐","哈尔滨",
+  "长春","沈阳","大连","石家庄","太原","呼和浩特","银川","西宁","拉萨","香港","澳门","台北",
+  "东京","大阪","京都","首尔","新加坡","曼谷","清迈","吉隆坡","巴黎","伦敦",
+  "纽约","洛杉矶","旧金山","悉尼","墨尔本","罗马","米兰","巴塞罗那","马德里","柏林"
+];
+let foodCities = [];
+function loadFoodCities(){
+  const raw = localStorage.getItem(FOOD_CITIES_KEY);
+  if(raw === null){
+    foodCities = DEFAULT_FOOD_CITIES.slice();
+    return;
+  }
+  let saved = [];
+  try{
+    const s = JSON.parse(raw);
+    if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
+  }catch(e){}
+  foodCities = saved;
+}
+function saveFoodCities(){
+  try{ localStorage.setItem(FOOD_CITIES_KEY, JSON.stringify(foodCities)); }catch(e){}
+}
+function addFoodCity(name){
+  const n = (name || "").trim();
+  if(!n) return false;
+  const exists = foodCities.some(function(b){ return b === n; });
+  if(exists) return false;
+  foodCities.push(n);
+  saveFoodCities();
+  return true;
+}
+function removeFoodCity(name){
+  const n = (name || "").trim();
+  if(!n) return;
+  foodCities = foodCities.filter(function(b){ return b !== n; });
+  saveFoodCities();
+}
+
 /* 通用访问: 根据门类取小门类列表/增删 */
 function getSubcatList(cat){
   if(cat === "beverage") return beverageBrands;
   if(cat === "skincare") return skincareFuncs;
+  if(cat === "food") return foodCities;
   return [];
 }
 function addSubcatItem(cat, name){
   if(cat === "beverage") return addBeverageBrand(name);
   if(cat === "skincare") return addSkincareFunc(name);
+  if(cat === "food") return addFoodCity(name);
   return false;
 }
 function removeSubcatItem(cat, name){
   if(cat === "beverage") return removeBeverageBrand(name);
   if(cat === "skincare") return removeSkincareFunc(name);
+  if(cat === "food") return removeFoodCity(name);
 }
-/* 小门类显示名: beverage→品牌, skincare→功效 */
+/* 小门类显示名: beverage→品牌, skincare→功效, food→城市 */
 function subcatLabel(cat){
   if(cat === "beverage") return "品牌";
   if(cat === "skincare") return "功效";
+  if(cat === "food") return "城市";
   return "小门类";
 }
 
@@ -4189,8 +4248,8 @@ function addItem(name, manualCategory, options){
   const finalCategory = manualCategory || autoCat;
   const trimmed = name.trim();
 
-  // 同分类同名去重 (饮品/护肤: 同小门类下同名才算重复; 跨小门类允许同名)
-  const hasSub = (finalCategory === "beverage" || finalCategory === "skincare");
+  // 同分类同名去重 (饮品/护肤/美食: 同小门类下同名才算重复; 跨小门类允许同名)
+  const hasSub = (finalCategory === "beverage" || finalCategory === "skincare" || finalCategory === "food");
   const low = trimmed.toLowerCase();
   const dup = state.items.find(function(i){
     if(i.name.trim().toLowerCase() !== low || i.category !== finalCategory) return false;
@@ -8891,14 +8950,15 @@ async function aiClassify(name){
     + "条目: " + name.trim() + "\n\n"
     + "可选分类: " + catList + "\n\n"
     + "判断规则:\n"
-    + "- movie(电影):电影、影片、导演作品\n"
+    + "- movie(影视):电影、电视剧、综艺、纪录片、导演作品\n"
     + "- literature(文学):小说、文学作品、经典著作、诗集、戏剧\n"
     + "- paper(论文):学术论文、研究报告、arxiv/DOI文献\n"
     + "- takeout(外卖):外卖品牌、快餐店\n"
     + "- dish(菜品):菜名、烹饪食物\n"
     + "- skincare(护肤):护肤品、化妆品、美妆品牌\n"
     + "- snack(零食):零食、休闲食品\n"
-    + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n\n"
+    + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n"
+    + "- food(美食):餐厅、饭馆、探店、美食店(按城市分类)\n\n"
     + "注意: 不要选 essay(随笔),随笔只能手动录入。\n"
     + "只回复一个分类英文名(如 literature),不要解释。";
   const res = await callAI([{ role:"user", content:prompt }], 50, 0.1);
@@ -11067,7 +11127,7 @@ function updateItem(id, patch){
   if(Object.prototype.hasOwnProperty.call(patch, "rating")) it.rating = Math.max(0, Math.min(5, parseInt(patch.rating, 10) || 0));
   if(Object.prototype.hasOwnProperty.call(patch, "description")) it.description = String(patch.description).trim();
   if(Object.prototype.hasOwnProperty.call(patch, "subCategory")){
-    const hasSub = (it.category === "beverage" || it.category === "skincare");
+    const hasSub = (it.category === "beverage" || it.category === "skincare" || it.category === "food");
     it.subCategory = hasSub ? String(patch.subCategory || "").trim() : "";
   }
   if(Object.prototype.hasOwnProperty.call(patch, "writtenAt")){
@@ -11249,7 +11309,7 @@ function renderFilters(){
       state.filter = this.dataset.filter;
       /* 切离随笔/饮品/护肤时清空其专属筛选, 避免残留 */
       if(state.filter !== "essay"){ state.essayYearFilter = null; state.essayMonthFilter = null; }
-      if(state.filter !== "beverage" && state.filter !== "skincare"){ state.subcatFilter = null; }
+      if(state.filter !== "beverage" && state.filter !== "skincare" && state.filter !== "food"){ state.subcatFilter = null; }
       state.galleryLimit = 120; /* 切换分类从头显示 */
       render();
     };
@@ -11345,7 +11405,7 @@ function renderSubcatBar(){
   const lblEl = bar ? bar.querySelector(".label") : null;
   if(!bar || !chips) return;
   const cat = state.filter;
-  if(cat !== "beverage" && cat !== "skincare"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  if(cat !== "beverage" && cat !== "skincare" && cat !== "food"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
   bar.style.display = "";
   const cObj = CATEGORIES[cat];
   if(cObj) bar.style.setProperty("--cat-color", cObj.color);
@@ -11439,7 +11499,7 @@ function initSubcatDnD(){
   const root = document.getElementById("beverageBrandChips");
   if(!root) return;
   const cat = state.filter;
-  if(cat !== "beverage" && cat !== "skincare") return;
+  if(cat !== "beverage" && cat !== "skincare" && cat !== "food") return;
   let dragName = null;
   /* 排除「全部」按钮, 其固定首位不可拖动 */
   const chips = root.querySelectorAll(".bb-chip[data-brand]:not([data-brand=''])");
@@ -11481,6 +11541,7 @@ function initSubcatDnD(){
       /* 写回对应列表并持久化 */
       if(cat === "beverage"){ beverageBrands = list; saveBeverageBrands(); }
       else if(cat === "skincare"){ skincareFuncs = list; saveSkincareFuncs(); }
+      else if(cat === "food"){ foodCities = list; saveFoodCities(); }
       clearMarks();
       dragName = null;
       render();
@@ -11519,7 +11580,7 @@ function renderGallery(){
   }
 
   /* 饮品/护肤: 按小门类(品牌/功效)筛选 */
-  if((state.filter === "beverage" || state.filter === "skincare") && state.subcatFilter){
+  if((state.filter === "beverage" || state.filter === "skincare" || state.filter === "food") && state.subcatFilter){
     items = items.filter(function(i){
       return i.category === state.filter && (i.subCategory || "") === state.subcatFilter;
     });
@@ -11596,8 +11657,8 @@ function renderGallery(){
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
     html += '</div>';
-    /* 饮品(品牌)/护肤(功效): 小门类标签 */
-    if((it.category === "beverage" || it.category === "skincare") && it.subCategory){
+    /* 饮品(品牌)/护肤(功效)/美食(城市): 小门类标签 */
+    if((it.category === "beverage" || it.category === "skincare" || it.category === "food") && it.subCategory){
       html += '<div class="card-brand" title="' + subcatLabel(it.category) + '小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
     }
     /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
@@ -11870,7 +11931,7 @@ function syncBeverageBrandComposer(){
     const r = classify(v);
     if(r && r.cat) finalCat = r.cat;
   }
-  const show = (finalCat === "beverage" || finalCat === "skincare");
+  const show = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food");
   composerBeverageBrandEl.style.display = show ? "" : "none";
   if(show){
     composerSubcatCat = finalCat;
@@ -12000,7 +12061,7 @@ function submit(){
   let autoCat = classify(v).cat;
   if(autoCat === "essay") autoCat = FALLBACK_CAT;
   const finalCat = state.composerCategory || autoCat;
-  const hasSub = (finalCat === "beverage" || finalCat === "skincare");
+  const hasSub = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food");
   let brand = composerBeverageBrand || "";
   if(hasSub){
     const newName = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
@@ -12259,7 +12320,7 @@ function renderEditSubcatSelect(){
 /* 依据当前选中门类决定小门类区显隐与文案 */
 function syncEditSubcat(){
   if(!editSubcatField) return;
-  const show = (editSelectedCat === "beverage" || editSelectedCat === "skincare");
+  const show = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food");
   editSubcatField.style.display = show ? "" : "none";
   if(show){
     const cObj = CATEGORIES[editSelectedCat];
@@ -12377,7 +12438,7 @@ if(modalSave){
     const desc = editDescInput ? editDescInput.value : "";
     /* 小门类: 若新建输入框有内容,先加入列表并选中; 非小门类门类则清空 */
     let sub = editSubcat || "";
-    const hasSub = (editSelectedCat === "beverage" || editSelectedCat === "skincare");
+    const hasSub = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food");
     if(hasSub){
       const newName = editSubcatNew ? editSubcatNew.value.trim() : "";
       if(newName){
