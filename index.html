@@ -3094,6 +3094,9 @@ async function classifyOnline(name){
 async function classifyWithOnline(name){
   const online = await classifyOnline(name);
   const local = classify(name);
+  /* 随笔(essay)只能手动录入,排除 */
+  if(online && online.cat === "essay") online.cat = FALLBACK_CAT;
+  if(local && local.cat === "essay") local.cat = FALLBACK_CAT;
   if(online && online.confidence >= 0.68) return online;
   if(online && online.confidence > local.confidence) return online;
   return local;
@@ -4185,7 +4188,10 @@ function subcatLabel(cat){
 function addItem(name, manualCategory, options){
   options = options || {};
   const result = classify(name);
-  const finalCategory = manualCategory || result.cat;
+  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
+  let autoCat = result.cat;
+  if(autoCat === "essay") autoCat = FALLBACK_CAT;
+  const finalCategory = manualCategory || autoCat;
   const trimmed = name.trim();
 
   // 同分类同名去重 (饮品/护肤: 同小门类下同名才算重复; 跨小门类允许同名)
@@ -8908,12 +8914,13 @@ function updateNavAiState(){
    返回 { cat, confidence, source } 格式,与 classify() 一致,失败返回 null */
 async function aiClassify(name){
   if(!name || !name.trim()) return null;
-  const catList = Object.keys(CATEGORIES).map(function(k){ return k + "(" + CATEGORIES[k].name + ")"; }).join(", ");
+  /* 排除 essay(随笔): 随笔只能手动粘贴录入,不参与AI自动分类 */
+  const catKeys = Object.keys(CATEGORIES).filter(function(k){ return k !== "essay"; });
+  const catList = catKeys.map(function(k){ return k + "(" + CATEGORIES[k].name + ")"; }).join(", ");
   const prompt = "请判断以下条目最可能属于哪个分类。\n\n"
     + "条目: " + name.trim() + "\n\n"
     + "可选分类: " + catList + "\n\n"
     + "判断规则:\n"
-    + "- essay(随笔):个人书写的散文、随笔、日记、札记\n"
     + "- movie(电影):电影、影片、导演作品\n"
     + "- literature(文学):小说、文学作品、经典著作、诗集、戏剧\n"
     + "- paper(论文):学术论文、研究报告、arxiv/DOI文献\n"
@@ -8922,15 +8929,21 @@ async function aiClassify(name){
     + "- skincare(护肤):护肤品、化妆品、美妆品牌\n"
     + "- snack(零食):零食、休闲食品\n"
     + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n\n"
+    + "注意: 不要选 essay(随笔),随笔只能手动录入。\n"
     + "只回复一个分类英文名(如 literature),不要解释。";
   const res = await callAI([{ role:"user", content:prompt }], 50, 0.1);
   if(res.error) return { error: res.error };
   const raw = (res.content || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  if(CATEGORIES[raw]){
+  /* 强制不返回 essay */
+  if(raw === "essay" || raw === "essayentry"){
+    return { cat: "literature", confidence: 0.6, source: "AI智能识别" };
+  }
+  if(CATEGORIES[raw] && raw !== "essay"){
     return { cat: raw, confidence: 0.85, source: "AI智能识别" };
   }
   /* AI返回了非标准分类名 → 尝试模糊匹配 */
   for(const k in CATEGORIES){
+    if(k === "essay") continue;
     if(raw.includes(k) || k.includes(raw)){
       return { cat: k, confidence: 0.7, source: "AI智能识别" };
     }
@@ -12354,7 +12367,9 @@ function updatePredict(){
     return;
   }
   const r = classify(v);
-  const autoCat = r.cat;
+  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
+  let autoCat = r.cat;
+  if(autoCat === "essay") autoCat = FALLBACK_CAT;
   const manual = state.composerCategory;
   const finalCat = manual || autoCat;
   const c = CATEGORIES[finalCat] || CATEGORIES[FALLBACK_CAT];
@@ -12426,7 +12441,10 @@ function submit(){
   const v = input.value.trim();
   if(!v){ toast("请先键入名目"); return; }
   /* 饮品/护肤: 若新建小门类输入框有内容,先加入列表并选中 */
-  const finalCat = state.composerCategory || (classify(v).cat);
+  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
+  let autoCat = classify(v).cat;
+  if(autoCat === "essay") autoCat = FALLBACK_CAT;
+  const finalCat = state.composerCategory || autoCat;
   const hasSub = (finalCat === "beverage" || finalCat === "skincare");
   let brand = composerBeverageBrand || "";
   if(hasSub){
@@ -13132,16 +13150,18 @@ function runBatchDetect(){
   }
   pushBatchHistory();
   batchItems = [];
-  /* 第一步: 本地分类,先渲染出来 */
+  /* 第一步: 本地分类,先渲染出来 (随笔essay只能手动录入,排除) */
   for(let i=0; i<names.length; i++){
     const r = classify(names[i]);
-    const isDup = isBatchDup(names[i], r.cat);
+    let cat = r.cat;
+    if(cat === "essay") cat = FALLBACK_CAT;
+    const isDup = isBatchDup(names[i], cat);
     batchItems.push({
       name: names[i],
-      category: r.cat,
+      category: cat,
       rating: 0,
       description: "",
-      autoCat: r.cat,
+      autoCat: cat,
       autoConfidence: r.confidence,
       autoSource: r.source,
       isDup: isDup
