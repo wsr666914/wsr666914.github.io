@@ -3790,37 +3790,64 @@ function loadState(){
     }
   }catch(e){ console.warn("load failed", e); }
 
-  /* === 自动迁移: 如果 localStorage 中还存着大字段(旧数据),自动转存 IDB 并瘦身 ===
-     这样下次 saveState 时 localStorage 只存元数据,不会再报空间不足 */
+  /* === 启动时同步瘦身: 清理 _bak, 剥离主数据/回收站/待审核的大字段 ===
+     大字段异步写入 IDB, 但 localStorage 立即可瘦身, 保证录入不报错 */
   try{
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw){
-      let hasLarge = false;
-      /* 简单检测: 是否包含大字段关键词 */
+    /* 1. 立即删除 _bak 备份(不再需要, 释放一倍空间) */
+    try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
+
+    /* 2. 检测是否含大字段 */
+    function _hasLargeField(str){
+      if(!str) return false;
       for(let f=0; f<LARGE_FIELDS.length; f++){
-        if(raw.indexOf('"' + LARGE_FIELDS[f] + '"') >= 0){ hasLarge = true; break; }
+        if(str.indexOf('"' + LARGE_FIELDS[f] + '"') >= 0) return true;
       }
-      if(hasLarge){
-        /* 有大字段 → 异步迁移到 IDB,然后瘦身写回 localStorage */
-        Promise.resolve().then(function(){
+      return false;
+    }
+
+    /* 3. 主数据瘦身 */
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw && _hasLargeField(raw)){
+      try{
+        const arr = JSON.parse(raw);
+        if(Array.isArray(arr)){
+          const slim = _stripLargeFields(arr);
           try{
-            const arr = JSON.parse(raw);
-            if(Array.isArray(arr)){
-              /* 先写 IDB(await确保写入完成) */
-              splitLargeFieldsToIdb(arr).then(function(slim){
-                try{
-                  localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
-                  /* 同步到 state.items(替换为瘦身版,大字段已在 IDB) */
-                  state.items = slim;
-                  /* 再从 IDB 恢复大字段到内存 */
-                  hydrateLargeFields();
-                  toast("检测到旧数据,已自动迁移大内容到本地数据库", 3000);
-                }catch(_){}
-              });
-            }
-          }catch(_){}
-        });
-      }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+            state.items = slim;
+            /* 大字段异步写 IDB, 完成后从 IDB 恢复到内存 */
+            splitLargeFieldsToIdb(arr).then(function(){
+              hydrateLargeFields();
+            });
+          }catch(_){ /* 写不下就先不管, 下次 saveState 会再试 */ }
+        }
+      }catch(_){}
+    }
+
+    /* 4. 回收站瘦身 */
+    const traw = localStorage.getItem(STORAGE_KEY + "_trash");
+    if(traw && _hasLargeField(traw)){
+      try{
+        const tarr = JSON.parse(traw);
+        if(Array.isArray(tarr)){
+          const slimT = _stripLargeFields(tarr);
+          try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(slimT)); }catch(_){}
+          state.trash = slimT;
+        }
+      }catch(_){}
+    }
+
+    /* 5. 待审核瘦身 */
+    const praw = localStorage.getItem(STORAGE_KEY + "_pending");
+    if(praw && _hasLargeField(praw)){
+      try{
+        const parr = JSON.parse(praw);
+        if(Array.isArray(parr)){
+          const slimP = _stripLargeFields(parr);
+          try{ localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(slimP)); }catch(_){}
+          state.pendingReview = slimP;
+        }
+      }catch(_){}
     }
   }catch(_){}
 }
@@ -3896,20 +3923,45 @@ function saveState(){
   catch(e){
     const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
     if(isQuota){
-      /* 极限压缩: 先清 _bak,再剥离所有大字段重试 */
+      /* 降级策略1: 清 _bak + 清回收站 + 清待审核, 释放空间 */
       try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
+      try{ localStorage.removeItem(STORAGE_KEY + "_trash"); state.trash = []; }catch(_){}
+      try{ localStorage.removeItem(STORAGE_KEY + "_pending"); state.pendingReview = []; }catch(_){}
       try{
         const slimItems = _stripLargeFields(state.items);
         const main = JSON.stringify(slimItems);
         localStorage.setItem(STORAGE_KEY, main);
-        try{ localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(_stripLargeFields(state.pendingReview || []))); }catch(_){}
-        try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(_stripLargeFields(state.trash || []))); }catch(_){}
         _flushLargeFieldsToIdb();
-        toast("存储空间紧张,已自动压缩并保存成功", 3000);
-        /* 云端同步 */
+        toast("存储空间紧张,已自动清空回收站并保存成功", 3000);
         scheduleSyncPush();
         return;
-      }catch(e2){ /* 仍失败则提示导出 */ }
+      }catch(e2){ /* 仍失败,进入降级策略2 */ }
+
+      /* 降级策略2: 只保留最近 200 条条目 */
+      try{
+        const keep = state.items.slice(-200);
+        const slimItems = _stripLargeFields(keep);
+        const main = JSON.stringify(slimItems);
+        localStorage.setItem(STORAGE_KEY, main);
+        state.items = keep;
+        _flushLargeFieldsToIdb();
+        toast("存储空间严重不足,已只保留最近 200 条记录", 4000);
+        scheduleSyncPush();
+        return;
+      }catch(e3){ /* 仍失败,进入降级策略3 */ }
+
+      /* 降级策略3: 只保留最近 50 条条目 */
+      try{
+        const keep = state.items.slice(-50);
+        const slimItems = _stripLargeFields(keep);
+        const main = JSON.stringify(slimItems);
+        localStorage.setItem(STORAGE_KEY, main);
+        state.items = keep;
+        _flushLargeFieldsToIdb();
+        toast("存储空间严重不足,已只保留最近 50 条记录", 4000);
+        scheduleSyncPush();
+        return;
+      }catch(e4){}
     }
     console.warn("save failed", e);
     toast("保存失败:浏览器存储空间不足,请尽快「导出数据」备份", 5000);
