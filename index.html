@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
@@ -419,7 +419,6 @@
     padding-top:8px; border-top:1px dashed var(--line-soft);
   }
   .card-meta span{ display:inline-flex; align-items:center; gap:4px; }
-  .card-note{ font-size:13px; color:var(--ink-soft); font-style:italic; line-height:1.6; margin-top:2px; }
   .card-reclassify{
     background:transparent; border:1px solid var(--line-soft); cursor:pointer;
     color:var(--ink-mute); font-size:11px;
@@ -1955,7 +1954,6 @@
     <div class="modal-field">
       <label>心得描述</label>
       <textarea id="editDesc" placeholder="此处可记所感、所评、所忆..."></textarea>
-      <button class="modal-btn" id="editAiGen" type="button" style="margin-top:8px;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI生成内容</button>
     </div>
     <div class="modal-actions">
       <button class="modal-btn" id="modalCancel">取消</button>
@@ -2991,58 +2989,12 @@ async function classifyOnline(name){
     }
   }
 
-  /* ===== 渠道2: 三百科定义句 (并行) ===== */
-  const baikeResults = await Promise.all([
-    (async function(){
-      try{
-        const htmlText = await fetchViaProxy("https://baike.baidu.com/item/" + raw, 9000);
-        return htmlText ? extractBaikeText(htmlText) : "";
-      }catch(e){ return ""; }
-    })(),
-    (async function(){
-      try{
-        const htmlText = await fetchViaProxy("https://baike.sogou.com/s?keyword=" + raw, 8000);
-        if(!htmlText) return "";
-        const doc = new DOMParser().parseFromString(htmlText, "text/html");
-        doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-        const el = doc.querySelector(".str_info, .fz-mid, .vrwrap, p");
-        return el ? cleanText(el) : "";
-      }catch(e){ return ""; }
-    })(),
-    (async function(){
-      try{
-        const htmlText = await fetchViaProxy("https://baike.so.com/doc/search?key=" + raw, 8000);
-        if(!htmlText) return "";
-        const doc = new DOMParser().parseFromString(htmlText, "text/html");
-        doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-        const el = doc.querySelector(".abstract, .res-desc, p");
-        return el ? cleanText(el) : "";
-      }catch(e){ return ""; }
-    })()
-  ]);
-
   /* 投票聚合容器: cat -> {w:权重, srcs:来源列表} */
   const votes = {};
   function addVote(cat, weight, srcName){
     votes[cat] = votes[cat] || { w:0, srcs:[] };
     votes[cat].w += weight;
     votes[cat].srcs.push(srcName);
-  }
-
-  /* 百科定义句投票 */
-  for(let i=0; i<baikeResults.length; i++){
-    if(baikeResults[i]){
-      const inferred = inferCatSmart(baikeResults[i]);
-      if(inferred){
-        const weight = inferred.confidence >= 0.9 ? 8 : (inferred.confidence >= 0.68 ? 5 : 2);
-        addVote(inferred.cat, weight, inferred.source);
-      }
-    }
-  }
-  /* 单一百科定义句高置信 → 直接定类 */
-  {
-    const strong = Object.entries(votes).filter(function(p){ return p[1].w >= 8; });
-    if(strong.length === 1) return cacheAndReturn({ cat:strong[0][0], confidence:0.9, source:strong[0][1].srcs[0] });
   }
 
   /* 强垂直单命中: 高权重 */
@@ -3055,7 +3007,7 @@ async function classifyOnline(name){
     if(r && r.found && r.weak) addVote(r.cat, 2, "垂直·" + r.source);
   }
 
-  /* ===== 渠道3: 多引擎搜索摘要分析 (百度/必应/搜狗 并行) ===== */
+  /* ===== 渠道2: 多引擎搜索摘要分析 (百度/必应/搜狗 并行) ===== */
   const engines = [
     "https://www.baidu.com/s?wd=" + raw,
     "https://www.bing.com/search?q=" + raw,
@@ -4280,32 +4232,7 @@ async function fetchRecipe(name){
     }
   }catch(e){}
 
-  /* 源2: 百度百科「原材料/制作/做法」章节 */
-  try{
-    const htmlText = await fetchViaProxy("https://baike.baidu.com/item/" + title, 8000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      const sections = parseBaikeSections(doc);
-      const recipeKws = ["制作方法","制作步骤","做法","烹饪方法","制作","食材原料","原材料","所需食材","调料"];
-      let parts = [];
-      for(let i=0; i<sections.length; i++){
-        for(let k=0; k<recipeKws.length; k++){
-          if(sections[i].title.indexOf(recipeKws[k]) >= 0){
-            const c = sections[i].content.trim();
-            if(c.length > 10 && c.length < 800) parts.push("【" + sections[i].title + "】\n" + c.substring(0, 350));
-            break;
-          }
-        }
-        if(parts.length >= 2) break;
-      }
-      if(parts.length > 0){
-        return "【菜谱 · 百度百科】" + title + "\n" + parts.join("\n\n");
-      }
-    }
-  }catch(e){}
-
-  /* 源3: 美食杰搜索 */
+  /* 源2: 美食杰搜索 */
   try{
     const htmlText = await fetchViaProxy("https://www.meishij.net/china/caipu/search.php?kw=" + title, 7000);
     if(htmlText){
@@ -8951,31 +8878,6 @@ async function aiClassify(name){
   return { error: "AI返回的分类无法识别: " + res.content };
 }
 
-/* AI内容生成: 根据条目门类生成对应内容(小说/文学/电影→梗概+人物+关系; 论文→摘要+关键词) */
-async function aiGenerateContent(name, category){
-  if(!name || !name.trim()) return { error: "no name" };
-  let prompt = "";
-  if(category === "literature" || category === "novel"){
-    prompt = "请为以下文学作品生成结构化介绍:\n\n作品名: " + name + "\n\n"
-      + "请按以下格式输出(用中文):\n"
-      + "【剧情梗概】\n(200字以内的故事梗概)\n\n"
-      + "【主要人物】\n(列出3-6个主要人物,每人一行: 人名 - 身份/性格)\n\n"
-      + "【人物关系】\n(简要描述主要人物之间的关系)";
-  }else if(category === "movie"){
-    prompt = "请为以下电影生成结构化介绍:\n\n电影名: " + name + "\n\n"
-      + "请按以下格式输出(用中文):\n"
-      + "【剧情梗概】\n(200字以内的剧情梗概)\n\n"
-      + "【主要人物】\n(列出3-6个主要角色,每人一行: 角色名 - 演员/身份)\n\n"
-      + "【人物关系】\n(简要描述主要角色之间的关系)";
-  }else{
-    /* 随笔/论文/饮品/护肤等门类不支持AI生成内容 */
-    return { error: "该门类暂不支持AI生成内容" };
-  }
-  const res = await callAI([{ role:"user", content:prompt }], 1500, 0.7);
-  if(res.error) return { error: res.error };
-  return { content: res.content || "" };
-}
-
 async function callAI(messages, maxTokens, temperature){
   const cfg = getAiConfig();
   if(!cfg || !cfg.endpoint || !cfg.key) return { error: "nokey" };
@@ -10629,393 +10531,6 @@ function cleanText(el){
   return t.replace(/\s+/g, " ").replace(/\[\d+\]/g, "").trim();  /* 去引用标记 [1][2] */
 }
 
-/* 解析百度百科页面,提取章节标题 + 内容 */
-function parseBaikeSections(doc){
-  const sections = [];
-  /* 找到正文根容器 */
-  const root = doc.querySelector(".J-lemma-content, .lemma-content, .content-wrap, .main-content, .body-wrapper");
-  if(!root) return sections;
-
-  /* 遍历根容器的所有直接子元素,按顺序识别标题块与内容段落 */
-  let currentTitle = null;
-  let currentContent = "";
-  const kids = root.children;
-  for(let i=0; i<kids.length; i++){
-    const kid = kids[i];
-    const cls = kid.className || "";
-    const tag = kid.tagName;
-
-    /* 标题容器: 新版 class 含 "paraTitle", 旧版含 "para-title" */
-    if(cls.indexOf("paraTitle") >= 0 || cls.indexOf("para-title") >= 0 || cls.indexOf("para_title") >= 0){
-      /* 保存上一个已收集的章节 */
-      if(currentTitle && currentContent.length > 5){
-        sections.push({ title: currentTitle, content: currentContent });
-      }
-      /* 提取标题文本 (优先从 h2/h3, 备选从整个容器) */
-      const h = kid.querySelector("h2, h3, .para-title-text, .title-text, .J-title-text");
-      let t = h ? cleanText(h) : cleanText(kid);
-      if(t.length > 40) t = t.substring(0, 40);
-      /* 跳过非内容标题 */
-      if(t && t.indexOf("目录") !== 0 && t.indexOf("相关") !== 0 && t !== "扩展阅读" && t.length > 0){
-        currentTitle = t;
-        currentContent = "";
-      }
-    }
-    /* 跳过装饰性分隔线 */
-    else if(cls.indexOf("titleLine") >= 0 || cls.indexOf("title-line") >= 0){
-      continue;
-    }
-    /* 跳过广告/推荐/评论等非正文元素 */
-    else if(cls.indexOf("tashuo") >= 0 || cls.indexOf("recommend") >= 0 || cls.indexOf("wgt-ad") >= 0 || cls.indexOf("comment") >= 0){
-      continue;
-    }
-    /* 收集内容段落: 广义收集任何有实质文本的直接子元素 (含 para/content/text class、p/div/table/ul/ol/li 等) */
-    else if(currentTitle){
-      const t = cleanText(kid);
-      /* 只收集有实质内容且不太长的文本 (排除纯装饰/空白元素) */
-      if(t && t.length > 3 && t.length < 3000){
-        currentContent += (currentContent ? "\n" : "") + t;
-      }
-    }
-  }
-  /* 保存最后一个章节 */
-  if(currentTitle && currentContent.length > 5){
-    sections.push({ title: currentTitle, content: currentContent });
-  }
-  return sections;
-}
-
-/* ============================================================
-   元数据精炼:剥离演员/配音/制作噪声,分清梗概·人物·关系
-   ============================================================ */
-
-/* 演员/配音/制作噪声关键词 —— 命中即判定为非叙事句 */
-const CAST_NOISE_KW = [
-  "饰演", "配音", "声优", "主演是", "演了", "扮演", "出演", "特邀",
-  "导演是", "编剧是", "制片人", "监制", "摄影", "剪辑", "配乐",
-  "上映于", "发行于", "票房", "制作成本", "拍摄于", "杀青",
-  "获奥斯卡", "获金鸡", "获戛纳", "获奖"
-];
-
-/* 剥离演员/配音/制作等噪声句 —— 按句切分,剔除命中噪声的句子 */
-function stripCastNoise(text){
-  if(!text) return "";
-  const sentences = text.split(/([。！？\n])/);
-  let out = [];
-  for(let i=0; i<sentences.length; i++){
-    const s = sentences[i];
-    if(!s || /[。！？\n]/.test(s)){ out.push(s); continue; }
-    const trimmed = s.trim();
-    if(!trimmed) continue;
-    /* 命中噪声关键词则跳过该句 */
-    const isNoise = CAST_NOISE_KW.some(function(k){ return trimmed.indexOf(k) >= 0; });
-    if(isNoise) continue;
-    out.push(s);
-  }
-  let result = out.join("").replace(/\n{3,}/g, "\n\n").trim();
-  return result;
-}
-
-/* 精炼情节为梗概 —— 保留叙事句,剔除非情节(演员/制作/获奖/评价) */
-function refinePlot(text){
-  if(!text) return "";
-  const lines = text.split(/\n/);
-  let refined = [];
-  for(let i=0; i<lines.length; i++){
-    let line = lines[i].trim();
-    if(!line) continue;
-    /* 跳过"第X部"标题行的前缀冒号,保留内容 */
-    line = line.replace(/^第[一二三四五六七八九十]+[部卷册篇][:：]\s*/, "");
-    /* 跳过纯标签行(如"剧情简介"四个字) */
-    if(line.length <= 6 && /剧情|梗概|简介|情节|内容|故事/.test(line)) continue;
-    /* 按句拆分,剔除噪声句 */
-    const sentences = line.split(/([。！？])/);
-    let cleanLine = [];
-    for(let j=0; j<sentences.length; j++){
-      const s = sentences[j];
-      if(!s || /[。！？]/.test(s)){ cleanLine.push(s); continue; }
-      const t = s.trim();
-      if(!t) continue;
-      const isNoise = CAST_NOISE_KW.some(function(k){ return t.indexOf(k) >= 0; });
-      if(isNoise) continue;
-      /* 跳过评价性短句(如"该片获得了广泛好评") */
-      if(/^(该片|本片|此片|本剧|该剧).*(获得|好评|赞誉|评价|口碑)/.test(t)) continue;
-      cleanLine.push(s);
-    }
-    const cl = cleanLine.join("").trim();
-    if(cl) refined.push(cl);
-  }
-  let result = refined.join("\n").trim();
-  /* 控制长度:保留前 1500 字作为梗概 */
-  if(result.length > 1500) result = result.substring(0, 1500) + "……";
-  return result;
-}
-
-/* 精炼人物介绍 —— 剔除演员表式罗列(纯名单无描述),保留角色描述句 */
-function refineCharacters(text){
-  if(!text) return "";
-  const lines = text.split(/\n/);
-  let refined = [];
-  for(let i=0; i<lines.length; i++){
-    let line = lines[i].trim();
-    if(!line) continue;
-    /* 跳过纯演员名单行(含饰演/配音/扮演,且无角色描述) */
-    if(CAST_NOISE_KW.some(function(k){ return line.indexOf(k) >= 0; })){
-      /* 若该行同时含较长描述(>40字),保留其叙事部分 */
-      if(line.length < 40) continue;
-    }
-    /* 跳过过短的纯名字行(如"张三") */
-    if(line.length <= 3) continue;
-    /* 按句拆分,剔除噪声句 */
-    const sentences = line.split(/([。！？])/);
-    let cleanLine = [];
-    for(let j=0; j<sentences.length; j++){
-      const s = sentences[j];
-      if(!s || /[。！？]/.test(s)){ cleanLine.push(s); continue; }
-      const t = s.trim();
-      if(!t) continue;
-      const isCast = ["饰演", "配音", "声优", "扮演", "出演", "特邀"].some(function(k){ return t.indexOf(k) >= 0; });
-      if(isCast) continue;
-      cleanLine.push(s);
-    }
-    const cl = cleanLine.join("").trim();
-    if(cl && cl.length > 3) refined.push(cl);
-  }
-  let result = refined.join("\n").trim();
-  if(result.length > 1800) result = result.substring(0, 1800) + "……";
-  return result;
-}
-
-/* 豆瓣查询: 获取评分、简介、短评 (书籍/电影) */
-async function fetchDoubanMeta(title, category){
-  const result = { rating:"", summary:"", source:"豆瓣" };
-  try{
-    /* 根据分类选择豆瓣子站 */
-    let searchUrl = "";
-    if(category === "movie"){
-      searchUrl = "https://search.douban.com/movie/subject_search?search_text=" + title;
-    } else if(category === "novel" || category === "literature"){
-      searchUrl = "https://search.douban.com/book/subject_search?search_text=" + title;
-    } else {
-      /* 通用搜索 */
-      searchUrl = "https://www.douban.com/search?q=" + title;
-    }
-
-    const htmlText = await fetchViaProxy(searchUrl, 7000);
-    if(!htmlText) return result;
-
-    const doc = new DOMParser().parseFromString(htmlText, "text/html");
-
-    /* 提取评分 (豆瓣评分通常在 .rating_num 或 [property="v:average"]) */
-    const ratingEl = doc.querySelector(".rating_num, [property='v:average'], .ll.rating_num");
-    if(ratingEl){
-      const r = cleanText(ratingEl);
-      if(r && !isNaN(parseFloat(r))) result.rating = r;
-    }
-
-    /* 提取简介 (.subject .abstract, [property="v:summary"], .entry-summary) */
-    const summaryEl = doc.querySelector("[property='v:summary'], .subject .abstract, .entry-summary, .summary, .content .abstract");
-    if(summaryEl){
-      const s = cleanText(summaryEl);
-      if(s && s.length > 10) result.summary = s.substring(0, 500);
-    }
-
-    /* 提取搜索结果摘要 (豆瓣通用搜索 .result .content) */
-    if(!result.summary){
-      const resultContents = doc.querySelectorAll(".result .content, .result .abstract, .search-result .content");
-      for(let i=0; i<resultContents.length && i<3; i++){
-        const t = cleanText(resultContents[i]);
-        if(t && t.length > 20 && t.indexOf(title) >= 0){
-          result.summary = t.substring(0, 500);
-          break;
-        }
-      }
-    }
-
-    /* 提取评价人数 */
-    const votesEl = doc.querySelector("[property='v:votes'], .rating_people span, .ll .rating_num ~ .star");
-    if(votesEl){
-      const v = cleanText(votesEl);
-      if(v && /\d/.test(v)) result.rating += " (" + v + "人评价)";
-    }
-  }catch(e){ /* 豆瓣反爬严格,失败属正常 */ }
-  return result;
-}
-
-/* 网络报道查询: 百度搜索摘要 + 知网公开摘要 */
-async function fetchWebSnippets(title, category){
-  const result = { snippets:[], source:"网络报道" };
-  try{
-    /* 百度搜索: 标题 + 类型关键词 */
-    const typeWord = (category === "movie") ? "剧情简介" : (category === "novel" || category === "literature") ? "内容简介" : "介绍";
-    const searchUrl = "https://www.baidu.com/s?wd=" + title + " " + typeWord;
-    const htmlText = await fetchViaProxy(searchUrl, 7000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      /* 百度搜索结果摘要 (.c-abstract, .content-right, span.content-right) */
-      const snippets = doc.querySelectorAll(".c-abstract, .content-right, .c-span-last span");
-      for(let i=0; i<snippets.length && result.snippets.length < 3; i++){
-        const t = cleanText(snippets[i]);
-        /* 过滤: 包含标题且长度适中 */
-        if(t && t.length > 30 && t.length < 500 && t.indexOf(title) >= 0){
-          /* 去重 */
-          if(!result.snippets.some(function(s){ return s.indexOf(t.substring(0, 20)) >= 0; })){
-            result.snippets.push(t.substring(0, 300));
-          }
-        }
-      }
-    }
-  }catch(e){ /* 搜索可能被反爬,失败属正常 */ }
-
-  /* 知网公开搜索 (尝试获取论文摘要) */
-  if(category === "paper" || category === "literature"){
-    try{
-      const cnkiUrl = "https://kns.cnki.net/kns8/defaultresult/index?kw=" + encodeURIComponent(title);
-      const cnkiHtml = await fetchViaProxy(cnkiUrl, 6000);
-      if(cnkiHtml){
-        const doc = new DOMParser().parseFromString(cnkiHtml, "text/html");
-        const abstracts = doc.querySelectorAll(".abstract, .summary, .content");
-        for(let i=0; i<abstracts.length && result.snippets.length < 4; i++){
-          const t = cleanText(abstracts[i]);
-          if(t && t.length > 30 && t.length < 500){
-            result.snippets.push("[知网] " + t.substring(0, 300));
-          }
-        }
-      }
-    }catch(e){ /* 知网反爬更严,失败属正常 */ }
-  }
-  return result;
-}
-
-/* ===== 拓展查询源 ===== */
-
-/* 网文平台梗概: 起点中文网/晋江文学城 搜索页简介 (小说门类专属) */
-async function fetchWebNovelSynopsis(title){
-  const result = { summary:"", source:"网文平台" };
-  /* 源1: 起点搜索页 */
-  try{
-    const htmlText = await fetchViaProxy("https://www.qidian.com/soushu/" + encodeURIComponent(title) + ".html", 8000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      /* 起点搜索结果: 书名 + 简介 */
-      const books = doc.querySelectorAll(".book-mid-info, .res-book-list li, li");
-      for(let i=0; i<books.length && i<10; i++){
-        const nameEl = books[i].querySelector("h4 a, a");
-        const introEl = books[i].querySelector(".intro, p");
-        const n = nameEl ? cleanText(nameEl) : "";
-        if(n && n.indexOf(title) >= 0){
-          const intro = introEl ? cleanText(introEl) : "";
-          if(intro && intro.length > 20){
-            result.summary = intro.substring(0, 500);
-            return result;
-          }
-        }
-      }
-    }
-  }catch(e){}
-  /* 源2: 晋江搜索页 */
-  try{
-    const htmlText = await fetchViaProxy("https://www.jjwxc.net/search.php?kw=" + encodeURIComponent(title), 8000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      const rows = doc.querySelectorAll("tr, .novel-item");
-      for(let i=0; i<rows.length && i<15; i++){
-        const t = cleanText(rows[i]);
-        if(t && t.indexOf(title) >= 0 && t.length > title.length + 20){
-          result.summary = t.substring(0, 500);
-          return result;
-        }
-      }
-    }
-  }catch(e){}
-  return result;
-}
-
-/* 维基百科 REST API (官方支持 CORS 直连,国内一般可访问,无需代理) */
-async function fetchWikiMeta(title){
-  const result = { summary:"", description:"", source:"维基百科" };
-  try{
-    const url = "https://zh.wikipedia.org/api/rest_v1/page/summary/" + encodeURIComponent(title);
-    const res = await fetchWithTimeout(url, 6000);
-    if(!res.ok) return result;
-    const data = await res.json();
-    if(data && data.extract && data.extract.length > 20){
-      result.summary = data.extract.substring(0, 600);
-    }
-    if(data && data.description) result.description = data.description;
-  }catch(e){}
-  return result;
-}
-
-/* 搜狗百科: 词条页摘要 + 结构化正文 */
-async function fetchSogouBaike(title){
-  const result = { summary:"", snippets:[], source:"搜狗百科" };
-  try{
-    /* 搜狗百科搜索页可定位词条并带摘要 */
-    const searchUrl = "https://baike.sogou.com/s?keyword=" + title;
-    const htmlText = await fetchViaProxy(searchUrl, 7000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      /* 搜索结果摘要区 */
-      const els = doc.querySelectorAll(".str_info, .fz-mid, .vrwrap, p");
-      for(let i=0; i<els.length && result.snippets.length < 3; i++){
-        const t = cleanText(els[i]);
-        if(t && t.length > 30 && t.length < 500 && t.indexOf(title) >= 0){
-          result.snippets.push(t.substring(0, 300));
-        }
-      }
-      if(result.snippets.length > 0) result.summary = result.snippets.join(" ");
-    }
-  }catch(e){}
-  return result;
-}
-
-/* 360百科: 搜索页摘要 */
-async function fetchSoBaike(title){
-  const result = { summary:"", snippets:[], source:"360百科" };
-  try{
-    const searchUrl = "https://baike.so.com/doc/search?key=" + title;
-    const htmlText = await fetchViaProxy(searchUrl, 7000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      const els = doc.querySelectorAll(".abstract, .summary, p, .res-desc");
-      for(let i=0; i<els.length && result.snippets.length < 3; i++){
-        const t = cleanText(els[i]);
-        if(t && t.length > 30 && t.length < 500 && t.indexOf(title) >= 0){
-          result.snippets.push(t.substring(0, 300));
-        }
-      }
-      if(result.snippets.length > 0) result.summary = result.snippets.join(" ");
-    }
-  }catch(e){}
-  return result;
-}
-
-/* 必应搜索摘要 (国际引擎,覆盖国内查不到的内容) */
-async function fetchBingSnippets(title){
-  const result = { snippets:[], source:"必应搜索" };
-  try{
-    const url = "https://www.bing.com/search?q=" + title;
-    const htmlText = await fetchViaProxy(url, 7000);
-    if(htmlText){
-      const doc = new DOMParser().parseFromString(htmlText, "text/html");
-      doc.querySelectorAll("script, style").forEach(function(e){ e.remove(); });
-      const els = doc.querySelectorAll(".b_caption p, li.b_algo p, .b_snippet, p");
-      for(let i=0; i<els.length && result.snippets.length < 3; i++){
-        const t = cleanText(els[i]);
-        if(t && t.length > 30 && t.length < 500 && t.indexOf(title) >= 0){
-          result.snippets.push(t.substring(0, 300));
-        }
-      }
-    }
-  }catch(e){}
-  return result;
-}
-
 /* AI归纳总结条目元数据 —— 不抓取网页HTML,直接由AI生成概要/情节/人物/关系,大幅节省存储空间 */
 async function fetchItemMetaByAI(title, cat){
   let prompt = "";
@@ -11988,8 +11503,6 @@ function renderGallery(){
     else if(it.autoConfidence >= 0.8) conf = "高";
     else if(it.autoConfidence >= 0.5) conf = "中";
     else conf = "低";
-    const showNote = (!it.manualOverride && it.autoConfidence < 0.5);
-    const note = showNote ? '<div class="card-note">归类尚待商榷,可点"编订"另择</div>' : "";
 
     // 星级显示
     const rating = (typeof it.rating === "number") ? it.rating : 0;
@@ -12780,15 +12293,6 @@ function renderEditCats(){
       editSelectedCat = newCat;
       syncEditSubcat();
       syncEditEssayDate();
-      /* 随笔/论文等门类不显示AI生成按钮 */
-      const aiBtn = document.getElementById("editAiGen");
-      if(aiBtn){
-        if(newCat === "literature" || newCat === "novel" || newCat === "movie"){
-          aiBtn.style.display = "";
-        }else{
-          aiBtn.style.display = "none";
-        }
-      }
     };
   }
 }
@@ -12814,15 +12318,6 @@ function openEditModal(id){
   renderEditStars();
   syncEditSubcat();
   syncEditEssayDate();
-  /* 随笔/论文等门类不显示AI生成按钮 */
-  const aiBtn = document.getElementById("editAiGen");
-  if(aiBtn){
-    if(it.category === "literature" || it.category === "novel" || it.category === "movie"){
-      aiBtn.style.display = "";
-    }else{
-      aiBtn.style.display = "none";
-    }
-  }
   editModal.classList.add("show");
   setTimeout(function(){ if(editNameInput) editNameInput.focus(); }, 50);
 }
@@ -12830,38 +12325,6 @@ function openEditModal(id){
 const modalCancel = document.getElementById("modalCancel");
 if(modalCancel){
   modalCancel.onclick = function(){ editModal.classList.remove("show"); };
-}
-/* AI生成内容按钮: 根据当前条目的门类生成梗概/人物/摘要等 */
-const editAiGenBtn = document.getElementById("editAiGen");
-if(editAiGenBtn){
-  editAiGenBtn.onclick = async function(){
-    const name = editNameInput ? editNameInput.value.trim() : "";
-    if(!name){ toast("请先填写名目"); return; }
-    if(!editSelectedCat){ toast("请先选择门类"); return; }
-    const cfg = getAiConfig();
-    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
-    const oldText = editAiGenBtn.textContent;
-    editAiGenBtn.disabled = true;
-    editAiGenBtn.textContent = "AI生成中…";
-    try{
-      const r = await aiGenerateContent(name, editSelectedCat);
-      if(r && !r.error){
-        if(editDescInput){
-          /* 已有内容则追加,否则直接填 */
-          const existing = editDescInput.value.trim();
-          editDescInput.value = existing ? (existing + "\n\n" + r.content) : r.content;
-        }
-        toast("AI内容已生成,填入心得描述");
-      }else{
-        toast(r && r.error ? r.error : "AI生成失败");
-      }
-    }catch(e){
-      toast("AI生成出错: " + (e.message || "未知"));
-    }finally{
-      editAiGenBtn.disabled = false;
-      editAiGenBtn.textContent = oldText;
-    }
-  };
 }
 const modalSave = document.getElementById("modalSave");
 if(modalSave){
