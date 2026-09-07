@@ -135,6 +135,15 @@
   .composer-submit:hover{ background:var(--accent-deep); }
   .composer-submit:active{ transform:translateY(1px); }
 
+  .composer-ai-btn{
+    background:linear-gradient(135deg,#a78bfa,#f472b6); color:#fff; border:none;
+    padding:0 16px; font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:14px; font-weight:600;
+    cursor:pointer; border-radius:8px; white-space:nowrap; transition:opacity .2s, transform .15s;
+  }
+  .composer-ai-btn:hover{ opacity:.88; }
+  .composer-ai-btn:active{ transform:translateY(1px); }
+  .composer-ai-btn:disabled{ opacity:.5; cursor:not-allowed; }
+
   .composer-predict{ margin-top:14px; min-height:22px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
 
   /* 手选门类 */
@@ -1825,6 +1834,7 @@
     <div class="composer-row">
       <input id="entryInput" class="composer-input" type="text" autocomplete="off" />
       <button id="entrySubmit" class="composer-submit">入册 ↵</button>
+      <button id="entryAiClassify" class="composer-ai-btn" title="用AI智能判断这个条目属于哪个门类">✨ AI识类</button>
     </div>
     <div class="composer-predict" id="predict"></div>
     <div class="composer-cats">
@@ -1955,6 +1965,7 @@
     <div class="modal-field">
       <label>心得描述</label>
       <textarea id="editDesc" placeholder="此处可记所感、所评、所忆..."></textarea>
+      <button class="modal-btn" id="editAiGen" type="button" style="margin-top:8px;background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI生成内容</button>
     </div>
     <div class="modal-actions">
       <button class="modal-btn" id="modalCancel">取消</button>
@@ -1974,6 +1985,7 @@
       <button class="modal-btn" id="batchClear">清空</button>
       <button class="modal-btn" id="batchUndo" title="撤销上一步操作" disabled>↶ 撤销</button>
       <button class="modal-btn" id="batchOnline" title="联网查询百科词条,智能判断类别">联网识别</button>
+      <button class="modal-btn" id="batchAiDetect" title="用AI智能识别每个条目的分类" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI识别</button>
     </div>
     <div class="batch-list" id="batchList"></div>
     <div class="modal-actions">
@@ -2022,6 +2034,7 @@
     <div class="paper-entry-stats" id="paperEntryStats"></div>
     <div class="modal-actions">
       <button class="modal-btn" id="paperEntryCancel">取消</button>
+      <button class="modal-btn" id="paperAiStruct" type="button" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI整理</button>
       <button class="modal-btn primary" id="paperEntrySubmit">整理入册</button>
     </div>
   </div>
@@ -8900,6 +8913,70 @@ function updateNavAiState(){
     btn.title = "配置 AI 接口(智谱 GLM-4-Flash 免费直连)";
   }
 }
+/* AI智能分类: 用LLM判断条目属于哪个门类
+   返回 { cat, confidence, source } 格式,与 classify() 一致,失败返回 null */
+async function aiClassify(name){
+  if(!name || !name.trim()) return null;
+  const catList = Object.keys(CATEGORIES).map(function(k){ return k + "(" + CATEGORIES[k].name + ")"; }).join(", ");
+  const prompt = "请判断以下条目最可能属于哪个分类。\n\n"
+    + "条目: " + name.trim() + "\n\n"
+    + "可选分类: " + catList + "\n\n"
+    + "判断规则:\n"
+    + "- essay(随笔):个人书写的散文、随笔、日记、札记\n"
+    + "- movie(电影):电影、影片、导演作品\n"
+    + "- literature(文学):小说、文学作品、经典著作、诗集、戏剧\n"
+    + "- paper(论文):学术论文、研究报告、arxiv/DOI文献\n"
+    + "- takeout(外卖):外卖品牌、快餐店\n"
+    + "- dish(菜品):菜名、烹饪食物\n"
+    + "- skincare(护肤):护肤品、化妆品、美妆品牌\n"
+    + "- snack(零食):零食、休闲食品\n"
+    + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n\n"
+    + "只回复一个分类英文名(如 literature),不要解释。";
+  const res = await callAI([{ role:"user", content:prompt }], 50, 0.1);
+  if(res.error) return { error: res.error };
+  const raw = (res.content || "").trim().toLowerCase().replace(/[^a-z]/g, "");
+  if(CATEGORIES[raw]){
+    return { cat: raw, confidence: 0.85, source: "AI智能识别" };
+  }
+  /* AI返回了非标准分类名 → 尝试模糊匹配 */
+  for(const k in CATEGORIES){
+    if(raw.includes(k) || k.includes(raw)){
+      return { cat: k, confidence: 0.7, source: "AI智能识别" };
+    }
+  }
+  return { error: "AI返回的分类无法识别: " + res.content };
+}
+
+/* AI内容生成: 根据条目门类生成对应内容(小说/文学/电影→梗概+人物+关系; 论文→摘要+关键词) */
+async function aiGenerateContent(name, category){
+  if(!name || !name.trim()) return { error: "no name" };
+  let prompt = "";
+  if(category === "literature" || category === "novel"){
+    prompt = "请为以下文学作品生成结构化介绍:\n\n作品名: " + name + "\n\n"
+      + "请按以下格式输出(用中文):\n"
+      + "【剧情梗概】\n(200字以内的故事梗概)\n\n"
+      + "【主要人物】\n(列出3-6个主要人物,每人一行: 人名 - 身份/性格)\n\n"
+      + "【人物关系】\n(简要描述主要人物之间的关系)";
+  }else if(category === "movie"){
+    prompt = "请为以下电影生成结构化介绍:\n\n电影名: " + name + "\n\n"
+      + "请按以下格式输出(用中文):\n"
+      + "【剧情梗概】\n(200字以内的剧情梗概)\n\n"
+      + "【主要人物】\n(列出3-6个主要角色,每人一行: 角色名 - 演员/身份)\n\n"
+      + "【人物关系】\n(简要描述主要角色之间的关系)";
+  }else if(category === "paper"){
+    prompt = "请为以下学术论文生成结构化摘要:\n\n论文名: " + name + "\n\n"
+      + "请按以下格式输出(用中文):\n"
+      + "【摘要】\n(200字以内的摘要)\n\n"
+      + "【关键词】\n(3-5个关键词,用顿号分隔)\n\n"
+      + "【研究要点】\n(简要描述研究方法、主要结论和贡献)";
+  }else{
+    return { error: "该门类暂不支持AI生成内容" };
+  }
+  const res = await callAI([{ role:"user", content:prompt }], 1500, 0.7);
+  if(res.error) return { error: res.error };
+  return { content: res.content || "" };
+}
+
 async function callAI(messages, maxTokens, temperature){
   const cfg = getAiConfig();
   if(!cfg || !cfg.endpoint || !cfg.key) return { error: "nokey" };
@@ -12489,6 +12566,41 @@ input.addEventListener("keydown", function(e){
 });
 submitBtn.addEventListener("click", submit);
 
+/* AI智能识别按钮 */
+const aiClassifyBtn = document.getElementById("entryAiClassify");
+if(aiClassifyBtn){
+  aiClassifyBtn.addEventListener("click", async function(){
+    const v = input.value.trim();
+    if(!v){ toast("请先键入名目"); return; }
+    const cfg = getAiConfig();
+    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+    const oldText = aiClassifyBtn.textContent;
+    aiClassifyBtn.disabled = true;
+    aiClassifyBtn.textContent = "识别中…";
+    try{
+      const r = await aiClassify(v);
+      if(r && !r.error){
+        state.composerCategory = r.cat;
+        renderComposerCats();
+        syncBeverageBrandComposer();
+        /* 更新预测显示 */
+        const c = CATEGORIES[r.cat];
+        predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
+          '<span class="dot"></span>' + catIcon(r.cat, 14) + ' ' + c.name +
+          '</span><span class="predict-conf">AI智能识别 · 置信 ' + Math.round(r.confidence*100) + '%</span>';
+        toast("AI判定为「" + c.name + "」");
+      }else{
+        toast(r && r.error ? r.error : "AI识别失败");
+      }
+    }catch(e){
+      toast("AI识别出错: " + (e.message || "未知"));
+    }finally{
+      aiClassifyBtn.disabled = false;
+      aiClassifyBtn.textContent = oldText;
+    }
+  });
+}
+
 function submit(){
   const v = input.value.trim();
   if(!v){ toast("请先键入名目"); return; }
@@ -12861,6 +12973,38 @@ function openEditModal(id){
 const modalCancel = document.getElementById("modalCancel");
 if(modalCancel){
   modalCancel.onclick = function(){ editModal.classList.remove("show"); };
+}
+/* AI生成内容按钮: 根据当前条目的门类生成梗概/人物/摘要等 */
+const editAiGenBtn = document.getElementById("editAiGen");
+if(editAiGenBtn){
+  editAiGenBtn.onclick = async function(){
+    const name = editNameInput ? editNameInput.value.trim() : "";
+    if(!name){ toast("请先填写名目"); return; }
+    if(!editSelectedCat){ toast("请先选择门类"); return; }
+    const cfg = getAiConfig();
+    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+    const oldText = editAiGenBtn.textContent;
+    editAiGenBtn.disabled = true;
+    editAiGenBtn.textContent = "AI生成中…";
+    try{
+      const r = await aiGenerateContent(name, editSelectedCat);
+      if(r && !r.error){
+        if(editDescInput){
+          /* 已有内容则追加,否则直接填 */
+          const existing = editDescInput.value.trim();
+          editDescInput.value = existing ? (existing + "\n\n" + r.content) : r.content;
+        }
+        toast("AI内容已生成,填入心得描述");
+      }else{
+        toast(r && r.error ? r.error : "AI生成失败");
+      }
+    }catch(e){
+      toast("AI生成出错: " + (e.message || "未知"));
+    }finally{
+      editAiGenBtn.disabled = false;
+      editAiGenBtn.textContent = oldText;
+    }
+  };
 }
 const modalSave = document.getElementById("modalSave");
 if(modalSave){
@@ -13291,6 +13435,35 @@ if(batchOnlineBtn){
     verifyLowConfidenceItems();
   };
 }
+/* AI批量识别: 用AI逐个判断条目的分类 */
+const batchAiBtn = document.getElementById("batchAiDetect");
+if(batchAiBtn){
+  batchAiBtn.onclick = async function(){
+    if(batchItems.length === 0){ toast("请先「识别」出条目,再AI识别"); return; }
+    const cfg = getAiConfig();
+    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+    pushBatchHistory();
+    const oldText = batchAiBtn.textContent;
+    batchAiBtn.disabled = true;
+    let done = 0;
+    for(let i=0; i<batchItems.length; i++){
+      const it = batchItems[i];
+      batchAiBtn.textContent = "AI识别中 " + (i+1) + "/" + batchItems.length;
+      const r = await aiClassify(it.name);
+      if(r && !r.error){
+        it.category = r.cat;
+        it.autoCategory = r.cat;
+        it.autoConfidence = r.confidence;
+        it.autoSource = r.source;
+      }
+      done++;
+      renderBatchList();
+    }
+    batchAiBtn.disabled = false;
+    batchAiBtn.textContent = oldText;
+    toast("AI识别完成 " + done + " 项");
+  };
+}
 const batchCancelBtn = document.getElementById("batchCancel");
 if(batchCancelBtn){
   batchCancelBtn.onclick = function(){ batchModal.classList.remove("show"); };
@@ -13469,6 +13642,47 @@ let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:�
 let paperEntryLayout = null;  /* PDF导入的文字块坐标字号(版面保真还原用,渲染层启用后1:1还原版面) */
 let paperEntryHtml = null;   /* Word导入的流式版面保真HTML(字号/缩进/对齐/加粗/分栏) */
 let paperEntryPdfBytes = null; /* PDF原始字节(Uint8Array),Canvas原生渲染用,与Adobe阅读器像素级一致,入册时存IDB */
+/* AI论文整理: 用AI通读全文,提取标题/摘要/关键词/章节/参考文献,生成结构化摘要填入描述 */
+const paperAiStructBtn = document.getElementById("paperAiStruct");
+if(paperAiStructBtn){
+  paperAiStructBtn.onclick = async function(){
+    const fullText = paperFullTextInput ? paperFullTextInput.value.trim() : "";
+    if(!fullText){ toast("请先粘贴论文全文"); return; }
+    const cfg = getAiConfig();
+    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+    const oldText = paperAiStructBtn.textContent;
+    paperAiStructBtn.disabled = true;
+    paperAiStructBtn.textContent = "AI整理中…";
+    try{
+      /* 截取前4000字避免超长(AI上下文限制) */
+      const snippet = fullText.length > 4000 ? fullText.substring(0, 4000) + "……" : fullText;
+      const prompt = "请为以下论文生成结构化整理(用中文):\n\n" + snippet + "\n\n"
+        + "请按以下格式输出:\n"
+        + "【论文标题】\n(从文中提取的标题)\n\n"
+        + "【摘要】\n(200字以内的摘要,若原文有摘要则基于原文整理)\n\n"
+        + "【关键词】\n(3-5个关键词,用顿号分隔)\n\n"
+        + "【研究内容】\n(简要描述研究问题、方法、主要结论,200字以内)\n\n"
+        + "【参考文献(前5条)】\n(提取文中参考文献的前5条,每条一行)";
+      const res = await callAI([{ role:"user", content:prompt }], 2000, 0.5);
+      if(res && !res.error && res.content){
+        /* 填入描述字段(用于展示),不修改原文 */
+        paperEntryStructured = res.content;
+        toast("AI整理完成,内容已暂存,点「整理入册」将保存");
+        /* 把整理结果显示在stats区域 */
+        if(paperEntryStats){
+          paperEntryStats.innerHTML = '<span style="color:#a78bfa"><b>✨ AI整理完成</b> · ' + res.content.length + ' 字</span>';
+        }
+      }else{
+        toast(res && res.error ? res.error : "AI整理失败");
+      }
+    }catch(e){
+      toast("AI整理出错: " + (e.message || "未知"));
+    }finally{
+      paperAiStructBtn.disabled = false;
+      paperAiStructBtn.textContent = oldText;
+    }
+  };
+}
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
