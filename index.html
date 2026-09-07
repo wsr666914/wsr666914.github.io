@@ -7354,14 +7354,14 @@ function _deleteAtCaret(range, dir){
     }catch(_){}
   }
 }
-/* 打开浮动编辑框: 用绝对定位div覆盖目标span,字号/字色/位置对齐 → 用户编辑 → blur/回车写回 */
+/* 打开浮动编辑框: 挂到 document.body + position:fixed,完全脱离 PDF textLayer 的 transform,
+   否则浏览器 contenteditable 光标会被 transform 算错(锁左上角/文字不可见) */
 function _openPdfFloatEditor(span, tLayer){
   _closePdfFloatEditor(true); /* 先关掉已打开的 */
   const r = span.getBoundingClientRect();
-  const pr = tLayer.getBoundingClientRect();
-  /* 计算浮层放在 textLayer 相对坐标系内的绝对定位 */
-  const left = r.left - pr.left;
-  const top = r.top - pr.top;
+  /* 直接用视口坐标(固定定位),不参与任何祖先 transform */
+  const left = r.left;
+  const top = r.top;
   const width = Math.max(40, r.width + 16);
   const height = Math.max(18, r.height + 6);
   const fontSize = parseFloat(window.getComputedStyle(span).fontSize || "16px");
@@ -7370,29 +7370,29 @@ function _openPdfFloatEditor(span, tLayer){
   box.className = "pr-pdf-editbox";
   box.setAttribute("contenteditable", "true");
   box.setAttribute("spellcheck", "false");
-  box.style.cssText = "position:absolute;"
+  box.style.cssText = "position:fixed;"
     + "left:" + Math.round(left-6) + "px;"
     + "top:" + Math.round(top-3) + "px;"
-    + "min-width:" + Math.round(width) + "px;"
-    + "min-height:" + Math.round(height) + "px;"
+    + "width:" + Math.round(width) + "px;"
+    + "height:" + Math.round(height) + "px;"
     + "padding:2px 6px;"
     + "margin:0;"
     + "font-size:" + Math.round(fontSize) + "px;"
     + "line-height:" + Math.round(height-6) + "px;"
     + "font-family:" + fontFamily + ";"
     + "color:#111;"
-    + "background:rgba(255,250,230,0.85);"
+    + "background:rgba(255,250,230,0.92);"
     + "border-bottom:2px solid #f6c343;"
     + "border-radius:2px;"
-    + "box-shadow:0 0 0 1px rgba(246,195,67,.25);"
+    + "box-shadow:0 0 0 1px rgba(246,195,67,.35);"
     + "outline:none;"
-    + "white-space:nowrap;"
+    + "white-space:pre;"
     + "overflow:hidden;"
-    + "z-index:99;"
+    + "z-index:2147483647;"
     + "pointer-events:auto;"
-    + "transform-origin:0 0;";
+    + "box-sizing:border-box;";
   box.textContent = span.textContent || "";
-  tLayer.appendChild(box);
+  document.body.appendChild(box);
   _pdfEditFloatBox = box;
   _pdfEditTargetSpan = span;
   _pdfEditTargetPage = tLayer;
@@ -7431,13 +7431,29 @@ function _openPdfFloatEditor(span, tLayer){
     if(e.key === "Enter"){ e.preventDefault(); commit(false); }
     else if(e.key === "Escape"){ e.preventDefault(); commit(true); }
   });
+  /* 滚动/缩放时关闭编辑器(fixed定位不会跟随PDF文字移动) */
+  const closeOnScroll = function(){ if(_pdfEditFloatBox === box) commit(false); };
+  window.addEventListener("scroll", closeOnScroll, true);
+  window.addEventListener("resize", closeOnScroll);
+  box.addEventListener("keydown", function(e){
+    if(e.key === "Enter" || e.key === "Escape"){
+      window.removeEventListener("scroll", closeOnScroll, true);
+      window.removeEventListener("resize", closeOnScroll);
+    }
+  });
+  box._cleanup = function(){
+    window.removeEventListener("scroll", closeOnScroll, true);
+    window.removeEventListener("resize", closeOnScroll);
+  };
 }
 function _closePdfFloatEditor(keepNode){
-  if(_pdfEditFloatBox && !keepNode && _pdfEditFloatBox.parentNode){
-    _pdfEditFloatBox.parentNode.removeChild(_pdfEditFloatBox);
-  }
-  if(!keepNode && _pdfEditFloatBox && _pdfEditFloatBox.parentNode){
-    try{ _pdfEditFloatBox.parentNode.removeChild(_pdfEditFloatBox); }catch(_){}
+  if(_pdfEditFloatBox){
+    if(typeof _pdfEditFloatBox._cleanup === "function"){
+      try{ _pdfEditFloatBox._cleanup(); }catch(_){}
+    }
+    if(!keepNode && _pdfEditFloatBox.parentNode){
+      try{ _pdfEditFloatBox.parentNode.removeChild(_pdfEditFloatBox); }catch(_){}
+    }
   }
   _pdfEditFloatBox = null;
   _pdfEditTargetSpan = null;
