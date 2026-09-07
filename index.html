@@ -2136,6 +2136,7 @@
         <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
         <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
         <button class="modal-btn" id="cleanStorageBtn" type="button" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">🧹 清理存储</button>
+        <button class="modal-btn" id="regenMetaBtn" type="button" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI重新生成概要</button>
         <input type="file" id="importDataInput" accept="application/json" style="display:none;">
       </div>
       <div class="storage-info-tip">导出 JSON 文件到本地(双保险),浏览器换电脑时导入即可恢复全部志录+版面。<br>
@@ -13956,6 +13957,44 @@ function toast(msg, duration){
     updateTrashBtn();
     render();
   };
+  /* AI重新生成已有文学/电影条目的概要(替换旧的网页抓取概要) */
+  const regenMetaBtn = document.getElementById("regenMetaBtn");
+  if(regenMetaBtn){
+    regenMetaBtn.onclick = async function(){
+      const cfg = getAiConfig();
+      if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+      /* 找出所有文学/小说/电影条目 */
+      const targets = state.items.filter(function(it){
+        return it.category === "literature" || it.category === "novel" || it.category === "movie";
+      });
+      if(targets.length === 0){ toast("没有文学/电影条目需要重新生成"); return; }
+      if(!confirm("将用AI重新生成 " + targets.length + " 条文学/电影条目的概要,覆盖现有概要(建议先导出备份)。是否继续?")) return;
+      const oldText = regenMetaBtn.textContent;
+      regenMetaBtn.disabled = true;
+      let done = 0, fail = 0;
+      for(let i=0; i<targets.length; i++){
+        const it = targets[i];
+        regenMetaBtn.textContent = "生成中 " + (i+1) + "/" + targets.length;
+        try{
+          const r = await fetchItemMeta(it);
+          if(r && !r.error){
+            it.meta = r;
+            done++;
+          }else{
+            fail++;
+          }
+        }catch(_){ fail++; }
+        /* 每5条保存一次,避免中途失败丢失全部 */
+        if((i+1) % 5 === 0) saveState();
+      }
+      saveState();
+      render();
+      regenMetaBtn.disabled = false;
+      regenMetaBtn.textContent = oldText;
+      toast("完成:成功 " + done + " 条" + (fail > 0 ? ",失败 " + fail + " 条" : ""));
+      if(typeof refreshStorageInfo === "function") refreshStorageInfo();
+    };
+  }
   const syncCopyBtn = document.getElementById("syncCopyBtn");
   if(syncCopyBtn) syncCopyBtn.onclick = function(){
     const code = (document.getElementById("syncCodeValue").textContent || "").trim();
