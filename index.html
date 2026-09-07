@@ -3688,7 +3688,17 @@ function idbDel(k){ return idbOpen().then(function(db){
     }catch(e){ resolve(false); }
   });
 }); }
-/* 将 items 中的 layout / images 拆分到 IDB,返回瘦身后的 items 副本 */
+/* 大字段列表: 这些字段体积大,优先存 IndexedDB,localStorage 只存元数据 */
+const LARGE_FIELDS = ["layout", "images", "fullText", "structured", "meta"];
+/* 判断字段值是否"有内容"(非空/非空字符串/非空对象) */
+function _hasValue(v){
+  if(v == null) return false;
+  if(Array.isArray(v)) return v.length > 0;
+  if(typeof v === "string") return v.length > 0;
+  if(typeof v === "object") return Object.keys(v).length > 0;
+  return true;
+}
+/* 将 items 中的大字段(layout/images/fullText/structured/meta)拆分到 IDB,返回瘦身后的 items 副本 */
 async function splitLargeFieldsToIdb(items){
   const slim = [];
   for(let i=0; i<items.length; i++){
@@ -3696,43 +3706,36 @@ async function splitLargeFieldsToIdb(items){
     const id = String(it.id);
     const cp = {};
     for(const k in it){
-      if(k === "layout" || k === "images") continue;
+      if(LARGE_FIELDS.indexOf(k) >= 0) continue;
       cp[k] = it[k];
     }
-    /* layout 存 IDB (失败不影响,会落在 localStorage 副本里) */
-    if(Array.isArray(it.layout) && it.layout.length){
-      try{ await idbSet(id + "|layout", it.layout); }catch(_){ cp.layout = it.layout; }
-    }else{
-      try{ await idbDel(id + "|layout"); }catch(_){}
-    }
-    /* images 存 IDB */
-    if(Array.isArray(it.images) && it.images.length){
-      try{ await idbSet(id + "|images", it.images); }catch(_){ cp.images = it.images; }
-    }else{
-      try{ await idbDel(id + "|images"); }catch(_){}
+    for(let f=0; f<LARGE_FIELDS.length; f++){
+      const fk = LARGE_FIELDS[f];
+      if(_hasValue(it[fk])){
+        try{ await idbSet(id + "|" + fk, it[fk]); }catch(_){ cp[fk] = it[fk]; }
+      }else{
+        try{ await idbDel(id + "|" + fk); }catch(_){}
+      }
     }
     slim.push(cp);
   }
   return slim;
 }
-/* 从 IDB 读取 layout / images / pdfBytes 挂回 state.items (失败则保留原值/未定义) */
+/* 从 IDB 读取大字段(layout/images/fullText/structured/meta/pdfBytes)挂回 state.items */
 async function hydrateLargeFields(){
   if(!Array.isArray(state.items)) return;
   for(let i=0; i<state.items.length; i++){
     const it = state.items[i];
     const id = String(it.id);
-    /* 已有数据则跳过(老 localStorage 数据向后兼容) */
-    if(!Array.isArray(it.layout)){
-      try{
-        const lay = await idbGet(id + "|layout");
-        if(Array.isArray(lay) && lay.length) it.layout = lay;
-      }catch(_){}
-    }
-    if(!Array.isArray(it.images)){
-      try{
-        const imgs = await idbGet(id + "|images");
-        if(Array.isArray(imgs) && imgs.length) it.images = imgs;
-      }catch(_){}
+    /* layout / images / fullText / structured / meta: 若本地无值则从 IDB 恢复 */
+    for(let f=0; f<LARGE_FIELDS.length; f++){
+      const fk = LARGE_FIELDS[f];
+      if(!_hasValue(it[fk])){
+        try{
+          const val = await idbGet(id + "|" + fk);
+          if(_hasValue(val)) it[fk] = val;
+        }catch(_){}
+      }
     }
     /* PDF原始字节(Uint8Array) - 存在则能走Canvas原生渲染,与Adobe阅读器一致
        (PDF字节不写localStorage, 只在IDB内存态, 内存挂到it._pdfBytes, 供_getPdfNativeDoc快速查找) */
@@ -3778,85 +3781,125 @@ function loadState(){
       }catch(e){ /* 忽略损坏的回收站数据 */ }
     }
   }catch(e){ console.warn("load failed", e); }
+
+  /* === 自动迁移: 如果 localStorage 中还存着大字段(旧数据),自动转存 IDB 并瘦身 ===
+     这样下次 saveState 时 localStorage 只存元数据,不会再报空间不足 */
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(raw){
+      let hasLarge = false;
+      /* 简单检测: 是否包含大字段关键词 */
+      for(let f=0; f<LARGE_FIELDS.length; f++){
+        if(raw.indexOf('"' + LARGE_FIELDS[f] + '"') >= 0){ hasLarge = true; break; }
+      }
+      if(hasLarge){
+        /* 有大字段 → 异步迁移到 IDB,然后瘦身写回 localStorage */
+        Promise.resolve().then(function(){
+          try{
+            const arr = JSON.parse(raw);
+            if(Array.isArray(arr)){
+              /* 先写 IDB(await确保写入完成) */
+              splitLargeFieldsToIdb(arr).then(function(slim){
+                try{
+                  localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
+                  /* 同步到 state.items(替换为瘦身版,大字段已在 IDB) */
+                  state.items = slim;
+                  /* 再从 IDB 恢复大字段到内存 */
+                  hydrateLargeFields();
+                  toast("检测到旧数据,已自动迁移大内容到本地数据库", 3000);
+                }catch(_){}
+              });
+            }
+          }catch(_){}
+        });
+      }
+    }
+  }catch(_){}
+}
+/* 剥离所有大字段,返回瘦身版 items(不写 IDB,纯内存操作,快速) */
+function _stripLargeFields(items){
+  const slim = [];
+  for(let i=0; i<items.length; i++){
+    const it = items[i];
+    const cp = {};
+    for(const k in it){
+      if(LARGE_FIELDS.indexOf(k) >= 0) continue;
+      cp[k] = it[k];
+    }
+    slim.push(cp);
+  }
+  return slim;
+}
+/* 把所有大字段异步写入 IDB(失败忽略) */
+function _flushLargeFieldsToIdb(){
+  const arr = state.items;
+  Promise.resolve().then(function(){
+    for(let i=0; i<arr.length; i++){
+      (function(it){
+        const id = String(it.id);
+        for(let f=0; f<LARGE_FIELDS.length; f++){
+          const fk = LARGE_FIELDS[f];
+          if(_hasValue(it[fk])) idbSet(id + "|" + fk, it[fk]);
+          else idbDel(id + "|" + fk);
+        }
+      })(arr[i]);
+    }
+  });
 }
 function saveState(){
   try{
-    /* ============ 策略(双写优先,与上一版保持一致) ============
-       1. 先完整写 items(含layout/images)到 localStorage → 保证刷新/关页后版面保真不丢;
-       2. 若 localStorage Quota超限 → 剥离layout/images存IDB,只把瘦身版写 localStorage;
-       3. 不论成功与否,layout/images 都异步双写一份到 IDB 作冗余备份。 */
+    /* 先尝试完整写(含大字段) */
     let fullStr = "";
     let quotaOk = false;
     try{
       fullStr = JSON.stringify(state.items);
-      /* 先测试写,看 localStorage 装不装得下(不改主key) */
       try{
         localStorage.setItem(STORAGE_KEY + "_wtest", fullStr);
         localStorage.removeItem(STORAGE_KEY + "_wtest");
         quotaOk = true;
       }catch(_t){ quotaOk = false; }
     }catch(_s){ quotaOk = false; }
-    let slimItems = null;
+
     if(quotaOk){
-      /* localStorage 装得下 → 完整存,跟 IndexedDB 升级之前完全一样 */
+      /* localStorage 装得下 → 完整存 */
       localStorage.setItem(STORAGE_KEY, fullStr);
-      try{ localStorage.setItem(STORAGE_KEY + "_bak", fullStr); }catch(_){}
     }else{
-      /* localStorage 超限 → 剥离 layout/images,瘦身副本写 localStorage,
-         layout/images 只能靠 IDB 了 */
-      slimItems = [];
-      for(let i=0; i<state.items.length; i++){
-        const it = state.items[i];
-        const cp = {};
-        for(const k in it){
-          if(k === "layout" || k === "images") continue;
-          cp[k] = it[k];
-        }
-        slimItems.push(cp);
-      }
+      /* localStorage 超限 → 剥离所有大字段(layout/images/fullText/structured/meta),
+         大字段靠 IDB,localStorage 只存元数据 */
+      const slimItems = _stripLargeFields(state.items);
       const main = JSON.stringify(slimItems);
       localStorage.setItem(STORAGE_KEY, main);
-      try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(_){}
+      toast("存储空间紧张,大内容已自动转存本地数据库", 3000);
     }
-    /* layout/images 异步双写 IDB(作冗余,失败忽略) */
+    /* 大字段异步双写 IDB(作冗余) */
+    _flushLargeFieldsToIdb();
+    /* 不再写 _bak 备份,释放 localStorage 空间 */
+    try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
+    /* 回收站/待审核也剥离大字段,避免占用 localStorage */
     try{
-      const arr = state.items;
-      Promise.resolve().then(function(){
-        for(let i=0; i<arr.length; i++){
-          (function(it){
-            const id = String(it.id);
-            if(Array.isArray(it.layout) && it.layout.length) idbSet(id + "|layout", it.layout);
-            else idbDel(id + "|layout");
-            if(Array.isArray(it.images) && it.images.length) idbSet(id + "|images", it.images);
-            else idbDel(id + "|images");
-          })(arr[i]);
-        }
-      });
+      const slimPending = _stripLargeFields(state.pendingReview || []);
+      localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(slimPending));
     }catch(_){}
-    localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
-    try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(state.trash || [])); }catch(e2){}
+    try{
+      const slimTrash = _stripLargeFields(state.trash || []);
+      localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(slimTrash));
+    }catch(_){}
   }
   catch(e){
-    /* 首次写 localStorage 已经失败(哪怕用瘦身版也超) → 再极限压缩 images */
     const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
-    if(isQuota && slimImagesForQuota()){
+    if(isQuota){
+      /* 极限压缩: 先清 _bak,再剥离所有大字段重试 */
+      try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
       try{
-        const slimItems = [];
-        for(let i=0; i<state.items.length; i++){
-          const it = state.items[i];
-          const cp = {};
-          for(const k in it){
-            if(k === "layout" || k === "images") continue;
-            cp[k] = it[k];
-          }
-          slimItems.push(cp);
-        }
+        const slimItems = _stripLargeFields(state.items);
         const main = JSON.stringify(slimItems);
         localStorage.setItem(STORAGE_KEY, main);
-        try{ localStorage.setItem(STORAGE_KEY + "_bak", main); }catch(e2){}
-        localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(state.pendingReview || []));
-        try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(state.trash || [])); }catch(e2){}
-        toast("存储空间紧张,已自动压缩图片并保存成功");
+        try{ localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(_stripLargeFields(state.pendingReview || []))); }catch(_){}
+        try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(_stripLargeFields(state.trash || []))); }catch(_){}
+        _flushLargeFieldsToIdb();
+        toast("存储空间紧张,已自动压缩并保存成功", 3000);
+        /* 云端同步 */
+        scheduleSyncPush();
         return;
       }catch(e2){ /* 仍失败则提示导出 */ }
     }
