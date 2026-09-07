@@ -2146,6 +2146,7 @@
       <div class="storage-info-actions">
         <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
         <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
+        <button class="modal-btn" id="cleanStorageBtn" type="button" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">🧹 清理存储</button>
         <input type="file" id="importDataInput" accept="application/json" style="display:none;">
       </div>
       <div class="storage-info-tip">导出 JSON 文件到本地(双保险),浏览器换电脑时导入即可恢复全部志录+版面。<br>
@@ -11083,263 +11084,22 @@ async function fetchItemMetaByAI(title, cat){
   return result;
 }
 
-/* 联网获取条目元数据 (概要/情节/重要转折/主要人物/人物关系) —— 多源综合 */
+/* 获取条目元数据 —— 仅用AI归纳总结,不抓取任何网页(节省存储空间) */
 async function fetchItemMeta(item){
   const title = (item.name || "").trim();
   if(!title) return { error:"empty" };
-
-  const result = {
-    summary: "",
-    plot: "",
-    turningPoints: "",
-    mainCharacters: "",
-    relationships: "",
-    outline: [],
-    doubanRating: "",
-    webSnippets: [],
-    source: [],
-    fetchedAt: new Date().toISOString()
-  };
-
-  /* ---- 优先: AI归纳总结(不抓取网页HTML,节省存储空间) ---- */
   const cat = item.category || "";
   const aiCfg = getAiConfig();
-  if(aiCfg && aiCfg.key){
-    try{
-      const aiResult = await fetchItemMetaByAI(title, cat);
-      if(aiResult && !aiResult.error){
-        return aiResult; /* AI成功 → 直接返回,不进行网络抓取 */
-      }
-    }catch(_){ /* AI失败 → 回退到网络抓取 */ }
+  if(!aiCfg || !aiCfg.key){
+    return { error:"noai" }; /* 未配置AI → 不获取概要,避免网络抓取占用存储 */
   }
-
-  /* ---- 多源并行查询: 按门类选择查询源 (梗概匹配当前门类) ---- */
-  /* 注意: title 不预先 encodeURIComponent, 因为 fetchViaProxy 内部会 encodeURIComponent 整个 URL,
-     若此处先编码会导致双重编码 (%25E4 而非 %E4) */
-  const pageUrl = "https://baike.baidu.com/item/" + title;
-
-  /* 并行发起: 百科页面 + 豆瓣(按门类选子站) + 网络搜索摘要 + 维基百科 + 网文梗概(小说门类) */
-  const [htmlText, doubanResult, webResult, wikiResult, novelResult] = await Promise.all([
-    fetchViaProxy(pageUrl, 9000),
-    fetchDoubanMeta(title, cat),
-    fetchWebSnippets(title, cat),
-    fetchWikiMeta(title),
-    cat === "novel" ? fetchWebNovelSynopsis(title) : Promise.resolve(null)
-  ]);
-
-  /* ---- 合并网文平台梗概 (小说门类: 起点中文网/晋江文学城简介) ---- */
-  if(novelResult && novelResult.summary){
-    if(!result.summary){
-      result.summary = novelResult.summary;
-    }
-    if(!result.plot) result.plot = novelResult.summary;
-    result.source.push("网文平台");
+  try{
+    const aiResult = await fetchItemMetaByAI(title, cat);
+    if(aiResult && !aiResult.error) return aiResult;
+    return { error: aiResult ? aiResult.error : "aifail" };
+  }catch(e){
+    return { error: "aierror: " + (e.message || "未知") };
   }
-
-  /* ---- 合并维基百科数据 (百度百科缺失时的有力补充, 尤其海外作品) ---- */
-  if(wikiResult && wikiResult.summary){
-    if(!result.summary){
-      result.summary = wikiResult.summary;
-    }
-    if(wikiResult.description && !result.doubanRating){
-      /* 维基描述(如「中国科幻小说」「1994年美国电影」)暂存到附加信息 */
-      result.wikiDesc = wikiResult.description;
-    }
-    result.source.push("维基百科");
-  }
-
-  /* ---- 合并豆瓣数据 ---- */
-  if(doubanResult && doubanResult.rating){
-    result.doubanRating = doubanResult.rating;
-    result.source.push("豆瓣");
-  }
-  if(doubanResult && doubanResult.summary && !result.summary){
-    /* 豆瓣简介作为补充(百科优先,豆瓣兜底) */
-    result.summary = doubanResult.summary;
-  }
-
-  /* ---- 合并网络报道摘要 ---- */
-  if(webResult && webResult.snippets && webResult.snippets.length > 0){
-    result.webSnippets = webResult.snippets;
-    result.source.push("网络报道");
-  }
-
-  if(htmlText){
-    const doc = new DOMParser().parseFromString(htmlText, "text/html");
-    /* 移除脚本/样式/导航等无关元素 */
-    doc.querySelectorAll("script, style, .tashuo-recommend, .before-content, .nav, .header, .footer, .wgt-ad, .wgt-ad-banner").forEach(function(e){ e.remove(); });
-
-    /* 概要:优先取 .J-summary / .lemma-summary, 备选前几段 .para */
-    if(!result.summary){
-      const sumEl = doc.querySelector(".J-summary, .lemma-summary, .summary, .lemmaWgt-promotion");
-      if(sumEl) result.summary = cleanText(sumEl);
-    }
-    if(!result.summary){
-      /* 备选:lemma-content 中前 3 段 .para 拼接 */
-      const paras = doc.querySelectorAll(".J-lemma-content .para, .lemma-content .para, .para");
-      let tmp = "";
-      for(let i=0; i<paras.length && i<3; i++){
-        const t = cleanText(paras[i]);
-        if(t && t.length > 10){ tmp += (tmp ? " " : "") + t; if(tmp.length > 400) break; }
-      }
-      if(tmp.length > 20) result.summary = tmp;
-    }
-
-    /* 解析章节 */
-    const sections = parseBaikeSections(doc);
-    result.outline = sections.map(function(s){ return s.title; });
-
-    /* 情节关键词 (移除过于宽泛的词如"简介""内容""故事",避免误匹配"作者简介") */
-    const plotKw = ["剧情简介", "剧情梗概", "故事梗概", "内容简介", "故事简介", "剧情", "情节", "梗概"];
-    /* 排除的情节标题 (如"作者简介"含"简介"但非情节) */
-    const plotExclude = ["作者简介", "创作者简介", "导演简介", "演员简介", "幕后制作", "幕后花絮", "制作发行", "发行", "上映", "票房"];
-    /* 人物关键词 —— 仅角色/人物介绍,不含演员/配音 */
-    const charKw = ["角色介绍", "角色设定", "登场角色", "主要登场角色", "主要角色", "登场人物", "主要人物", "人物介绍", "登场人物介绍"];
-    /* 演员关键词 —— 单独归类,绝不混入人物 */
-    const castKw = ["演职员表", "演员表", "演职员", "主要演员", "配音", "配音演员", "主演", "演员", "声优"];
-    /* 关系关键词 —— 仅人物关系图,不含泛"人物" */
-    const relKw = ["人物关系", "角色关系", "关系图", "人物关系图", "角色关系图"];
-    /* 分部关键词 (小说多部曲的情节分布) */
-    const partKw = ["第一部", "第二部", "第三部", "第四部", "第五部", "上卷", "下卷", "上册", "下册", "上篇", "下篇"];
-
-    let plotParts = [];        /* 收集多部曲情节 */
-    let charCandidates = [];   /* 仅角色章节(不含演员/配音) */
-    let castSections = [];     /* 演员/配音章节(单独存放,不污染人物) */
-
-    for(let i=0; i<sections.length; i++){
-      const sec = sections[i];
-      const t = sec.title;
-      /* 排除"作者简介/幕后"等非情节标题 */
-      if(plotExclude.indexOf(t) >= 0) continue;
-      /* 演员表/配音表 —— 单独归类,不混入人物 */
-      const isCast = castKw.some(function(k){ return t.indexOf(k) >= 0; });
-      if(isCast){
-        castSections.push(sec);
-        continue;
-      }
-      /* 情节 (优先匹配更具体的标题) */
-      if(!result.plot && plotKw.some(function(k){ return t.indexOf(k) >= 0; })){
-        result.plot = sec.content;
-      }
-      /* 收集分部内容 (作为情节备选) */
-      if(partKw.indexOf(t) >= 0){
-        plotParts.push(t + ":" + sec.content.substring(0, 400));
-      }
-      /* 人物关系 (仅匹配关系图,不含泛"人物") */
-      if(!result.relationships && relKw.some(function(k){ return t.indexOf(k) >= 0; })){
-        result.relationships = sec.content;
-      }
-      /* 收集角色章节(不含演员) */
-      if(charKw.some(function(k){ return t.indexOf(k) >= 0; })){
-        charCandidates.push(sec);
-      }
-    }
-
-    /* 从角色候选项中取内容最长者 */
-    if(charCandidates.length > 0){
-      charCandidates.sort(function(a, b){ return b.content.length - a.content.length; });
-      result.mainCharacters = charCandidates[0].content;
-    }
-
-    /* 备选:无情节章节时,用分部内容拼接作为情节 */
-    if(!result.plot && plotParts.length > 0){
-      result.plot = plotParts.join("\n\n");
-    }
-    /* 备选:仍无情节,用概要作为情节 */
-    if(!result.plot && result.summary){
-      result.plot = result.summary;
-    }
-
-    /* 清洗各字段:剥离演员/配音/制作等噪声 */
-    result.plot = stripCastNoise(result.plot);
-    result.mainCharacters = stripCastNoise(result.mainCharacters);
-    result.summary = stripCastNoise(result.summary);
-    result.relationships = stripCastNoise(result.relationships);
-
-    /* 精炼情节为梗概:剔除演员句,保留叙事 */
-    if(result.plot){
-      result.plot = refinePlot(result.plot);
-    }
-
-    /* 精炼人物:剔除演员表式罗列,保留角色介绍 */
-    if(result.mainCharacters){
-      result.mainCharacters = refineCharacters(result.mainCharacters);
-    }
-
-    /* 若有情节,从中提取重要转折提示 */
-    if(result.plot){
-      /* 在情节中寻找转折标志句 */
-      const turnKw = ["最终", "结果", "不料", "意外", "突然", "转折", "关键", "然而", "危机", "结局", "终于", "幸而", "幸亏", "竟然", "发现"];
-      const sentences = result.plot.split(/[。！？\n]/).filter(function(s){ return s.trim().length > 8; });
-      const turnSentences = sentences.filter(function(s){
-        return turnKw.some(function(k){ return s.indexOf(k) >= 0; });
-      });
-      if(turnSentences.length > 0){
-        result.turningPoints = turnSentences.slice(0, 6).map(function(s){ return "· " + s.trim() + "。"; }).join("\n");
-      } else {
-        result.turningPoints = "（详见情节概述中关键节点）";
-      }
-    }
-
-    result.source.push("百度百科");
-  }
-
-  /* ---- 第二轮兜底: 百度百科未命中关键字段时,查询搜狗百科 + 360百科 + 必应 ---- */
-  if(!result.summary || !result.plot || !result.mainCharacters){
-    const [sogouResult, soResult, bingResult] = await Promise.all([
-      fetchSogouBaike(title),
-      fetchSoBaike(title),
-      fetchBingSnippets(title)
-    ]);
-
-    /* 合并搜狗百科 */
-    if(sogouResult && sogouResult.snippets.length > 0){
-      for(let i=0; i<sogouResult.snippets.length; i++){
-        if(result.webSnippets.length < 6) result.webSnippets.push("[搜狗百科] " + sogouResult.snippets[i]);
-      }
-      if(!result.summary) result.summary = sogouResult.snippets[0];
-      result.source.push("搜狗百科");
-    }
-
-    /* 合并360百科 */
-    if(soResult && soResult.snippets.length > 0){
-      for(let i=0; i<soResult.snippets.length; i++){
-        if(result.webSnippets.length < 6) result.webSnippets.push("[360百科] " + soResult.snippets[i]);
-      }
-      if(!result.summary) result.summary = soResult.snippets[0];
-      result.source.push("360百科");
-    }
-
-    /* 合并必应搜索 */
-    if(bingResult && bingResult.snippets.length > 0){
-      for(let i=0; i<bingResult.snippets.length; i++){
-        if(result.webSnippets.length < 6) result.webSnippets.push("[必应] " + bingResult.snippets[i]);
-      }
-      if(!result.summary) result.summary = bingResult.snippets[0];
-      result.source.push("必应搜索");
-    }
-
-    /* 仍无情节时,用各源摘要拼出的概要作情节 */
-    if(!result.plot && result.summary){
-      result.plot = result.summary;
-      /* 从摘要中尝试提取转折句 */
-      const turnKw2 = ["最终", "不料", "突然", "然而", "结局", "发现", "竟然"];
-      const sentences2 = result.summary.split(/[。！？]/).filter(function(s){ return s.trim().length > 8; });
-      const turns2 = sentences2.filter(function(s){
-        return turnKw2.some(function(k){ return s.indexOf(k) >= 0; });
-      });
-      if(turns2.length > 0){
-        result.turningPoints = turns2.slice(0, 5).map(function(s){ return "· " + s.trim() + "。"; }).join("\n");
-      }
-    }
-  }
-
-  if(!result.summary && !result.plot && !result.mainCharacters){
-    return { error:"notfound" };
-  }
-
-  result.source = Array.from(new Set(result.source)).join(" · ");
-  return result;
 }
 
 /* 概要模态框状态 */
@@ -14193,6 +13953,48 @@ function toast(msg, duration){
     const f = this.files && this.files[0];
     handleImportFile(f);
     this.value = "";
+  };
+  /* 清理存储: 精简meta(去掉webSnippets等大字段) + 清空回收站 + 清空待审核 */
+  const cleanBtn = document.getElementById("cleanStorageBtn");
+  if(cleanBtn) cleanBtn.onclick = function(){
+    if(!confirm("确定清理存储空间吗？\n\n将执行以下操作:\n1. 精简所有条目的概要数据(删除旧的网页抓取片段)\n2. 清空回收站\n3. 清空待审核列表\n\n此操作不可撤销,建议先导出数据备份。")) return;
+    let metaCleaned = 0;
+    let spaceBefore = 0, spaceAfter = 0;
+    try{ spaceBefore = JSON.stringify(state.items).length; }catch(_){}
+    /* 1. 精简meta: 只保留概要/情节/转折/人物/关系/来源/时间,删除webSnippets等大字段 */
+    for(let i=0; i<state.items.length; i++){
+      const it = state.items[i];
+      if(it.meta && typeof it.meta === "object"){
+        const old = JSON.stringify(it.meta);
+        it.meta = {
+          summary: it.meta.summary || "",
+          plot: it.meta.plot || "",
+          turningPoints: it.meta.turningPoints || "",
+          mainCharacters: it.meta.mainCharacters || "",
+          relationships: it.meta.relationships || "",
+          outline: Array.isArray(it.meta.outline) ? it.meta.outline.slice(0, 10) : [],
+          source: it.meta.source || "AI归纳总结",
+          fetchedAt: it.meta.fetchedAt || new Date().toISOString()
+        };
+        const nw = JSON.stringify(it.meta);
+        if(nw.length < old.length) metaCleaned++;
+      }
+    }
+    /* 2. 清空回收站 */
+    const trashCount = (state.trash || []).length;
+    state.trash = [];
+    /* 3. 清空待审核 */
+    const pendingCount = (state.pendingReview || []).length;
+    state.pendingReview = [];
+    /* 保存 */
+    saveState();
+    try{ spaceAfter = JSON.stringify(state.items).length; }catch(_){}
+    const saved = Math.max(0, spaceBefore - spaceAfter);
+    toast("已清理:精简" + metaCleaned + "条概要 · 清空回收站" + trashCount + "项 · 清空待审核" + pendingCount + "项 · 节省约" + _fmtKB(saved));
+    /* 刷新容量显示 */
+    if(typeof refreshStorageInfo === "function") refreshStorageInfo();
+    updateTrashBtn();
+    render();
   };
   const syncCopyBtn = document.getElementById("syncCopyBtn");
   if(syncCopyBtn) syncCopyBtn.onclick = function(){
