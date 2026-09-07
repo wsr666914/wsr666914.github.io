@@ -135,15 +135,6 @@
   .composer-submit:hover{ background:var(--accent-deep); }
   .composer-submit:active{ transform:translateY(1px); }
 
-  .composer-ai-btn{
-    background:linear-gradient(135deg,#a78bfa,#f472b6); color:#fff; border:none;
-    padding:0 16px; font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:14px; font-weight:600;
-    cursor:pointer; border-radius:8px; white-space:nowrap; transition:opacity .2s, transform .15s;
-  }
-  .composer-ai-btn:hover{ opacity:.88; }
-  .composer-ai-btn:active{ transform:translateY(1px); }
-  .composer-ai-btn:disabled{ opacity:.5; cursor:not-allowed; }
-
   .composer-predict{ margin-top:14px; min-height:22px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px; }
 
   /* 手选门类 */
@@ -1834,7 +1825,6 @@
     <div class="composer-row">
       <input id="entryInput" class="composer-input" type="text" autocomplete="off" />
       <button id="entrySubmit" class="composer-submit">入册 ↵</button>
-      <button id="entryAiClassify" class="composer-ai-btn" title="用AI智能判断这个条目属于哪个门类">✨ AI识类</button>
     </div>
     <div class="composer-predict" id="predict"></div>
     <div class="composer-cats">
@@ -2034,7 +2024,6 @@
     <div class="paper-entry-stats" id="paperEntryStats"></div>
     <div class="modal-actions">
       <button class="modal-btn" id="paperEntryCancel">取消</button>
-      <button class="modal-btn" id="paperAiStruct" type="button" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI整理</button>
       <button class="modal-btn primary" id="paperEntrySubmit">整理入册</button>
     </div>
   </div>
@@ -8964,13 +8953,8 @@ async function aiGenerateContent(name, category){
       + "【剧情梗概】\n(200字以内的剧情梗概)\n\n"
       + "【主要人物】\n(列出3-6个主要角色,每人一行: 角色名 - 演员/身份)\n\n"
       + "【人物关系】\n(简要描述主要角色之间的关系)";
-  }else if(category === "paper"){
-    prompt = "请为以下学术论文生成结构化摘要:\n\n论文名: " + name + "\n\n"
-      + "请按以下格式输出(用中文):\n"
-      + "【摘要】\n(200字以内的摘要)\n\n"
-      + "【关键词】\n(3-5个关键词,用顿号分隔)\n\n"
-      + "【研究要点】\n(简要描述研究方法、主要结论和贡献)";
   }else{
+    /* 随笔/论文/饮品/护肤等门类不支持AI生成内容 */
     return { error: "该门类暂不支持AI生成内容" };
   }
   const res = await callAI([{ role:"user", content:prompt }], 1500, 0.7);
@@ -12393,49 +12377,48 @@ function updatePredict(){
 
 input.addEventListener("input", function(){
   // 输入清空时,顺手清掉手选(避免残留)
-  if(!input.value.trim()) state.composerCategory = null;
+  if(!input.value.trim()){
+    state.composerCategory = null;
+    _aiClassifyLastText = "";
+  }
   updatePredict();
   renderComposerCats();
   syncBeverageBrandComposer();
+  triggerAiClassify(); /* 输入时自动触发AI智能分类 */
 });
 input.addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); submit(); }
 });
 submitBtn.addEventListener("click", submit);
 
-/* AI智能识别按钮 */
-const aiClassifyBtn = document.getElementById("entryAiClassify");
-if(aiClassifyBtn){
-  aiClassifyBtn.addEventListener("click", async function(){
-    const v = input.value.trim();
-    if(!v){ toast("请先键入名目"); return; }
-    const cfg = getAiConfig();
-    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
-    const oldText = aiClassifyBtn.textContent;
-    aiClassifyBtn.disabled = true;
-    aiClassifyBtn.textContent = "识别中…";
+/* ===== AI自动智能分类: 输入时防抖触发,自动识别门类 ===== */
+let _aiClassifyTimer = null;
+let _aiClassifyLastText = "";
+function triggerAiClassify(){
+  const v = input.value.trim();
+  if(!v) return;
+  if(v === _aiClassifyLastText) return;
+  const cfg = getAiConfig();
+  if(!cfg || !cfg.key) return;
+  _aiClassifyLastText = v;
+  if(predictEl){ predictEl.innerHTML = '<span class="predict-conf">🤖 AI识别中…</span>'; }
+  clearTimeout(_aiClassifyTimer);
+  _aiClassifyTimer = setTimeout(async function(){
     try{
       const r = await aiClassify(v);
       if(r && !r.error){
         state.composerCategory = r.cat;
         renderComposerCats();
         syncBeverageBrandComposer();
-        /* 更新预测显示 */
         const c = CATEGORIES[r.cat];
-        predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
-          '<span class="dot"></span>' + catIcon(r.cat, 14) + ' ' + c.name +
-          '</span><span class="predict-conf">AI智能识别 · 置信 ' + Math.round(r.confidence*100) + '%</span>';
-        toast("AI判定为「" + c.name + "」");
-      }else{
-        toast(r && r.error ? r.error : "AI识别失败");
+        if(predictEl){
+          predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
+            '<span class="dot"></span>' + catIcon(r.cat, 14) + ' ' + c.name +
+            '</span><span class="predict-conf">AI智能识别 · 置信 ' + Math.round(r.confidence*100) + '%</span>';
+        }
       }
-    }catch(e){
-      toast("AI识别出错: " + (e.message || "未知"));
-    }finally{
-      aiClassifyBtn.disabled = false;
-      aiClassifyBtn.textContent = oldText;
-    }
-  });
+    }catch(_){}
+  }, 800);
 }
 
 function submit(){
@@ -12778,6 +12761,15 @@ function renderEditCats(){
       editSelectedCat = newCat;
       syncEditSubcat();
       syncEditEssayDate();
+      /* 随笔/论文等门类不显示AI生成按钮 */
+      const aiBtn = document.getElementById("editAiGen");
+      if(aiBtn){
+        if(newCat === "literature" || newCat === "novel" || newCat === "movie"){
+          aiBtn.style.display = "";
+        }else{
+          aiBtn.style.display = "none";
+        }
+      }
     };
   }
 }
@@ -12803,6 +12795,15 @@ function openEditModal(id){
   renderEditStars();
   syncEditSubcat();
   syncEditEssayDate();
+  /* 随笔/论文等门类不显示AI生成按钮 */
+  const aiBtn = document.getElementById("editAiGen");
+  if(aiBtn){
+    if(it.category === "literature" || it.category === "novel" || it.category === "movie"){
+      aiBtn.style.display = "";
+    }else{
+      aiBtn.style.display = "none";
+    }
+  }
   editModal.classList.add("show");
   setTimeout(function(){ if(editNameInput) editNameInput.focus(); }, 50);
 }
@@ -13479,47 +13480,6 @@ let paperEntryStructured = null; /* GROBID(Zotero同款引擎)结构化结果:�
 let paperEntryLayout = null;  /* PDF导入的文字块坐标字号(版面保真还原用,渲染层启用后1:1还原版面) */
 let paperEntryHtml = null;   /* Word导入的流式版面保真HTML(字号/缩进/对齐/加粗/分栏) */
 let paperEntryPdfBytes = null; /* PDF原始字节(Uint8Array),Canvas原生渲染用,与Adobe阅读器像素级一致,入册时存IDB */
-/* AI论文整理: 用AI通读全文,提取标题/摘要/关键词/章节/参考文献,生成结构化摘要填入描述 */
-const paperAiStructBtn = document.getElementById("paperAiStruct");
-if(paperAiStructBtn){
-  paperAiStructBtn.onclick = async function(){
-    const fullText = paperFullTextInput ? paperFullTextInput.value.trim() : "";
-    if(!fullText){ toast("请先粘贴论文全文"); return; }
-    const cfg = getAiConfig();
-    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
-    const oldText = paperAiStructBtn.textContent;
-    paperAiStructBtn.disabled = true;
-    paperAiStructBtn.textContent = "AI整理中…";
-    try{
-      /* 截取前4000字避免超长(AI上下文限制) */
-      const snippet = fullText.length > 4000 ? fullText.substring(0, 4000) + "……" : fullText;
-      const prompt = "请为以下论文生成结构化整理(用中文):\n\n" + snippet + "\n\n"
-        + "请按以下格式输出:\n"
-        + "【论文标题】\n(从文中提取的标题)\n\n"
-        + "【摘要】\n(200字以内的摘要,若原文有摘要则基于原文整理)\n\n"
-        + "【关键词】\n(3-5个关键词,用顿号分隔)\n\n"
-        + "【研究内容】\n(简要描述研究问题、方法、主要结论,200字以内)\n\n"
-        + "【参考文献(前5条)】\n(提取文中参考文献的前5条,每条一行)";
-      const res = await callAI([{ role:"user", content:prompt }], 2000, 0.5);
-      if(res && !res.error && res.content){
-        /* 填入描述字段(用于展示),不修改原文 */
-        paperEntryStructured = res.content;
-        toast("AI整理完成,内容已暂存,点「整理入册」将保存");
-        /* 把整理结果显示在stats区域 */
-        if(paperEntryStats){
-          paperEntryStats.innerHTML = '<span style="color:#a78bfa"><b>✨ AI整理完成</b> · ' + res.content.length + ' 字</span>';
-        }
-      }else{
-        toast(res && res.error ? res.error : "AI整理失败");
-      }
-    }catch(e){
-      toast("AI整理出错: " + (e.message || "未知"));
-    }finally{
-      paperAiStructBtn.disabled = false;
-      paperAiStructBtn.textContent = oldText;
-    }
-  };
-}
 if(paperEntrySubmit){
   paperEntrySubmit.onclick = function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
