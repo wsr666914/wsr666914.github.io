@@ -11017,6 +11017,72 @@ async function fetchBingSnippets(title){
   return result;
 }
 
+/* AI归纳总结条目元数据 —— 不抓取网页HTML,直接由AI生成概要/情节/人物/关系,大幅节省存储空间 */
+async function fetchItemMetaByAI(title, cat){
+  let prompt = "";
+  if(cat === "movie"){
+    prompt = "请为以下电影生成结构化介绍(用中文):\n\n电影名: " + title + "\n\n"
+      + "请严格按以下格式输出,每个字段之间用换行分隔:\n"
+      + "【概要】\n(150字以内的剧情简介)\n\n"
+      + "【情节】\n(300字以内的完整剧情梗概,按叙事顺序)\n\n"
+      + "【重要转折】\n(列出3-5个关键转折点,每条一行,格式: · 转折描述)\n\n"
+      + "【主要人物】\n(列出3-6个主要角色,每人一行,格式: 角色名 - 身份/性格/在剧情中的作用)\n\n"
+      + "【人物关系】\n(简要描述主要角色之间的关系,150字以内)";
+  }else{
+    /* literature / novel */
+    prompt = "请为以下文学作品生成结构化介绍(用中文):\n\n作品名: " + title + "\n\n"
+      + "请严格按以下格式输出,每个字段之间用换行分隔:\n"
+      + "【概要】\n(150字以内的作品简介,包括作者、类型、主题)\n\n"
+      + "【情节】\n(300字以内的完整故事梗概,按叙事顺序)\n\n"
+      + "【重要转折】\n(列出3-5个关键转折点,每条一行,格式: · 转折描述)\n\n"
+      + "【主要人物】\n(列出3-6个主要人物,每人一行,格式: 人名 - 身份/性格/在故事中的作用)\n\n"
+      + "【人物关系】\n(简要描述主要人物之间的关系,150字以内)";
+  }
+  const res = await callAI([{ role:"user", content:prompt }], 2000, 0.6);
+  if(res.error) return { error: res.error };
+  const content = res.content || "";
+  if(!content.trim()) return { error:"empty" };
+
+  /* 解析AI返回的结构化内容 */
+  const result = {
+    summary: "",
+    plot: "",
+    turningPoints: "",
+    mainCharacters: "",
+    relationships: "",
+    outline: [],
+    doubanRating: "",
+    webSnippets: [],
+    source: ["AI归纳总结"],
+    fetchedAt: new Date().toISOString()
+  };
+
+  /* 按【字段名】切分 */
+  const sections = {};
+  const parts = content.split(/【([^】]+)】/);
+  for(let i=1; i<parts.length; i+=2){
+    const key = parts[i].trim();
+    const val = (parts[i+1] || "").trim();
+    sections[key] = val;
+  }
+  result.summary = sections["概要"] || "";
+  result.plot = sections["情节"] || sections["概要"] || "";
+  result.turningPoints = sections["重要转折"] || "";
+  result.mainCharacters = sections["主要人物"] || "";
+  result.relationships = sections["人物关系"] || "";
+
+  /* 生成章节大纲(从情节中提取) */
+  if(result.plot){
+    const sentences = result.plot.split(/[。！？\n]/).filter(function(s){ return s.trim().length > 10; });
+    result.outline = sentences.slice(0, 6).map(function(s){ return s.trim(); });
+  }
+
+  if(!result.summary && !result.plot){
+    return { error:"empty" };
+  }
+  return result;
+}
+
 /* 联网获取条目元数据 (概要/情节/重要转折/主要人物/人物关系) —— 多源综合 */
 async function fetchItemMeta(item){
   const title = (item.name || "").trim();
@@ -11035,11 +11101,22 @@ async function fetchItemMeta(item){
     fetchedAt: new Date().toISOString()
   };
 
+  /* ---- 优先: AI归纳总结(不抓取网页HTML,节省存储空间) ---- */
+  const cat = item.category || "";
+  const aiCfg = getAiConfig();
+  if(aiCfg && aiCfg.key){
+    try{
+      const aiResult = await fetchItemMetaByAI(title, cat);
+      if(aiResult && !aiResult.error){
+        return aiResult; /* AI成功 → 直接返回,不进行网络抓取 */
+      }
+    }catch(_){ /* AI失败 → 回退到网络抓取 */ }
+  }
+
   /* ---- 多源并行查询: 按门类选择查询源 (梗概匹配当前门类) ---- */
   /* 注意: title 不预先 encodeURIComponent, 因为 fetchViaProxy 内部会 encodeURIComponent 整个 URL,
      若此处先编码会导致双重编码 (%25E4 而非 %E4) */
   const pageUrl = "https://baike.baidu.com/item/" + title;
-  const cat = item.category || "";
 
   /* 并行发起: 百科页面 + 豆瓣(按门类选子站) + 网络搜索摘要 + 维基百科 + 网文梗概(小说门类) */
   const [htmlText, doubanResult, webResult, wikiResult, novelResult] = await Promise.all([
