@@ -2134,7 +2134,7 @@
         <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
         <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
         <button class="modal-btn" id="cleanStorageBtn" type="button" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">🧹 清理存储</button>
-        <button class="modal-btn" id="regenMetaBtn" type="button" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI重新生成概要</button>
+        <button class="modal-btn" id="regenMetaBtn" type="button" style="background:linear-gradient(135deg,#f87171,#f472b6);color:#fff;border:none;">🧹 删除文学/影视概要</button>
         <input type="file" id="importDataInput" accept="application/json" style="display:none;">
       </div>
       <div class="storage-info-tip">导出 JSON 文件到本地(双保险),浏览器换电脑时导入即可恢复全部志录+版面。<br>
@@ -2224,6 +2224,20 @@ const CATEGORIES = {
     name:"影视", color:"#9B7B33", icon:"✦",
     svg:'<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/>',
     keywords:["电影","影视","movie","film","cinema","导演","主演","imax","蓝光","dvd","剧场版","续集","电视剧","连续剧","网剧","剧","韩剧","美剧","日剧","泰剧","综艺","纪录片"],
+    patterns:[]
+  },
+  novel: {
+    name:"小说", color:"#8B5E3C", icon:"❉",
+    svg:'<path d="M4 19c2-1 4-1 8 0 4-1 6-1 8 0"/><path d="M6 19V5c2-.8 4-.8 6 0v14"/><path d="M18 19V5c-2-.8-4-.8-6 0"/>',
+    /* 网络小说/通俗小说: 与传统文学区分 */
+    keywords:["小说","网络小说","网文","网文小说","连载","章节","番外","主角","配角","穿越","重生","系统","金手指","爽文","修仙","玄幻","奇幻","仙侠","武侠","都市","言情","架空","科幻","历史军事","游戏","灵异","悬疑","恐怖","盗墓","同人","轻小说","web novel","light novel","novel","fiction","网络小说","起点","纵横","晋江","番茄","飞卢","创世","连载","完本","连载中","追更","追读","大结局","结局","书评","推书","书荒","完结","正文","卷","章","节"],
+    patterns:[]
+  },
+  treatise: {
+    name:"论著", color:"#3D5A6B", icon:"§",
+    svg:'<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2V4z"/><path d="M4 4v16"/><path d="M8 8h6M8 11h6M8 14h4"/>',
+    /* 学术论著/专著/研究性书籍: 按学科分类(历史/文学/心理学等) */
+    keywords:["论著","专著","学术","研究","史学","哲学","心理学","社会学","政治学","经济学","法学","教育学","人类学","考古","历史","文学批评","文学理论","文艺学","美学","逻辑学","伦理学","宗教学","传播学","管理学","地理","军事","国际关系","公共管理","统计学","数学","物理","化学","生物","医学","工程","计算机","信息论","系统论","控制论","方法论","导论","概论","通史","断代史","编年","纪传","史料","考据","校勘","注释","译注","批评论","思想史","文化史","社会史","制度史","制度","改革","革命","运动","思潮","流派","学派","理论","实践","评传","传记","年谱","方志","地方志","县志","府志","通志","文献","典籍","经籍","经史","子集","丛刊","集刊","论集","文集","选集","选读","读本","文选","文存","文献综述","研究综述"],
     patterns:[]
   },
   literature: {
@@ -2431,6 +2445,33 @@ const KNOWN = {
   "杜伊诺哀歌":"literature", "致奥尔弗斯的十四行诗":"literature",
   "叶芝诗选":"literature", "二十首情诗和一首绝望的歌":"literature",
   "海子诗全集":"literature",
+
+  /* ===== 网络小说/通俗小说 ===== */
+  "斗破苍穹":"novel", "斗罗大陆":"novel", "凡人修仙传":"novel", "遮天":"novel", "完美世界":"novel",
+  "圣墟":"novel", "一念永恒":"novel", "诡秘之主":"novel", "大奉打更人":"novel", "深海之尽":"novel",
+  "诛仙":"novel", "仙逆":"novel", "求魔":"novel", "我欲封天":"novel", "三生三世十里桃花":"novel",
+  "花千骨":"novel", "琅琊榜":"novel", "庆余年":"novel", "将夜":"novel", "择天记":"novel",
+  "盗墓笔记":"novel", "鬼吹灯":"novel", "藏海花":"novel", "沙海":"novel", "老九门":"novel",
+  "全职高手":"novel", "超越fast极限":"novel", "我在元宇宙":"novel",
+  "赘婿":"novel", "临渊行":"novel", "大医凌然":"novel", "超神机械师":"novel",
+  "修真聊天群":"novel", "大王饶命":"novel", "异常生物见闻录":"novel", "第一序列":"novel",
+  "万族之劫":"novel", "万相之王":"novel", "星门":"novel", "牧神记":"novel",
+  "元尊":"novel", "武动乾坤":"novel", "大主宰":"novel", "冰河末日":"novel",
+  "从红月开始":"novel", "诡舍":"novel", "深海余烬":"novel", "赤心巡天":"novel",
+
+  /* ===== 论著/专著 ===== */
+  "中国哲学简史":"treatise", "美的历程":"treatise", "万历十五年":"treatise",
+  "乡土中国":"treatise", "江村经济":"treatise", "生育制度":"treatise",
+  "中国大历史":"treatise", "国史大纲":"treatise", "中国通史":"treatise",
+  "资治通鉴":"treatise", "史记":"treatise", "汉书":"treatise",
+  "梦的解析":"treatise", "精神分析引论":"treatise",
+  "国富论":"treatise", "经济学原理":"treatise",
+  "论法的精神":"treatise", "社会契约论":"treatise",
+  "正义论":"treatise", "理想国":"treatise",
+  "君主论":"treatise", "利维坦":"treatise",
+  "孙子兵法":"treatise", "战争论":"treatise",
+  "道德经":"treatise", "论语":"treatise", "孟子":"treatise", "庄子":"treatise",
+  "传习录":"treatise", "近思录":"treatise",
 
   /* ===== 论文 ===== */
   "attention is all you need":"paper",
@@ -3598,10 +3639,26 @@ function afterLogin(){
   state.items = [];
   state.pendingReview = [];
   state.trash = [];
+  /* === 外部拓宽浏览器存储空间 ===
+     1. 请求持久化存储: 浏览器不再自动清理, 配额可扩大到磁盘可用空间的一定比例
+     2. 使用 IndexedDB 存储大字段(已在 saveState 中实现)
+     3. 启动时自动清理旧数据中的大字段(已在 loadState 中实现) */
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      navigator.storage.persist().then(function(granted){
+        if(granted){
+          console.log("[存储] 持久化存储已开启,配额已扩大");
+        }else{
+          console.log("[存储] 持久化存储未开启,但已启用降级策略");
+        }
+      }).catch(function(){});
+    }
+  }catch(_){}
   loadState();
   loadBeverageBrands();
   loadSkincareFuncs();
   loadFoodCities();
+  loadTreatiseSubs();
   migrateItems();
   /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
   try{
@@ -3849,6 +3906,28 @@ function loadState(){
         }
       }catch(_){}
     }
+
+    /* 6. 彻底删除文学/影视已有条目的概要(meta字段) */
+    try{
+      let raw2 = localStorage.getItem(STORAGE_KEY);
+      if(raw2){
+        const arr2 = JSON.parse(raw2);
+        if(Array.isArray(arr2)){
+          let changed = false;
+          for(let i=0; i<arr2.length; i++){
+            const it = arr2[i];
+            if((it.category === "literature" || it.category === "movie") && it.meta){
+              delete it.meta;
+              changed = true;
+            }
+          }
+          if(changed){
+            try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr2)); }catch(_){}
+            state.items = arr2;
+          }
+        }
+      }
+    }catch(_){}
   }catch(_){}
 }
 /* 剥离所有大字段,返回瘦身版 items(不写 IDB,纯内存操作,快速) */
@@ -4265,29 +4344,77 @@ function removeFoodCity(name){
   saveFoodCities();
 }
 
+/* ============================================================
+   论著学科小门类 —— 按学科分类(历史/文学/心理学等), 可自建
+   ============================================================ */
+const TREATISE_SUBS_KEY = "wsr_treatise_subs_v1";
+const DEFAULT_TREATISE_SUBS = [
+  "历史","文学","哲学","心理学","社会学","政治学","经济学","法学",
+  "教育学","人类学","考古学","美学","逻辑学","伦理学","宗教学",
+  "传播学","管理学","地理学","军事学","统计学",
+  "数学","物理学","化学","生物学","医学","计算机科学",
+  "艺术理论","音乐理论","建筑学","国际关系","公共管理"
+];
+let treatiseSubs = [];
+function loadTreatiseSubs(){
+  const raw = localStorage.getItem(TREATISE_SUBS_KEY);
+  if(raw === null){
+    treatiseSubs = DEFAULT_TREATISE_SUBS.slice();
+    return;
+  }
+  let saved = [];
+  try{
+    const s = JSON.parse(raw);
+    if(Array.isArray(s)) saved = s.filter(function(b){ return typeof b === "string" && b.trim(); }).map(function(b){ return b.trim(); });
+  }catch(e){}
+  treatiseSubs = saved;
+}
+function saveTreatiseSubs(){
+  try{ localStorage.setItem(TREATISE_SUBS_KEY, JSON.stringify(treatiseSubs)); }catch(e){}
+}
+function addTreatiseSub(name){
+  const n = (name || "").trim();
+  if(!n) return false;
+  const exists = treatiseSubs.some(function(b){ return b === n; });
+  if(exists) return false;
+  treatiseSubs.push(n);
+  saveTreatiseSubs();
+  return true;
+}
+function removeTreatiseSub(name){
+  const n = (name || "").trim();
+  if(!n) return;
+  treatiseSubs = treatiseSubs.filter(function(b){ return b !== n; });
+  saveTreatiseSubs();
+}
+
 /* 通用访问: 根据门类取小门类列表/增删 */
 function getSubcatList(cat){
   if(cat === "beverage") return beverageBrands;
   if(cat === "skincare") return skincareFuncs;
   if(cat === "food") return foodCities;
+  if(cat === "treatise") return treatiseSubs;
   return [];
 }
 function addSubcatItem(cat, name){
   if(cat === "beverage") return addBeverageBrand(name);
   if(cat === "skincare") return addSkincareFunc(name);
   if(cat === "food") return addFoodCity(name);
+  if(cat === "treatise") return addTreatiseSub(name);
   return false;
 }
 function removeSubcatItem(cat, name){
   if(cat === "beverage") return removeBeverageBrand(name);
   if(cat === "skincare") return removeSkincareFunc(name);
   if(cat === "food") return removeFoodCity(name);
+  if(cat === "treatise") return removeTreatiseSub(name);
 }
-/* 小门类显示名: beverage→品牌, skincare→功效, food→城市 */
+/* 小门类显示名 */
 function subcatLabel(cat){
   if(cat === "beverage") return "品牌";
   if(cat === "skincare") return "功效";
   if(cat === "food") return "城市";
+  if(cat === "treatise") return "学科";
   return "小门类";
 }
 
@@ -4301,7 +4428,7 @@ function addItem(name, manualCategory, options){
   const trimmed = name.trim();
 
   // 同分类同名去重 (饮品/护肤/美食: 同小门类下同名才算重复; 跨小门类允许同名)
-  const hasSub = (finalCategory === "beverage" || finalCategory === "skincare" || finalCategory === "food");
+  const hasSub = (finalCategory === "beverage" || finalCategory === "skincare" || finalCategory === "food" || finalCategory === "treatise");
   const low = trimmed.toLowerCase();
   const dup = state.items.find(function(i){
     if(i.name.trim().toLowerCase() !== low || i.category !== finalCategory) return false;
@@ -8998,22 +9125,42 @@ async function aiClassify(name){
   /* 排除 essay(随笔): 随笔只能手动粘贴录入,不参与AI自动分类 */
   const catKeys = Object.keys(CATEGORIES).filter(function(k){ return k !== "essay"; });
   const catList = catKeys.map(function(k){ return k + "(" + CATEGORIES[k].name + ")"; }).join(", ");
-  const prompt = "请判断以下条目最可能属于哪个分类。\n\n"
-    + "条目: " + name.trim() + "\n\n"
+
+  const systemMsg = "你是一个中文条目分类助手。用户会给你一个条目名称,你需要判断它属于哪个分类。只回复分类的英文名,不要解释,不要加标点。";
+
+  const userMsg = "判断以下条目属于哪个分类。\n\n"
     + "可选分类: " + catList + "\n\n"
-    + "判断规则:\n"
-    + "- movie(影视):电影、电视剧、综艺、纪录片、导演作品\n"
-    + "- literature(文学):小说、文学作品、经典著作、诗集、戏剧\n"
+    + "分类规则:\n"
+    + "- movie(影视):电影、电视剧、综艺、纪录片、导演作品、片名\n"
+    + "- novel(小说):网络小说、网文、修仙、玄幻、穿越、重生、爽文、连载小说\n"
+    + "- literature(文学):传统文学、经典名著、诗集、散文集、戏剧、严肃文学(如《活着》《红楼梦》)\n"
+    + "- treatise(论著):学术专著、研究性书籍、历史/哲学/心理学等学科著作\n"
     + "- paper(论文):学术论文、研究报告、arxiv/DOI文献\n"
     + "- takeout(外卖):外卖品牌、快餐店\n"
     + "- dish(菜品):菜名、烹饪食物\n"
     + "- skincare(护肤):护肤品、化妆品、美妆品牌\n"
     + "- snack(零食):零食、休闲食品\n"
     + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n"
-    + "- food(美食):餐厅、饭馆、探店、美食店(按城市分类)\n\n"
-    + "注意: 不要选 essay(随笔),随笔只能手动录入。\n"
-    + "只回复一个分类英文名(如 literature),不要解释。";
-  const res = await callAI([{ role:"user", content:prompt }], 50, 0.1);
+    + "- food(美食):餐厅、饭馆、探店、美食店\n\n"
+    + "示例:\n"
+    + "「三体」→ literature\n"
+    + "「斗破苍穹」→ novel\n"
+    + "「肖申克的救赎」→ movie\n"
+    + "「中国哲学简史」→ treatise\n"
+    + "「 Attention Is All You Need」→ paper\n"
+    + "「海底捞」→ food\n"
+    + "「喜茶」→ beverage\n"
+    + "「雅诗兰黛小棕瓶」→ skincare\n"
+    + "「乐事薯片」→ snack\n"
+    + "「宫保鸡丁」→ dish\n"
+    + "「麦当劳」→ takeout\n\n"
+    + "条目: " + name.trim() + "\n\n"
+    + "只回复一个分类英文名:";
+
+  const res = await callAI([
+    { role:"system", content:systemMsg },
+    { role:"user", content:userMsg }
+  ], 30, 0.05);
   if(res.error) return { error: res.error };
   const raw = (res.content || "").trim().toLowerCase().replace(/[^a-z]/g, "");
   /* 强制不返回 essay */
@@ -9021,13 +9168,13 @@ async function aiClassify(name){
     return { cat: "literature", confidence: 0.6, source: "AI智能识别" };
   }
   if(CATEGORIES[raw] && raw !== "essay"){
-    return { cat: raw, confidence: 0.85, source: "AI智能识别" };
+    return { cat: raw, confidence: 0.9, source: "AI智能识别" };
   }
   /* AI返回了非标准分类名 → 尝试模糊匹配 */
   for(const k in CATEGORIES){
     if(k === "essay") continue;
     if(raw.includes(k) || k.includes(raw)){
-      return { cat: k, confidence: 0.7, source: "AI智能识别" };
+      return { cat: k, confidence: 0.75, source: "AI智能识别" };
     }
   }
   return { error: "AI返回的分类无法识别: " + res.content };
@@ -10757,6 +10904,8 @@ async function fetchItemMeta(item){
   const title = (item.name || "").trim();
   if(!title) return { error:"empty" };
   const cat = item.category || "";
+  /* 文学/影视不再生成概要 */
+  if(cat === "literature" || cat === "movie") return { error:"disabled" };
   const aiCfg = getAiConfig();
   if(!aiCfg || !aiCfg.key){
     return { error:"noai" }; /* 未配置AI → 不获取概要,避免网络抓取占用存储 */
@@ -11179,7 +11328,7 @@ function updateItem(id, patch){
   if(Object.prototype.hasOwnProperty.call(patch, "rating")) it.rating = Math.max(0, Math.min(5, parseInt(patch.rating, 10) || 0));
   if(Object.prototype.hasOwnProperty.call(patch, "description")) it.description = String(patch.description).trim();
   if(Object.prototype.hasOwnProperty.call(patch, "subCategory")){
-    const hasSub = (it.category === "beverage" || it.category === "skincare" || it.category === "food");
+    const hasSub = (it.category === "beverage" || it.category === "skincare" || it.category === "food" || it.category === "treatise");
     it.subCategory = hasSub ? String(patch.subCategory || "").trim() : "";
   }
   if(Object.prototype.hasOwnProperty.call(patch, "writtenAt")){
@@ -11361,7 +11510,7 @@ function renderFilters(){
       state.filter = this.dataset.filter;
       /* 切离随笔/饮品/护肤时清空其专属筛选, 避免残留 */
       if(state.filter !== "essay"){ state.essayYearFilter = null; state.essayMonthFilter = null; }
-      if(state.filter !== "beverage" && state.filter !== "skincare" && state.filter !== "food"){ state.subcatFilter = null; }
+      if(state.filter !== "beverage" && state.filter !== "skincare" && state.filter !== "food" && state.filter !== "treatise"){ state.subcatFilter = null; }
       state.galleryLimit = 120; /* 切换分类从头显示 */
       render();
     };
@@ -11457,7 +11606,7 @@ function renderSubcatBar(){
   const lblEl = bar ? bar.querySelector(".label") : null;
   if(!bar || !chips) return;
   const cat = state.filter;
-  if(cat !== "beverage" && cat !== "skincare" && cat !== "food"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
+  if(cat !== "beverage" && cat !== "skincare" && cat !== "food" && cat !== "treatise"){ bar.style.display = "none"; chips.innerHTML = ""; return; }
   bar.style.display = "";
   const cObj = CATEGORIES[cat];
   if(cObj) bar.style.setProperty("--cat-color", cObj.color);
@@ -11551,7 +11700,7 @@ function initSubcatDnD(){
   const root = document.getElementById("beverageBrandChips");
   if(!root) return;
   const cat = state.filter;
-  if(cat !== "beverage" && cat !== "skincare" && cat !== "food") return;
+  if(cat !== "beverage" && cat !== "skincare" && cat !== "food" && cat !== "treatise") return;
   let dragName = null;
   /* 排除「全部」按钮, 其固定首位不可拖动 */
   const chips = root.querySelectorAll(".bb-chip[data-brand]:not([data-brand=''])");
@@ -11594,6 +11743,7 @@ function initSubcatDnD(){
       if(cat === "beverage"){ beverageBrands = list; saveBeverageBrands(); }
       else if(cat === "skincare"){ skincareFuncs = list; saveSkincareFuncs(); }
       else if(cat === "food"){ foodCities = list; saveFoodCities(); }
+      else if(cat === "treatise"){ treatiseSubs = list; saveTreatiseSubs(); }
       clearMarks();
       dragName = null;
       render();
@@ -11632,7 +11782,7 @@ function renderGallery(){
   }
 
   /* 饮品/护肤: 按小门类(品牌/功效)筛选 */
-  if((state.filter === "beverage" || state.filter === "skincare" || state.filter === "food") && state.subcatFilter){
+  if((state.filter === "beverage" || state.filter === "skincare" || state.filter === "food" || state.filter === "treatise") && state.subcatFilter){
     items = items.filter(function(i){
       return i.category === state.filter && (i.subCategory || "") === state.subcatFilter;
     });
@@ -11710,7 +11860,7 @@ function renderGallery(){
     html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
     html += '</div>';
     /* 饮品(品牌)/护肤(功效)/美食(城市): 小门类标签 */
-    if((it.category === "beverage" || it.category === "skincare" || it.category === "food") && it.subCategory){
+    if((it.category === "beverage" || it.category === "skincare" || it.category === "food" || it.category === "treatise") && it.subCategory){
       html += '<div class="card-brand" title="' + subcatLabel(it.category) + '小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
     }
     /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
@@ -11983,7 +12133,7 @@ function syncBeverageBrandComposer(){
     const r = classify(v);
     if(r && r.cat) finalCat = r.cat;
   }
-  const show = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food");
+  const show = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food" || finalCat === "treatise");
   composerBeverageBrandEl.style.display = show ? "" : "none";
   if(show){
     composerSubcatCat = finalCat;
@@ -12102,7 +12252,7 @@ function triggerAiClassify(){
         }
       }
     }catch(_){}
-  }, 800);
+  }, 400);
 }
 
 function submit(){
@@ -12113,7 +12263,7 @@ function submit(){
   let autoCat = classify(v).cat;
   if(autoCat === "essay") autoCat = FALLBACK_CAT;
   const finalCat = state.composerCategory || autoCat;
-  const hasSub = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food");
+  const hasSub = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food" || finalCat === "treatise");
   let brand = composerBeverageBrand || "";
   if(hasSub){
     const newName = beverageBrandNewEl ? beverageBrandNewEl.value.trim() : "";
@@ -12372,7 +12522,7 @@ function renderEditSubcatSelect(){
 /* 依据当前选中门类决定小门类区显隐与文案 */
 function syncEditSubcat(){
   if(!editSubcatField) return;
-  const show = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food");
+  const show = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food" || editSelectedCat === "treatise");
   editSubcatField.style.display = show ? "" : "none";
   if(show){
     const cObj = CATEGORIES[editSelectedCat];
@@ -12490,7 +12640,7 @@ if(modalSave){
     const desc = editDescInput ? editDescInput.value : "";
     /* 小门类: 若新建输入框有内容,先加入列表并选中; 非小门类门类则清空 */
     let sub = editSubcat || "";
-    const hasSub = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food");
+    const hasSub = (editSelectedCat === "beverage" || editSelectedCat === "skincare" || editSelectedCat === "food" || editSelectedCat === "treatise");
     if(hasSub){
       const newName = editSubcatNew ? editSubcatNew.value.trim() : "";
       if(newName){
@@ -13603,33 +13753,28 @@ function toast(msg, duration){
       if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
       /* 找出所有文学/小说/电影条目 */
       const targets = state.items.filter(function(it){
-        return it.category === "literature" || it.category === "novel" || it.category === "movie";
+        return it.category === "literature" || it.category === "movie" || it.category === "novel";
       });
-      if(targets.length === 0){ toast("没有文学/电影条目需要重新生成"); return; }
-      if(!confirm("将用AI重新生成 " + targets.length + " 条文学/电影条目的概要,覆盖现有概要(建议先导出备份)。是否继续?")) return;
+      if(targets.length === 0){ toast("没有文学/影视条目需要清理"); return; }
+      if(!confirm("将彻底删除 " + targets.length + " 条文学/影视条目的概要数据,释放存储空间。是否继续?")) return;
       const oldText = regenMetaBtn.textContent;
       regenMetaBtn.disabled = true;
-      let done = 0, fail = 0;
+      let done = 0;
       for(let i=0; i<targets.length; i++){
         const it = targets[i];
-        regenMetaBtn.textContent = "生成中 " + (i+1) + "/" + targets.length;
-        try{
-          const r = await fetchItemMeta(it);
-          if(r && !r.error){
-            it.meta = r;
-            done++;
-          }else{
-            fail++;
-          }
-        }catch(_){ fail++; }
-        /* 每5条保存一次,避免中途失败丢失全部 */
-        if((i+1) % 5 === 0) saveState();
+        regenMetaBtn.textContent = "清理中 " + (i+1) + "/" + targets.length;
+        if(it.meta){
+          delete it.meta;
+          done++;
+        }
+        /* 同时清理IndexedDB中的meta */
+        try{ idbDel(String(it.id) + "|meta"); }catch(_){}
       }
       saveState();
       render();
       regenMetaBtn.disabled = false;
       regenMetaBtn.textContent = oldText;
-      toast("完成:成功 " + done + " 条" + (fail > 0 ? ",失败 " + fail + " 条" : ""));
+      toast("已删除 " + done + " 条文学/影视概要,存储空间已释放");
       if(typeof refreshStorageInfo === "function") refreshStorageInfo();
     };
   }
