@@ -2226,10 +2226,17 @@ const CATEGORIES = {
     patterns:[]
   },
   novel: {
-    name:"网络小说", color:"#8B5E3C", icon:"❉",
+    name:"小说", color:"#8B5E3C", icon:"❉",
     svg:'<path d="M4 19c2-1 4-1 8 0 4-1 6-1 8 0"/><path d="M6 19V5c2-.8 4-.8 6 0v14"/><path d="M18 19V5c-2-.8-4-.8-6 0"/>',
-    /* 网络小说: 不含"小说"等过宽词,避免传统文学误判;只用网文特征词 */
-    keywords:["网络小说","网文","网文小说","连载","番外","穿越","重生","系统流","金手指","爽文","修仙","玄幻","奇幻","仙侠","武侠","都市言情","架空","盗墓","同人","轻小说","web novel","light novel","起点","纵横","晋江","番茄","飞卢","创世","连载中","追更","追读","完本","书荒"],
+    /* 小说(网络小说): 不参与AI自动识别,需手动选择;关键词只用于已有条目检索 */
+    keywords:["网络小说","网文","网文小说","连载","番外","穿越","重生","系统流","金手指","爽文","修仙","玄幻","奇幻","仙侠","武侠","都市言情","架空","盗墓","同人","轻小说","起点","纵横","晋江","番茄","飞卢","创世","连载中","追更","追读","完本","书荒"],
+    patterns:[]
+  },
+  tosee: {
+    name:"待看", color:"#6B8E9E", icon:"◐",
+    svg:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    /* 待看清单: 不参与AI自动识别,需手动选择 */
+    keywords:[],
     patterns:[]
   },
   treatise: {
@@ -3093,9 +3100,10 @@ async function classifyOnline(name){
 async function classifyWithOnline(name){
   const online = await classifyOnline(name);
   const local = classify(name);
-  /* 随笔(essay)只能手动录入,排除 */
-  if(online && online.cat === "essay") online.cat = FALLBACK_CAT;
-  if(local && local.cat === "essay") local.cat = FALLBACK_CAT;
+  /* 随笔(essay)、小说(novel)、待看(tosee)只能手动录入,排除 */
+  const AI_EXCLUDED_CATS = { essay:1, novel:1, tosee:1 };
+  if(online && AI_EXCLUDED_CATS[online.cat]) online.cat = FALLBACK_CAT;
+  if(local && AI_EXCLUDED_CATS[local.cat]) local.cat = FALLBACK_CAT;
   if(online && online.confidence >= 0.68) return online;
   if(online && online.confidence > local.confidence) return online;
   return local;
@@ -4406,9 +4414,9 @@ function subcatLabel(cat){
 function addItem(name, manualCategory, options){
   options = options || {};
   const result = classify(name);
-  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
+  /* 随笔(essay)、小说(novel)、待看(tosee)只能手动录入,自动分类时排除 */
   let autoCat = result.cat;
-  if(autoCat === "essay") autoCat = FALLBACK_CAT;
+  if(autoCat === "essay" || autoCat === "novel" || autoCat === "tosee") autoCat = FALLBACK_CAT;
   const finalCategory = manualCategory || autoCat;
   const trimmed = name.trim();
 
@@ -9107,8 +9115,9 @@ function updateNavAiState(){
    返回 { cat, confidence, source } 格式,与 classify() 一致,失败返回 null */
 async function aiClassify(name){
   if(!name || !name.trim()) return null;
-  /* 排除 essay(随笔): 随笔只能手动粘贴录入,不参与AI自动分类 */
-  const catKeys = Object.keys(CATEGORIES).filter(function(k){ return k !== "essay"; });
+  /* 排除 essay(随笔)、novel(小说)、tosee(待看): 这些门类不参与AI自动识别,需手动选择 */
+  const AI_EXCLUDED = { essay:1, novel:1, tosee:1 };
+  const catKeys = Object.keys(CATEGORIES).filter(function(k){ return !AI_EXCLUDED[k]; });
   const catList = catKeys.map(function(k){ return k + "(" + CATEGORIES[k].name + ")"; }).join(", ");
 
   const systemMsg = "你是一个中文条目分类助手。用户会给你一个条目名称,你需要判断它属于哪个分类。只回复分类的英文名,不要解释,不要加标点。";
@@ -9117,8 +9126,7 @@ async function aiClassify(name){
     + "可选分类: " + catList + "\n\n"
     + "分类规则:\n"
     + "- movie(影视):电影、电视剧、综艺、纪录片、导演作品、片名\n"
-    + "- novel(网络小说):仅在起点/晋江/番茄等网文平台连载的网络小说、修仙、玄幻、穿越、重生、爽文、网文小说\n"
-    + "- literature(文学):传统文学、经典名著、诗集、散文集、戏剧、严肃文学、出版小说(如《活着》《红楼梦》《三体》)「小说」二字本身不等于网络小说\n"
+    + "- literature(文学):传统文学、经典名著、诗集、散文集、戏剧、严肃文学、出版小说(如《活着》《红楼梦》《三体》)\n"
     + "- treatise(论著):学术专著、研究性书籍、历史/哲学/心理学等学科著作\n"
     + "- paper(论文):学术论文、研究报告、arxiv/DOI文献\n"
     + "- takeout(外卖):外卖品牌、快餐店\n"
@@ -9128,12 +9136,9 @@ async function aiClassify(name){
     + "- beverage(饮品):饮料、茶、咖啡、奶茶、酒水\n"
     + "- food(美食):餐厅、饭馆、探店、美食店\n\n"
     + "示例:\n"
-    + "「三体」→ literature (刘慈欣出版的科幻小说,属于文学)\n"
-    + "「活着」→ literature (余华出版的严肃文学)\n"
-    + "「红楼梦」→ literature (古典名著)\n"
-    + "「斗破苍穹」→ novel (起点连载的玄幻网文)\n"
-    + "「诡秘之主」→ novel (起点连载的网文)\n"
-    + "「盗墓笔记」→ novel (连载网文)\n"
+    + "「三体」→ literature\n"
+    + "「活着」→ literature\n"
+    + "「红楼梦」→ literature\n"
     + "「肖申克的救赎」→ movie\n"
     + "「中国哲学简史」→ treatise\n"
     + "「 Attention Is All You Need」→ paper\n"
@@ -9152,16 +9157,16 @@ async function aiClassify(name){
   ], 30, 0.05);
   if(res.error) return { error: res.error };
   const raw = (res.content || "").trim().toLowerCase().replace(/[^a-z]/g, "");
-  /* 强制不返回 essay */
-  if(raw === "essay" || raw === "essayentry"){
+  /* 强制不返回排除的门类 */
+  if(AI_EXCLUDED[raw]){
     return { cat: "literature", confidence: 0.6, source: "AI智能识别" };
   }
-  if(CATEGORIES[raw] && raw !== "essay"){
+  if(CATEGORIES[raw] && !AI_EXCLUDED[raw]){
     return { cat: raw, confidence: 0.9, source: "AI智能识别" };
   }
   /* AI返回了非标准分类名 → 尝试模糊匹配 */
   for(const k in CATEGORIES){
-    if(k === "essay") continue;
+    if(AI_EXCLUDED[k]) continue;
     if(raw.includes(k) || k.includes(raw)){
       return { cat: k, confidence: 0.75, source: "AI智能识别" };
     }
