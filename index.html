@@ -1799,7 +1799,7 @@
       <a href="#" id="exportBtn">导出</a>
       <a href="#" id="importBtn" title="导入JSON备份文件恢复数据">导入</a>
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
-      <a href="#" id="navTrash" title="回收站:删除的记录保留7天,可恢复或彻底删除">🗑 回收站<span class="trash-badge" id="trashBadge"></span></a>
+      <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站<span class="trash-badge" id="trashBadge"></span></a>
       <a href="#" id="navSyncCode" class="nav-code-btn" title="查看身份码:其他设备登录时输入身份码+暗语即可同步本账号数据">⌁ 身份码</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
@@ -2134,7 +2134,6 @@
         <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
         <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
         <button class="modal-btn" id="cleanStorageBtn" type="button" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">🧹 清理存储</button>
-        <button class="modal-btn" id="regenMetaBtn" type="button" style="background:linear-gradient(135deg,#f87171,#f472b6);color:#fff;border:none;">🧹 删除文学/影视概要</button>
         <input type="file" id="importDataInput" accept="application/json" style="display:none;">
       </div>
       <div class="storage-info-tip">导出 JSON 文件到本地(双保险),浏览器换电脑时导入即可恢复全部志录+版面。<br>
@@ -3673,7 +3672,6 @@ function afterLogin(){
       }, 1200);
     }
   }catch(e){ /* 静默 */ }
-  purgeExpiredTrash();   /* 回收站7天自动清空 */
   updateTrashBtn();      /* 导航徽章 */
   render();
   renderComposerCats();
@@ -4050,20 +4048,7 @@ function saveState(){
 }
 
 /* ===== 回收站: 删除内容保留7天后自动清空 ===== */
-const TRASH_RETAIN_MS = 7 * 24 * 60 * 60 * 1000; /* 7天 */
-/* 清理过期回收站条目(登录加载时调用) */
-function purgeExpiredTrash(){
-  if(!state.trash || !state.trash.length) return;
-  const now = Date.now();
-  const before = state.trash.length;
-  state.trash = state.trash.filter(function(t){
-    return !t.deletedAt || (now - t.deletedAt) < TRASH_RETAIN_MS;
-  });
-  if(state.trash.length < before){
-    saveState();
-    toast("回收站已自动清空 " + (before - state.trash.length) + " 条超期记录(保留期7天)", 4000);
-  }
-}
+/* 回收站不再自动清空,由用户手动管理 */
 
 /* 容量超限时瘦身图片: 逐张压缩(保留最近3张,其余降质/丢弃) */
 function slimImagesForQuota(){
@@ -11225,7 +11210,7 @@ function removeItem(id){
   const it = state.items.find(function(i){ return i.id === id; });
   if(!it) return;
   const catName = CATEGORIES[it.category] ? CATEGORIES[it.category].name : it.category;
-  if(!confirm("确定删除「" + it.name + "」(" + catName + ")?\n删除后进入回收站,保留7天可恢复。")) return;
+  if(!confirm("确定删除「" + it.name + "」(" + catName + ")?\n删除后进入回收站,可恢复。")) return;
   if(!state.trash) state.trash = [];
   /* 完整备份原条目数据(含论文全文/标注/图片) */
   state.trash.push(Object.assign({}, it, { deletedAt: Date.now() }));
@@ -11233,7 +11218,7 @@ function removeItem(id){
   saveState();
   render();
   updateTrashBtn();
-  toast("已移入回收站 · 7天内可在顶部「回收站」恢复");
+  toast("已移入回收站 · 可在顶部「回收站」恢复");
 }
 
 /* ===== 回收站界面 ===== */
@@ -11242,7 +11227,6 @@ function updateTrashBtn(){
   if(badge) badge.textContent = (state.trash && state.trash.length) ? String(state.trash.length) : "";
 }
 function openTrashModal(){
-  purgeExpiredTrash();
   const list = document.getElementById("trashList");
   if(!list) return;
   if(!state.trash || !state.trash.length){
@@ -11467,7 +11451,7 @@ function renderStats(){
       const c = CATEGORIES[cat];
       const cnt = state.items.filter(function(it){ return it.category === cat; }).length;
       if(cnt === 0){ toast(c.name + "已虚"); return; }
-      if(confirm("确定清空「" + c.name + "」分类下全部 " + cnt + " 条志录?\n将移入回收站,保留7天可恢复。")){
+      if(confirm("确定清空「" + c.name + "」分类下全部 " + cnt + " 条志录?\n将移入回收站,可恢复。")){
         if(!state.trash) state.trash = [];
         const now = Date.now();
         const removed = state.items.filter(function(it){ return it.category === cat; });
@@ -11844,11 +11828,8 @@ function renderGallery(){
     const recipeBtnHtml = isDish ?
       '<button class="card-recipe-btn" data-id="' + it.id + '" title="跳转下厨房查看做法">❉ 查看做法</button>' : "";
 
-    // 小说/电影/文学专属:联网查询概要按钮
-    const canMeta = (it.category === "novel" || it.category === "movie" || it.category === "literature");
-    const metaReady = canMeta && it.meta && it.meta.fetchedAt;
-    const metaBtnHtml = canMeta ?
-      '<button class="card-meta-btn' + (metaReady ? ' ready' : '') + '" data-id="' + it.id + '" title="联网查询百度百科 · 情节 · 转折 · 人物 · 关系">❦ 概要</button>' : "";
+    /* 概要按钮已删除(文学/影视/小说不再生成概要) */
+    const metaBtnHtml = "";
 
     html += '<article class="card' + (inBulk ? ' bulk-mode' : '') + (checked ? ' bulk-selected' : '') + '" style="--cat-color:' + c.color + '; animation-delay:' + Math.min(idx*0.03, 0.4) + 's">';
     if(inBulk){
@@ -12342,7 +12323,7 @@ if(bulkDeleteBtn){
   bulkDeleteBtn.onclick = function(){
     const ids = state.bulkSelected ? Object.keys(state.bulkSelected) : [];
     if(ids.length === 0){ toast("请先勾选要删除的条目"); return; }
-    if(!confirm("确定删除所选 " + ids.length + " 条志录?\n将移入回收站,保留7天可恢复。")) return;
+    if(!confirm("确定删除所选 " + ids.length + " 条志录?\n将移入回收站,可恢复。")) return;
     if(!state.trash) state.trash = [];
     const now = Date.now();
     const removed = state.items.filter(function(i){ return state.bulkSelected[i.id]; });
