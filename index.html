@@ -850,6 +850,7 @@
     animation:pulse 1.2s ease-in-out infinite;
   }
   @keyframes pulse{ 0%,100%{opacity:.5;} 50%{opacity:1;} }
+  @keyframes aiSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
   .pa-block{ margin-bottom:14px; padding:0 2px; }
   .pa-block-h{
     font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:600;
@@ -2383,6 +2384,9 @@ const CATEGORIES = {
 
 /* 兜底分类 (无 misc 时使用,根据文本特征回落) */
 const FALLBACK_CAT = "literature";
+
+/* 回收站保留时长: 7 天后自动清空 */
+const TRASH_RETAIN_MS = 7 * 24 * 60 * 60 * 1000;
 
 /* ============================================================
    状态管理 + localStorage (按用户隔离)
@@ -8272,13 +8276,23 @@ function openAiCfgModal(){
       const apikey = (key ? key.value : "").trim();
       const mname = (model ? model.value : "").trim() || "glm-4.7-flash";
       if(!endpoint || !apikey){
-        if(testRes){ testRes.style.display = ""; testRes.innerHTML = "请先填写 API 端点与 API Key"; }
+        if(testRes){ testRes.style.display = ""; testRes.style.background = "#fef2f2"; testRes.style.padding = "10px 14px"; testRes.style.borderRadius = "8px"; testRes.innerHTML = '<b style="color:#c0392b;">⚠ 请先填写</b> API 端点与 API Key'; }
+        toast("请先填写 API 端点与 API Key");
         return;
       }
       testBtn.disabled = true;
       const oldText = testBtn.textContent;
-      testBtn.textContent = "测试中…";
-      if(testRes) testRes.innerHTML = "正在连接 " + endpoint + " / " + mname + " …";
+      /* 测试中: 按钮变成旋转图标 + 计时器,结果区显示醒目"正在连接" */
+      testBtn.innerHTML = '<span style="display:inline-block;animation:aiSpin 0.8s linear infinite;">◌</span> 测试中…';
+      if(testRes){
+        testRes.style.display = "";
+        testRes.style.background = "#f0f7ff";
+        testRes.style.padding = "10px 14px";
+        testRes.style.borderRadius = "8px";
+        testRes.innerHTML = '<b style="color:#1976d2;">⏳ 正在连接…</b><br><span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(endpoint) + ' / ' + escapeHtml(mname) + '</span>';
+        testRes.scrollIntoView({ behavior:"smooth", block:"center" });
+      }
+      const t0 = Date.now();
       try{
         const resp = await fetch(endpoint + "/chat/completions", {
           method: "POST",
@@ -8290,23 +8304,34 @@ function openAiCfgModal(){
             max_tokens: 20
           })
         });
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
         if(resp.ok){
           const data = await resp.json().catch(function(){ return null; });
           const content = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
-          if(testRes) testRes.innerHTML = '<b style="color:#2e7d32;">连接成功 ✓</b> 模型回复: ' + (content || "(无内容)");
-          else toast("连接成功 ✓");
+          if(testRes){
+            testRes.style.background = "#e8f5e9";
+            testRes.innerHTML = '<b style="color:#2e7d32;font-size:15px;">✓ 连接成功</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">模型回复: ' + escapeHtml(content || "(无内容)") + '</span>';
+          }
+          toast("✓ 连接成功 · " + elapsed + "s");
         }else{
           const errText = await resp.text().catch(function(){ return ""; });
           let hint = "";
           if(resp.status === 401) hint = " <b>密钥无效</b> — 请到 open.bigmodel.cn 重新复制整串密钥(格式 id.secret)";
           else if(resp.status === 404) hint = " <b>模型名/地址不对</b> — 智谱模型名填 glm-4.7-flash,端点 https://open.bigmodel.cn/api/paas/v4";
           else if(resp.status === 429) hint = " <b>限流</b> — 免费版同一时间仅1个并发,稍后重试";
-          if(testRes) testRes.innerHTML = '<b style="color:#c0392b;">连接失败</b> HTTP ' + resp.status + hint + (errText ? " <span style=\"color:var(--ink-mute);\">" + errText.substring(0, 100) + "</span>" : "");
-          else toast("连接失败 HTTP " + resp.status);
+          if(testRes){
+            testRes.style.background = "#fef2f2";
+            testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">✗ 连接失败</b> <span style="color:var(--ink-mute);font-size:12px;">HTTP ' + resp.status + ' (' + elapsed + 's)</span><br>' + hint + (errText ? ' <span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(errText.substring(0, 120)) + '</span>' : '');
+          }
+          toast("✗ 连接失败 HTTP " + resp.status);
         }
       }catch(e){
-        if(testRes) testRes.innerHTML = '<b style="color:#c0392b;">网络错误</b> — ' + (e.message || "未知") + "。请检查网络/端点地址";
-        else toast("网络错误: " + (e.message || "未知"));
+        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+        if(testRes){
+          testRes.style.background = "#fef2f2";
+          testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">✗ 网络错误</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">' + escapeHtml(e.message || "未知") + ' — 请检查网络/端点地址</span>';
+        }
+        toast("✗ 网络错误: " + (e.message || "未知"));
       }
       testBtn.disabled = false;
       testBtn.textContent = oldText;
