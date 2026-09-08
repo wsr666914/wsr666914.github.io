@@ -4112,7 +4112,7 @@ function renderPendingList(){
   const pend = state.pendingReview || [];
   if(cnt) cnt.textContent = pend.length > 0 ? "共 " + pend.length + " 条待确认" : "";
   if(pend.length === 0){
-    list.innerHTML = '<div class="batch-empty">识别列表已清空 —— 新的低置信条目会自动进入此列表</div>';
+    list.innerHTML = '<div class="batch-empty">识别列表已清空 —— 录入已改为纯手动选择,新条目不再进入此列表</div>';
     return;
   }
   let html = "";
@@ -4166,9 +4166,6 @@ function renderPendingList(){
         });
         if(!dup){
           target.category = p.category;
-          target.manualOverride = true;
-          target.autoConfidence = 1;
-          target.autoSource = "人工确认";
         }
       }
       state.pendingReview.splice(idx, 1);
@@ -4413,11 +4410,8 @@ function subcatLabel(cat){
 
 function addItem(name, manualCategory, options){
   options = options || {};
-  const result = classify(name);
-  /* 随笔(essay)、小说(novel)、待看(tosee)只能手动录入,自动分类时排除 */
-  let autoCat = result.cat;
-  if(autoCat === "essay" || autoCat === "novel" || autoCat === "tosee") autoCat = FALLBACK_CAT;
-  const finalCategory = manualCategory || autoCat;
+  /* 纯手动录入: 必须手动选择门类,无自动识别 */
+  const finalCategory = manualCategory || FALLBACK_CAT;
   const trimmed = name.trim();
 
   // 同分类同名去重 (饮品/护肤/美食: 同小门类下同名才算重复; 跨小门类允许同名)
@@ -4436,10 +4430,6 @@ function addItem(name, manualCategory, options){
     id: uid(),
     name: trimmed,
     category: finalCategory,
-    autoCategory: result.cat,
-    autoConfidence: result.confidence,
-    autoSource: result.source,
-    manualOverride: !!manualCategory && manualCategory !== result.cat,
     rating: Math.max(0, Math.min(5, parseInt(options.rating, 10) || 0)),  // 0 = 未评
     description: (options.description || "").trim(),
     subCategory: (hasSub && options.subCategory) ? options.subCategory.trim() : "",
@@ -4448,11 +4438,8 @@ function addItem(name, manualCategory, options){
   state.items.unshift(item);
   saveState();
   render();
-  /* 后台联网智能识别: 无手动指定时,用多源投票修正分类 */
-  if(!manualCategory){
-    refineCategoryOnline(item);
-  } else if(manualCategory === "dish" && !item.description){
-    /* 手动指定菜品且无描述 → 自动获取菜谱 */
+  /* 手动指定菜品且无描述 → 自动获取菜谱 */
+  if(finalCategory === "dish" && !item.description){
     autoFetchRecipe(item);
   }
   /* 小说/电影/文学:后台联网查询概要 */
@@ -4525,34 +4512,7 @@ async function fetchRecipe(name){
   return null;
 }
 
-/* 后台联网智能修正分类: 多源投票,比本地启发式更准 */
-async function refineCategoryOnline(item){
-  try{
-    const online = await classifyOnline(item.name);
-    if(online && online.confidence >= 0.68){
-      /* 联网置信度足够高 → 采用联网结果(无论与本地是否一致) */
-      if(online.cat !== item.category){
-        const exists = state.items.some(function(i){
-          return i.id !== item.id && i.name.trim().toLowerCase() === item.name.trim().toLowerCase() && i.category === online.cat;
-        });
-        if(exists) return; /* 避免改成重复 */
-        item.category = online.cat;
-        const c = CATEGORIES[online.cat] || CATEGORIES[FALLBACK_CAT];
-        toast("「" + item.name + "」经联网识别归入「" + c.name + "」");
-      }
-      item.autoCategory = online.cat;
-      item.autoConfidence = online.confidence;
-      item.autoSource = online.source;
-      saveState();
-      render();
-      /* 菜品:自动联网获取菜谱,填入编订(描述) */
-      if(online.cat === "dish") autoFetchRecipe(item);
-    } else if((item.autoConfidence || 0) < 0.5){
-      /* 联网也未能可靠识别 → 进入识别列表待人工确认 */
-      addPendingReview(item.name, item.category, item.autoConfidence || 0, item.autoSource || "联网亦未识别");
-    }
-  }catch(e){ /* 联网失败保持原分类 */ }
-}
+/* refineCategoryOnline 已移除: 录入改为纯手动选择,不再自动联网识别修正分类 */
 
 /* ============================================================
    论文功能:录入 / 大纲生成 / 查看器 / 颜色标注
@@ -6435,10 +6395,6 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
     id: uid(),
     name: paperTitle,
     category: category,
-    autoCategory: category,
-    autoConfidence: 1.0,
-    autoSource: isEssay ? "随笔录入" : "论文录入",
-    manualOverride: false,
     rating: 0,
     description: "全文 " + charCount + " 字 · " + paraCount + " 段",
     fullText: trimmedText,
@@ -11310,14 +11266,14 @@ function openTrashModal(){
 }
 function reclassifyItem(id, newCat){
   const it = state.items.find(function(i){ return i.id === id; });
-  if(it){ it.category = newCat; it.manualOverride = true; saveState(); render(); }
+  if(it){ it.category = newCat; saveState(); render(); }
 }
 /* 通用更新条目字段 (供编辑模态框调用) */
 function updateItem(id, patch){
   const it = state.items.find(function(i){ return i.id === id; });
   if(!it) return;
   if(Object.prototype.hasOwnProperty.call(patch, "name")) it.name = String(patch.name).trim();
-  if(Object.prototype.hasOwnProperty.call(patch, "category")){ it.category = patch.category; it.manualOverride = true; }
+  if(Object.prototype.hasOwnProperty.call(patch, "category")){ it.category = patch.category; }
   if(Object.prototype.hasOwnProperty.call(patch, "rating")) it.rating = Math.max(0, Math.min(5, parseInt(patch.rating, 10) || 0));
   if(Object.prototype.hasOwnProperty.call(patch, "description")) it.description = String(patch.description).trim();
   if(Object.prototype.hasOwnProperty.call(patch, "subCategory")){
@@ -11797,11 +11753,8 @@ function renderGallery(){
     const c = CATEGORIES[it.category] || CATEGORIES[FALLBACK_CAT];
     const d = new Date(it.writtenAt || it.addedAt);
     const dateStr = d.getFullYear() + "." + String(d.getMonth()+1).padStart(2,"0") + "." + String(d.getDate()).padStart(2,"0");
-    let conf;
-    if(it.manualOverride) conf = "手订";
-    else if(it.autoConfidence >= 0.8) conf = "高";
-    else if(it.autoConfidence >= 0.5) conf = "中";
-    else conf = "低";
+    /* 纯手动录入: 所有条目均为手选门类,统一显示"手订" */
+    const conf = "手订";
 
     // 星级显示
     const rating = (typeof it.rating === "number") ? it.rating : 0;
@@ -12114,15 +12067,10 @@ function renderBeverageBrandSelect(){
   }
   beverageBrandSelEl.innerHTML = html;
 }
-/* 依据当前最终分类(手选或自动判定)决定小门类区显隐 */
+/* 依据当前手选门类决定小门类区显隐(纯手动,不再自动判定) */
 function syncBeverageBrandComposer(){
   if(!composerBeverageBrandEl) return;
-  const v = input ? input.value.trim() : "";
-  let finalCat = state.composerCategory;
-  if(!finalCat && v){
-    const r = classify(v);
-    if(r && r.cat) finalCat = r.cat;
-  }
+  const finalCat = state.composerCategory;
   const show = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food" || finalCat === "treatise");
   composerBeverageBrandEl.style.display = show ? "" : "none";
   if(show){
@@ -12174,28 +12122,16 @@ function updatePredict(){
     predictEl.innerHTML = '';
     return;
   }
-  const r = classify(v);
-  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
-  let autoCat = r.cat;
-  if(autoCat === "essay") autoCat = FALLBACK_CAT;
+  /* 纯手动: 不再自动判类,只显示手选或提示选择 */
   const manual = state.composerCategory;
-  const finalCat = manual || autoCat;
-  const c = CATEGORIES[finalCat] || CATEGORIES[FALLBACK_CAT];
-  const autoC = CATEGORIES[autoCat] || CATEGORIES[FALLBACK_CAT];
-  const pct = Math.round(r.confidence * 100);
-  const src = r.source || "";
-
-  let html = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
-    '<span class="dot"></span>' + catIcon(r.cat, 14) + ' ' + c.name +
-  '</span>';
-
   if(manual){
-    // 显示手选 + 自动对照
-    html += '<span class="predict-conf">手选覆盖 · 自动判为 ' + autoC.icon + ' ' + autoC.name + '(' + pct + '%)</span>';
+    const c = CATEGORIES[manual] || CATEGORIES[FALLBACK_CAT];
+    predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
+      '<span class="dot"></span>' + catIcon(manual, 14) + ' ' + c.name +
+    '</span><span class="predict-conf">手选 · ' + escapeHtml(c.name) + '</span>';
   } else {
-    html += '<span class="predict-conf">置信 ' + pct + '% · ' + escapeHtml(src) + '</span>';
+    predictEl.innerHTML = '<span class="predict-conf">请选择门类(纯手动录入)</span>';
   }
-  predictEl.innerHTML = html;
   syncBeverageBrandComposer();
 }
 
@@ -12203,56 +12139,28 @@ input.addEventListener("input", function(){
   // 输入清空时,顺手清掉手选(避免残留)
   if(!input.value.trim()){
     state.composerCategory = null;
-    _aiClassifyLastText = "";
   }
   updatePredict();
   renderComposerCats();
   syncBeverageBrandComposer();
-  triggerAiClassify(); /* 输入时自动触发AI智能分类 */
 });
 input.addEventListener("keydown", function(e){
   if(e.key === "Enter"){ e.preventDefault(); submit(); }
 });
 submitBtn.addEventListener("click", submit);
 
-/* ===== AI自动智能分类: 输入时防抖触发,自动识别门类 ===== */
-let _aiClassifyTimer = null;
-let _aiClassifyLastText = "";
-function triggerAiClassify(){
-  const v = input.value.trim();
-  if(!v) return;
-  if(v === _aiClassifyLastText) return;
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.key) return;
-  _aiClassifyLastText = v;
-  if(predictEl){ predictEl.innerHTML = '<span class="predict-conf">🤖 AI识别中…</span>'; }
-  clearTimeout(_aiClassifyTimer);
-  _aiClassifyTimer = setTimeout(async function(){
-    try{
-      const r = await aiClassify(v);
-      if(r && !r.error){
-        state.composerCategory = r.cat;
-        renderComposerCats();
-        syncBeverageBrandComposer();
-        const c = CATEGORIES[r.cat];
-        if(predictEl){
-          predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
-            '<span class="dot"></span>' + catIcon(r.cat, 14) + ' ' + c.name +
-            '</span><span class="predict-conf">AI智能识别 · 置信 ' + Math.round(r.confidence*100) + '%</span>';
-        }
-      }
-    }catch(_){}
-  }, 400);
-}
+/* triggerAiClassify 已移除: 录入改为纯手动选择,不再触发AI智能分类 */
 
 function submit(){
   const v = input.value.trim();
   if(!v){ toast("请先键入名目"); return; }
-  /* 饮品/护肤: 若新建小门类输入框有内容,先加入列表并选中 */
-  /* 随笔(essay)只能手动粘贴录入,自动分类时排除 */
-  let autoCat = classify(v).cat;
-  if(autoCat === "essay") autoCat = FALLBACK_CAT;
-  const finalCat = state.composerCategory || autoCat;
+  /* 纯手动: 必须手选门类才能提交 */
+  if(!state.composerCategory){
+    toast("请先选择门类(纯手动录入,不再自动识别)");
+    renderComposerCats();
+    return;
+  }
+  const finalCat = state.composerCategory;
   const hasSub = (finalCat === "beverage" || finalCat === "skincare" || finalCat === "food" || finalCat === "treatise");
   let brand = composerBeverageBrand || "";
   if(hasSub){
@@ -12277,9 +12185,8 @@ function submit(){
     return;
   }
   const c = CATEGORIES[result.category] || CATEGORIES[FALLBACK_CAT];
-  const tag = result.manualOverride ? '手订' : '已入';
   const brandTag = (hasSub && result.subCategory) ? ' · ' + result.subCategory : '';
-  toast(tag + '「' + c.name + '」' + brandTag + ' · ' + result.name);
+  toast('已入「' + c.name + '」' + brandTag + ' · ' + result.name);
   input.value = "";
   state.composerCategory = null;
   composerBeverageBrand = "";
@@ -12678,7 +12585,7 @@ const batchModal = document.getElementById("batchModal");
 const batchInput = document.getElementById("batchInput");
 const batchList = document.getElementById("batchList");
 const batchCountEl = document.getElementById("batchCount");
-let batchItems = [];  // [{name, category, rating, description, autoCat, autoConfidence, autoSource, isDup}]
+let batchItems = [];  // [{name, category, rating, description, isDup}] 纯手动录入
 /* 统一撤销栈: 字符级({type:"char",...}) + 内容级({type:"content",...}) */
 let batchUndoStack = [];
 
@@ -12802,13 +12709,10 @@ function renderBatchList(){
     for(let s=1; s<=5; s++){
       starsHtml += '<span class="star' + (s<=it.rating?' on':'') + '" data-v="' + s + '">★</span>';
     }
-    const confPct = Math.round((it.autoConfidence||0) * 100);
-    const needReview = confPct < 50;
-    const tagText = dup
-      ? '已存于「' + c.name + '」,将跳过'
-      : (needReview ? '⟳ 待识别 · 置信 ' + confPct + '% · 将入识别列表' : '置信 ' + confPct + '% · ' + escapeHtml(it.autoSource || ""));
+    /* 纯手动: 不再有置信度/识别源,只显示手选门类或重复提示 */
+    const tagText = dup ? '已存于「' + c.name + '」,将跳过' : '手选 · ' + c.name;
 
-    html += '<div class="batch-row' + (dup?' dup':'') + (needReview?' need-review':'') + '" data-idx="' + i + '" style="--cat-color:' + c.color + '">';
+    html += '<div class="batch-row' + (dup?' dup':'') + '" data-idx="' + i + '" style="--cat-color:' + c.color + '">';
     html += '<div class="batch-row-top">';
     html += '<input class="batch-row-name" value="' + escapeHtml(it.name) + '" data-idx="' + i + '" />';
     html += '<select class="batch-row-cat" data-idx="' + i + '">' + catOpts + '</select>';
@@ -12837,9 +12741,8 @@ function renderBatchList(){
         const tag = row.querySelector('.batch-row-tag');
         const c = CATEGORIES[batchItems[idx].category] || CATEGORIES[FALLBACK_CAT];
         const dup = batchItems[idx].isDup;
-        const confPct = Math.round((batchItems[idx].autoConfidence||0) * 100);
         if(tag){
-          tag.textContent = dup ? '已存于「' + c.name + '」,将跳过' : '置信 ' + confPct + '% · ' + (batchItems[idx].autoSource || "");
+          tag.textContent = dup ? '已存于「' + c.name + '」,将跳过' : '手选 · ' + c.name;
           tag.classList.toggle('dup-tag', dup);
         }
         row.classList.toggle('dup', dup);
@@ -12908,72 +12811,23 @@ function runBatchDetect(){
   }
   pushBatchHistory();
   batchItems = [];
-  /* 第一步: 本地分类,先渲染出来 (随笔essay只能手动录入,排除) */
+  /* 纯手动: 不再自动判类,所有项默认归 literature,需用户逐项手选门类 */
   for(let i=0; i<names.length; i++){
-    const r = classify(names[i]);
-    let cat = r.cat;
-    if(cat === "essay") cat = FALLBACK_CAT;
+    const cat = FALLBACK_CAT;
     const isDup = isBatchDup(names[i], cat);
     batchItems.push({
       name: names[i],
       category: cat,
       rating: 0,
       description: "",
-      autoCat: cat,
-      autoConfidence: r.confidence,
-      autoSource: r.source,
       isDup: isDup
     });
   }
   renderBatchList();
-  toast("识别得 " + names.length + " 项,联网智能识别中……");
-
-  /* 第二步: 联网智能识别(百科定义句+多引擎分析,覆盖全部非精确命中项) */
-  verifyLowConfidenceItems();
+  toast("识得 " + names.length + " 项 · 请逐项手选门类后入册(纯手动录入)");
 }
 
-/* 联网智能识别: 对批量识别结果逐条联网校验(知识库精确命中项除外) */
-async function verifyLowConfidenceItems(){
-  /* 需联网识别的项: 非知识库精确命中(联网以真实百科内容为准,不受本地词表局限) */
-  const needVerify = [];
-  for(let i=0; i<batchItems.length; i++){
-    const it = batchItems[i];
-    if((it.autoSource || "").indexOf("知识库·精确") !== 0){
-      needVerify.push(i);
-    }
-  }
-  if(needVerify.length === 0) return;
-
-  /* 标记这些行正在联网校验中(更新 tag 文本) */
-  for(let k=0; k<needVerify.length; k++){
-    updateBatchRowTag(needVerify[k], null, "联网校验中……");
-  }
-
-  /* 并行发起(限并发 3,避免压垮代理) */
-  let idx = 0;
-  async function worker(){
-    while(idx < needVerify.length){
-      const i = needVerify[idx++];
-      const it = batchItems[i];
-      if(!it) continue;
-      try{
-        const online = await classifyOnline(it.name);
-        /* 联网结果优先: 启发式本地结果仅作临时初始值 */
-        if(online && (online.confidence >= 0.68 || online.confidence > it.autoConfidence)){
-          it.autoCat = online.cat;
-          it.autoConfidence = online.confidence;
-          it.autoSource = online.source;
-          it.category = online.cat;
-          it.isDup = isBatchDup(it.name, it.category);
-        }
-      }catch(e){}
-      /* 局部更新该行(避免全列重渲导致光标失焦) */
-      updateBatchRow(i);
-    }
-  }
-  await Promise.all([worker(), worker(), worker()]);
-  toast("联网智能识别完成");
-}
+/* verifyLowConfidenceItems 已移除: 批量录入改为纯手动,不再联网自动识别 */
 
 /* 局部更新某一行的门类下拉、tag、dup 状态(不重渲整列) */
 function updateBatchRow(i){
@@ -13000,13 +12854,11 @@ function updateBatchRowTag(i, confOverride, textOverride){
   const tag = row.querySelector('.batch-row-tag');
   if(!tag) return;
   const dup = it.isDup;
-  const confPct = Math.round((confOverride != null ? confOverride : (it.autoConfidence||0)) * 100);
-  const needReview = confPct < 50;
   tag.textContent = dup
     ? '已存于「' + c.name + '」,将跳过'
-    : (textOverride || (needReview ? '⟳ 待识别 · 置信 ' + confPct + '% · 将入识别列表' : '置信 ' + confPct + '% · ' + (it.autoSource || "")));
+    : (textOverride || '手选 · ' + c.name);
   tag.classList.toggle('dup-tag', dup);
-  row.classList.toggle('need-review', needReview && !dup);
+  row.classList.remove('need-review');
 }
 
 function openBatchModal(){
@@ -13042,44 +12894,17 @@ if(batchUndoBtn){
 }
 const batchOnlineBtn = document.getElementById("batchOnline");
 if(batchOnlineBtn){
-  batchOnlineBtn.onclick = function(){
-    if(batchItems.length === 0){ toast("请先「识别」出条目,再联网识别"); return; }
-    const needCount = batchItems.filter(function(it){
-      return (it.autoSource || "").indexOf("知识库·精确") !== 0;
-    }).length;
-    if(needCount === 0){ toast("全部条目已精确识别,无需联网"); return; }
-    toast("开始联网智能识别 " + needCount + " 项……");
-    verifyLowConfidenceItems();
-  };
+  /* 纯手动录入: 联网识别按钮禁用 */
+  batchOnlineBtn.disabled = true;
+  batchOnlineBtn.title = "已改为纯手动录入,联网自动识别已停用";
+  batchOnlineBtn.onclick = function(){ toast("已改为纯手动录入,请逐项手选门类"); };
 }
-/* AI批量识别: 用AI逐个判断条目的分类 */
+/* AI批量识别按钮: 纯手动录入下禁用 */
 const batchAiBtn = document.getElementById("batchAiDetect");
 if(batchAiBtn){
-  batchAiBtn.onclick = async function(){
-    if(batchItems.length === 0){ toast("请先「识别」出条目,再AI识别"); return; }
-    const cfg = getAiConfig();
-    if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
-    pushBatchHistory();
-    const oldText = batchAiBtn.textContent;
-    batchAiBtn.disabled = true;
-    let done = 0;
-    for(let i=0; i<batchItems.length; i++){
-      const it = batchItems[i];
-      batchAiBtn.textContent = "AI识别中 " + (i+1) + "/" + batchItems.length;
-      const r = await aiClassify(it.name);
-      if(r && !r.error){
-        it.category = r.cat;
-        it.autoCategory = r.cat;
-        it.autoConfidence = r.confidence;
-        it.autoSource = r.source;
-      }
-      done++;
-      renderBatchList();
-    }
-    batchAiBtn.disabled = false;
-    batchAiBtn.textContent = oldText;
-    toast("AI识别完成 " + done + " 项");
-  };
+  batchAiBtn.disabled = true;
+  batchAiBtn.title = "已改为纯手动录入,AI自动识别已停用";
+  batchAiBtn.onclick = function(){ toast("已改为纯手动录入,请逐项手选门类"); };
 }
 const batchCancelBtn = document.getElementById("batchCancel");
 if(batchCancelBtn){
@@ -13089,7 +12914,13 @@ const batchCommitBtn = document.getElementById("batchCommit");
 if(batchCommitBtn){
   batchCommitBtn.onclick = function(){
     if(batchItems.length === 0){ toast("无可入册之项"); return; }
-    let added = 0, skipped = 0, pending = 0;
+    /* 纯手动: 强制每项都手选门类(默认 literature 视为未选) */
+    const unselected = batchItems.filter(function(it){ return !it.category || it.category === FALLBACK_CAT; });
+    if(unselected.length > 0){
+      toast("有 " + unselected.length + " 项未手选门类(默认文学),请在入册前为每项选择正确门类");
+      return;
+    }
+    let added = 0, skipped = 0;
     for(let i=0; i<batchItems.length; i++){
       const it = batchItems[i];
       // 重算重复(可能用户改名了)
@@ -13097,17 +12928,10 @@ if(batchCommitBtn){
       if(it.isDup){ skipped++; continue; }
       const r = addItem(it.name, it.category, { rating: it.rating, description: it.description });
       if(r && r.error === "duplicate"){ skipped++; }
-      else {
-        added++;
-        /* 联网后仍低置信 → 进识别列表待人工确认 */
-        if((it.autoConfidence || 0) < 0.5){
-          addPendingReview(it.name, it.category, it.autoConfidence || 0, it.autoSource || "联网亦未识别");
-          pending++;
-        }
-      }
+      else { added++; }
     }
     batchModal.classList.remove("show");
-    toast("已入册 " + added + " 项" + (skipped>0 ? " · 跳过 " + skipped + " 项已存" : "") + (pending>0 ? " · " + pending + " 项入识别列表" : ""));
+    toast("已入册 " + added + " 项" + (skipped>0 ? " · 跳过 " + skipped + " 项已存" : ""));
   };
 }
 if(batchInput){
