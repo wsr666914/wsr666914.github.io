@@ -1224,8 +1224,8 @@
     position:absolute; top:0; left:0; right:0; bottom:0; z-index:3;
     pointer-events:none;
   }
-  .pr-text .pr-pdf-page .pr-pdf-svgLayer rect{ pointer-events:auto; }
-  .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-box{ cursor:pointer; }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer rect{ pointer-events:none; }
+  .pr-text .pr-pdf-page .pr-pdf-svgLayer .pdf-note-badge{ cursor:pointer; pointer-events:auto; }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-ai{ fill:rgba(100,150,255,.22); stroke:rgba(80,120,200,.6); stroke-width:1px; }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-box:hover{ filter:brightness(.92); }
   .pr-text > p, .pr-text > div{
@@ -1439,11 +1439,14 @@
   .pr-text strong.pr-bold{ font-weight:700; color:var(--ink); }
   .pr-text u.pr-underline{ text-decoration:underline; text-decoration-color:var(--ink-mute); text-decoration-thickness:1px; text-underline-offset:3px; }
   .pr-text u.pr-note{
-    text-decoration:underline; text-decoration-style:wavy; text-decoration-color:#9B7B33;
-    text-decoration-thickness:1px; text-underline-offset:3px; cursor:pointer;
-    color:inherit; border-radius:2px; transition:background .15s;
+    text-decoration:none; border-bottom:1px dashed var(--teal); cursor:pointer;
+    color:inherit;
   }
-  .pr-text u.pr-note:hover{ background:rgba(155,123,51,.12); }
+  .pr-text u.pr-note::after{
+    content:"✦"; color:var(--teal); font-size:.65em; vertical-align:super;
+    margin-left:2px; font-family:system-ui,sans-serif;
+  }
+  .pr-text u.pr-note:hover{ border-bottom-style:solid; }
   .pr-note-popup{
     position:fixed; z-index:200; max-width:340px; padding:10px 14px;
     background:var(--paper); border:1px solid var(--ink-mute); border-radius:10px;
@@ -7018,6 +7021,28 @@ function capturePdfSelectionRects(range){
   }
   return out;
 }
+function appendPdfNoteBadge(svg, x, y, hlIdx){
+  const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
+  group.setAttribute("class", "pdf-note-badge");
+  group.setAttribute("transform", "translate(" + x + " " + y + ")");
+  const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+  circle.setAttribute("r", "6");
+  circle.setAttribute("fill", "#2f5d62");
+  const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+  label.setAttribute("text-anchor", "middle");
+  label.setAttribute("dominant-baseline", "central");
+  label.setAttribute("fill", "#fff");
+  label.setAttribute("font-size", "8");
+  label.setAttribute("font-family", "sans-serif");
+  label.textContent = "N";
+  const title = document.createElementNS("http://www.w3.org/2000/svg", "title");
+  title.textContent = "备注 · 点击查看";
+  group.appendChild(title);
+  group.appendChild(circle);
+  group.appendChild(label);
+  group.addEventListener("click", function(ev){ ev.stopPropagation(); showPdfNotePopup(hlIdx, ev); });
+  svg.appendChild(group);
+}
 /* 根据 hl.text 在 textLayer span 中顺序匹配 → 在 svgLayer 画对应矩形; 支持跨span同一行合并矩形 */
 function drawHighlightInSvg(hl, hlIdx){
   const searchText = (hl.text || "").trim();
@@ -7036,17 +7061,15 @@ function drawHighlightInSvg(hl, hlIdx){
       rect.setAttribute("y", String(saved.y * vh));
       rect.setAttribute("width", String(Math.max(2, saved.w * vw)));
       rect.setAttribute("height", String(Math.max(4, saved.h * vh)));
-      rect.setAttribute("fill", rectColor);
-      rect.setAttribute("fill-opacity", "0.75");
+      rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
+      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.28");
       rect.setAttribute("rx", "2");
       rect.setAttribute("class", "hl-box");
       rect.setAttribute("data-hl-idx", String(hlIdx));
       rect.setAttribute("data-hl-color", rectColor);
       rect.setAttribute("data-hl-type", hl.type || "highlight");
       if(hl.type === "note"){
-        rect.style.pointerEvents = "all";
-        rect.style.cursor = "pointer";
-        rect.addEventListener("click", function(ev){ ev.stopPropagation(); showPdfNotePopup(hlIdx, ev); });
+        appendPdfNoteBadge(svg, Math.min(vw - 8, (saved.x + saved.w) * vw + 7), Math.max(8, saved.y * vh + 6), hlIdx);
       }
       svg.appendChild(rect);
     }
@@ -7105,25 +7128,20 @@ function drawHighlightInSvg(hl, hlIdx){
               const svg = document.getElementById("prPdfSvg_" + row.page);
               if(!svg) continue;
               const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-              rect.setAttribute("x", String(Math.max(0, row.x1 - 1)));
-              rect.setAttribute("y", String(Math.max(0, row.y - 1)));
-              rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1 + 2)));
-              rect.setAttribute("height", String(Math.max(8, row.h + 2)));
+              rect.setAttribute("x", String(Math.max(0, row.x1)));
+              rect.setAttribute("y", String(Math.max(0, row.y)));
+              rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1)));
+              rect.setAttribute("height", String(Math.max(8, row.h)));
               const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
-              rect.setAttribute("fill", rectColor);
-              rect.setAttribute("fill-opacity", "0.75");
+              rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
+              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.28");
               rect.setAttribute("rx", "2");
               rect.setAttribute("class", "hl-box");
               rect.setAttribute("data-hl-idx", String(hlIdx));
               rect.setAttribute("data-hl-color", rectColor);
               rect.setAttribute("data-hl-type", hl.type || "highlight");
               if(hl.type === "note"){
-                rect.style.pointerEvents = "all";
-                rect.style.cursor = "pointer";
-                rect.addEventListener("click", function(ev){
-                  ev.stopPropagation();
-                  showPdfNotePopup(hlIdx, ev);
-                });
+                appendPdfNoteBadge(svg, Math.min(svg.viewBox.baseVal.width - 8, row.x2 + 7), Math.max(8, row.y + 6), hlIdx);
               }
               /* 点击选中该标注 → 可通过颜色按钮取消(toggleHighlight逻辑) */
               (function(r){
