@@ -1414,7 +1414,8 @@
     border-radius:4px; transition:width .35s ease;
   }
   mark.hl{
-    border-radius:3px; padding:1px 2px; color:inherit;
+    background:color-mix(in srgb, var(--hl-color) 18%, transparent);
+    border-radius:2px; padding:0 1px; color:inherit;
     cursor:pointer; transition:filter .15s;
   }
   mark.hl:hover{ filter:brightness(.92); }
@@ -1436,8 +1437,6 @@
   }
   .pr-hl-fmt:hover{ background:var(--paper-deep); color:var(--ink); border-color:var(--ink-mute); }
   .pr-hl-fmt.active{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
-  .pr-text strong.pr-bold{ font-weight:700; color:var(--ink); }
-  .pr-text u.pr-underline{ text-decoration:underline; text-decoration-color:var(--ink-mute); text-decoration-thickness:1px; text-underline-offset:3px; }
   .pr-text u.pr-note{
     text-decoration:none; border-bottom:1px dashed var(--teal); cursor:pointer;
     color:inherit;
@@ -2098,17 +2097,15 @@
           <button class="pr-hl-color" data-color="#F5C6C6" style="background:#F5C6C6" title="淡红"></button>
           <button class="pr-hl-color" data-color="#E0C6E8" style="background:#E0C6E8" title="淡紫"></button>
           <span class="pr-hl-sep"></span>
-          <button class="pr-hl-fmt" data-fmt="bold" title="加粗选中文字"><b>B</b></button>
-          <button class="pr-hl-fmt" data-fmt="underline" title="下划线选中文字"><u>U</u></button>
           <button class="pr-hl-fmt" data-fmt="note" title="为选中句子添加备注(平时隐藏,点击可见)">💬 备注</button>
-          <button class="pr-hl-undo" id="prHlUndo" title="撤销最近一次操作(Ctrl+Z):键盘编辑/删除/排版/标注">↶</button>
+          <button class="pr-hl-undo" id="prHlUndo" title="撤销上一步(Ctrl+Z)">↶</button>
           <button class="pr-hl-undo" id="prHlRedo" title="重做(Ctrl+Y / Ctrl+Shift+Z)">↷</button>
-          <button class="pr-hl-eraser" data-color="clear" title="清除全部标注">×</button>
+          <button class="pr-hl-eraser" data-color="clear" title="清除全部标记（可逐步撤回）">×</button>
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
-          <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色/加粗/划线/备注">✕ 取消标记</button>
-          <button class="pr-hl-fmt" id="prTranslate" title="翻译选中文字(AI),再次点击取消译文">文 翻译</button>
+          <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">✕ 取消标记</button>
+          <button class="pr-hl-fmt" id="prTranslate" title="开启后，选中任意文字会自动翻译；再次点击关闭">文 翻译</button>
           <span class="pr-hl-sep"></span>
         </div>
         <div class="pr-zoom-ctl">
@@ -5731,7 +5728,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, chat:[] };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, translateMode:false, translateRequestId:0, chat:[] };
 
 /* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照。
    注意: 键盘编辑不再调用此函数(改用浏览器原生undo)。
@@ -5778,8 +5775,30 @@ function restorePdfNativeDom(texts, item){
   return true;
 }
 /* 推入标注操作历史 */
-function pushHlHistory(){
-  pushCustomSnapshot("hl");
+function pushHlHistory(item){
+  if(!item) return;
+  pushCustomSnapshot("highlights", {
+    type:"highlights",
+    highlights: JSON.parse(JSON.stringify(item.highlights || []))
+  });
+}
+
+function pdfHighlightsOverlap(a, b){
+  if(!Array.isArray(a.pdfRects) || !Array.isArray(b.pdfRects)) return false;
+  return a.pdfRects.some(function(ar){
+    return b.pdfRects.some(function(br){
+      return ar.page === br.page && ar.x < br.x + br.w && ar.x + ar.w > br.x && ar.y < br.y + br.h && ar.y + ar.h > br.y;
+    });
+  });
+}
+
+function replaceColorHighlight(item, entry){
+  const isSameTarget = function(old){
+    if(old.type !== "highlight") return false;
+    return pdfHighlightsOverlap(old, entry) || old.text === entry.text;
+  };
+  item.highlights = (item.highlights || []).filter(function(old){ return !isSameTarget(old); });
+  item.highlights.push(entry);
 }
 
 /* 打开论文查看器 */
@@ -5795,6 +5814,8 @@ function openPaperReader(itemId){
   prState.redoHistory = [];  /* 重做栈 */
   prState.kbHistPushed = false;
   prState.pdfEditMode = false;
+  prState.translateMode = false;
+  prState.translateRequestId = 0;
   /* PDF Canvas原生模式 渲染状态标志(每次打开重置,避免上次回退标志残留) */
   prState._pdfRendered = false;
   prState._pdfRenderFallback = false;
@@ -5846,6 +5867,8 @@ function openPaperReader(itemId){
   if(chatLog) chatLog.innerHTML = "";
   const delModeBtn = document.getElementById("prDelMode");
   if(delModeBtn) delModeBtn.classList.remove("on");
+  const translateBtn = document.getElementById("prTranslate");
+  if(translateBtn) translateBtn.classList.remove("on");
 
   /* 渲染全文 + 应用高亮 (applyHighlightsToDom 内部会先重建全文) */
   applyHighlightsToDom(item);
@@ -5931,40 +5954,33 @@ function openPaperReader(itemId){
       return h.text === selText && h.type === type && (h.color || null) === (color || null);
     });
     if(idx >= 0){
+      pushHlHistory(cur);
       cur.highlights.splice(idx, 1);
-      pushHlHistory();
       saveState();
       markDirty();
       if(isPdfNativeMode){
-        /* PDF Canvas原生模式: 重画整个svgLayer,不重建DOM(重建会丢canvas和textLayer状态) */
-        for(let p=1; p<=prState.pdfNativeNumPages; p++){
-          const svg = document.getElementById("prPdfSvg_" + p);
-          if(svg){
-            const olds = svg.querySelectorAll("rect.hl-box");
-            for(let k=0; k<olds.length; k++) olds[k].parentNode && olds[k].parentNode.removeChild(olds[k]);
-          }
-        }
-        renderHighlightsAsSvg(cur);
+        refreshHighlightsRender(cur);
       }else{
         applyHighlightsToDom(cur);
       }
-      toast("已取消「" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"备注") + "」");
+      toast("已取消「" + (type==="highlight"?"标注":"备注") + "」");
       return true;
     }
     /* 不存在 → 添加 */
     const entry = { text: selText, type: type };
     if(color) entry.color = color;
     if(isPdfNativeMode && selectionRange) entry.pdfRects = capturePdfSelectionRects(selectionRange);
-    cur.highlights.push(entry);
-    pushHlHistory();
+    pushHlHistory(cur);
+    if(type === "highlight") replaceColorHighlight(cur, entry);
+    else cur.highlights.push(entry);
     saveState();
     markDirty();
     if(isPdfNativeMode){
-      drawHighlightInSvg(entry, cur.highlights.length - 1);
+      refreshHighlightsRender(cur);
     }else{
       applyHighlightsToDom(cur);
     }
-    toast("已" + (type==="highlight"?"标注":type==="bold"?"加粗":type==="underline"?"划线":"添加备注"));
+      toast("已" + (type==="highlight"?"标注":"添加备注"));
     return true;
   }
   /* 读取当前有效选区(≥2字,在正文内) */
@@ -6015,7 +6031,7 @@ function openPaperReader(itemId){
     };
   }
 
-  /* 格式按钮: 加粗/划线/备注 (排除删除按钮)
+   /* 格式按钮: 备注 (排除删除和翻译按钮)
      Word式交互: 有选区→直接应用/取消;无选区→进模式(再点退出) */
   for(let i=0; i<fmtBtns.length; i++){
     if(fmtBtns[i].id === "prDelMode" || fmtBtns[i].id === "prTranslate") continue;
@@ -6025,11 +6041,6 @@ function openPaperReader(itemId){
       if(!fmt) return;
       /* Word式:先选中文字再点按钮 → 直接应用/取消 */
       const live = prGetLiveSelection();
-      if(live && (fmt === "bold" || fmt === "underline" || fmt === "highlight")){
-        prApplyOrToggleAnnotation(live.text, fmt, null, live.sel.getRangeAt(0).cloneRange());
-        live.sel.removeAllRanges();
-        return;
-      }
       /* 备注模式:有选区时弹输入框 */
       if(live && fmt === "note"){
         const noteText = prompt("为选中文字添加备注:");
@@ -6045,8 +6056,8 @@ function openPaperReader(itemId){
             if(!cur.highlights) cur.highlights = [];
             const noteEntry = { text: live.text, type:"note", note: noteText.trim(), color:"#FFF1A8" };
             if(isPdfNativeMode) noteEntry.pdfRects = capturePdfSelectionRects(live.sel.getRangeAt(0).cloneRange());
+            pushHlHistory(cur);
             cur.highlights.push(noteEntry);
-            pushHlHistory();
             saveState();
             markDirty();
             live.sel.removeAllRanges();
@@ -6060,14 +6071,14 @@ function openPaperReader(itemId){
       /* 无选区 → 进/出模式(再点同按钮退出) */
       if(prState.activeFmt === fmt){
         deactivateAllFmt();
-        toast("已取消「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」模式");
+        toast("已取消备注模式");
         return;
       }
       deactivateAllColor();
       prState.activeFmt = fmt;
       for(let j=0; j<fmtBtns.length; j++) fmtBtns[j].classList.remove("active");
       this.classList.add("active");
-      toast("已选「" + (fmt==="bold"?"加粗":fmt==="underline"?"划线":"备注") + "」· 选中文字即可应用(再点退出)");
+      toast("已选备注 · 选中文字即可添加(再点退出)");
     };
   }
 
@@ -6088,10 +6099,10 @@ function openPaperReader(itemId){
       if(removed.length === 0){ toast("选中文字上没有标注"); return; }
       if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
       rebuildFromDom(cur);
+      pushHlHistory(cur);
       cur.highlights = cur.highlights.filter(function(h){
         return selText.indexOf(h.text) < 0 && h.text.indexOf(selText) < 0;
       });
-      pushHlHistory();
       saveState();
       markDirty();
       refreshHighlightsRender(cur);
@@ -6195,6 +6206,7 @@ function openPaperReader(itemId){
             const idx = parseInt(this.dataset.hlIdx, 10);
             const cur = state.items.find(function(x){ return x.id === prState.itemId; });
             if(cur && cur.highlights && cur.highlights[idx]){
+              pushHlHistory(cur);
               cur.highlights.splice(idx, 1);
               saveState();
               applyHighlightsToDom(cur);
@@ -6218,6 +6230,11 @@ function openPaperReader(itemId){
         return;
       }
 
+      if(prState.translateMode){
+        translateCurrentSelection();
+        return;
+      }
+
       if(!prState.activeColor && !prState.activeFmt) return;
       const sel = window.getSelection();
       if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
@@ -6233,16 +6250,15 @@ function openPaperReader(itemId){
         if(!item2.highlights) item2.highlights = [];
         let hlType = "highlight";
         let hlColor = prState.activeColor || null;
-        if(prState.activeFmt === "bold"){ hlType = "bold"; }
-        else if(prState.activeFmt === "underline"){ hlType = "underline"; }
-        else if(prState.activeFmt === "note"){
+        if(prState.activeFmt === "note"){
           const noteText = prompt("为选中文字添加备注:");
           if(!noteText || !noteText.trim()) return;
           hlType = "note";
           const noteEntry = { text: selectedText, type:"note", note: noteText.trim(), color:"#FFF1A8", pdfRects:capturePdfSelectionRects(sel.getRangeAt(0).cloneRange()) };
+          pushHlHistory(item2);
           item2.highlights.push(noteEntry);
           drawHighlightInSvg(noteEntry, item2.highlights.length - 1);
-          pushHlHistory(); saveState(); markDirty(); sel.removeAllRanges();
+          saveState(); markDirty(); sel.removeAllRanges();
           toast("备注已添加");
           return;
         }
@@ -6252,12 +6268,10 @@ function openPaperReader(itemId){
         if(!exists2){
           var entry2 = { text: selectedText, type: hlType };
           if(hlColor) entry2.color = hlColor;
-          else if(hlType === "bold") entry2.color = "#D7F0FF";
-          else if(hlType === "underline") entry2.color = "#E7D8FF";
           entry2.pdfRects = capturePdfSelectionRects(sel.getRangeAt(0).cloneRange());
-          item2.highlights.push(entry2);
-          drawHighlightInSvg(entry2, item2.highlights.length - 1);
-          pushHlHistory();
+          pushHlHistory(item2);
+          replaceColorHighlight(item2, entry2);
+          refreshHighlightsRender(item2);
         }
         saveState(); markDirty(); sel.removeAllRanges();
         return;
@@ -6271,8 +6285,8 @@ function openPaperReader(itemId){
         /* 备注模式: 弹出输入框 */
         const noteText = prompt("为选中文字添加备注:");
         if(noteText && noteText.trim()){
+          pushHlHistory(item2);
           item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
-          pushHlHistory();
           saveState();
           markDirty();
           sel.removeAllRanges();
@@ -6284,9 +6298,6 @@ function openPaperReader(itemId){
 
       var hlType = "highlight";
       var hlColor = prState.activeColor;
-      if(prState.activeFmt === "bold"){ hlType = "bold"; }
-      else if(prState.activeFmt === "underline"){ hlType = "underline"; }
-
       /* 去重 */
       var exists = item2.highlights.some(function(h){
         return h.text === selectedText && h.type === hlType && h.color === hlColor;
@@ -6294,8 +6305,8 @@ function openPaperReader(itemId){
       if(!exists){
         var entry = { text: selectedText, type: hlType };
         if(hlColor) entry.color = hlColor;
-        item2.highlights.push(entry);
-        pushHlHistory();
+        pushHlHistory(item2);
+        replaceColorHighlight(item2, entry);
         saveState();
         markDirty();
       }
@@ -7062,7 +7073,7 @@ function drawHighlightInSvg(hl, hlIdx){
       rect.setAttribute("width", String(Math.max(2, saved.w * vw)));
       rect.setAttribute("height", String(Math.max(4, saved.h * vh)));
       rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.28");
+      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.18");
       rect.setAttribute("rx", "2");
       rect.setAttribute("class", "hl-box");
       rect.setAttribute("data-hl-idx", String(hlIdx));
@@ -7134,7 +7145,7 @@ function drawHighlightInSvg(hl, hlIdx){
               rect.setAttribute("height", String(Math.max(8, row.h)));
               const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
               rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.28");
+              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.18");
               rect.setAttribute("rx", "2");
               rect.setAttribute("class", "hl-box");
               rect.setAttribute("data-hl-idx", String(hlIdx));
@@ -7450,10 +7461,8 @@ function applyHighlightsToDom(item){
   for(let h=0; h<item.highlights.length; h++){
     const hl = item.highlights[h];
     var hlType = hl.type || "highlight";
-    var skipTags = ["MARK","STRONG","U"];
-    if(hlType === "bold") skipTags = ["STRONG","MARK","U"];
-    else if(hlType === "underline") skipTags = ["U","MARK","STRONG"];
-    else if(hlType === "note") skipTags = ["U","MARK","STRONG"];
+    if(hlType !== "highlight" && hlType !== "note") continue;
+    var skipTags = ["MARK","U"];
 
     const walker = document.createTreeWalker(prText, NodeFilter.SHOW_TEXT, {
       acceptNode: function(node){
@@ -7478,13 +7487,7 @@ function applyHighlightsToDom(item){
                导致extractHighlightsFromDom提取的color与按钮data-color(hex)不一致,
                toggle取消匹配失败 → 颜色取消按钮失效。dataset.color保持原始格式 */
             wrapper.dataset.color = hl.color || "#FFE08A";
-            wrapper.style.background = wrapper.dataset.color;
-          }else if(hlType === "bold"){
-            wrapper = document.createElement("strong");
-            wrapper.className = "pr-bold";
-          }else if(hlType === "underline"){
-            wrapper = document.createElement("u");
-            wrapper.className = "pr-underline";
+            wrapper.style.setProperty("--hl-color", wrapper.dataset.color);
           }else if(hlType === "note"){
             wrapper = document.createElement("u");
             wrapper.className = "pr-note";
@@ -7521,11 +7524,12 @@ function applyHighlightsToDom(item){
 function clearAllHighlights(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.highlights || item.highlights.length === 0) return;
+  pushHlHistory(item);
   item.highlights = [];
   saveState();
   refreshHighlightsRender(item);
   markDirty();
-  toast("已清除全部标注(高亮/加粗/划线/备注)");
+  toast("已清除全部标记，可按撤销恢复");
 }
 
 /* 取消未落盘的防抖同步(撤销/重做/删除/排版前调用,防止旧DOM覆盖恢复的数据) */
@@ -7572,7 +7576,7 @@ function _domRedo(){
 /* C类操作推自定义快照(必须同时写入操作最近标记,确保撤销优先级正确) */
 function pushCustomSnapshot(type, payload){
   if(type === "text" && payload) prState.history.push(payload);
-  else if(type === "hl") prState.history.push({ type:"hl" });
+  else if(type === "highlights" && payload) prState.history.push(payload);
   if(prState.history.length > 50) prState.history.shift();
   prState.redoHistory = [];
   _lastCustomOpAt = Date.now();
@@ -7590,7 +7594,7 @@ function refreshHighlightsRender(item){
     for(let p=1; p<=n; p++){
       const svg = document.getElementById("prPdfSvg_" + p);
       if(!svg) continue;
-      const olds = svg.querySelectorAll("rect.hl-box");
+      const olds = svg.querySelectorAll("rect.hl-box, .pdf-note-badge");
       for(let k=0; k<olds.length; k++){
         if(olds[k].parentNode) olds[k].parentNode.removeChild(olds[k]);
       }
@@ -7639,18 +7643,16 @@ function undoLastAction(){
       _undoChannelLog.push("custom");
       toast("已撤销");
       return;
-    }else if(op.type === "hl"){
-      if(item.highlights && item.highlights.length > 0){
-        prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
-        if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-        item.highlights.pop();
-        saveState();
-        refreshHighlightsRender(item);
-        markDirty();
-        _undoChannelLog.push("hl");
-        toast("已撤销一处标注");
-        return;
-      }
+    }else if(op.type === "highlights"){
+      prState.redoHistory.push({ type:"highlights", highlights: JSON.parse(JSON.stringify(item.highlights || [])) });
+      if(prState.redoHistory.length > 50) prState.redoHistory.shift();
+      item.highlights = JSON.parse(JSON.stringify(op.highlights || []));
+      saveState();
+      refreshHighlightsRender(item);
+      markDirty();
+      _undoChannelLog.push("highlights");
+      toast("已撤销标记操作");
+      return;
     }
   }
   /* 优先级2: 最近是键盘编辑 → 走浏览器原生undo(Word式: 一步一个动作) */
@@ -7693,31 +7695,19 @@ function undoLastAction(){
       _undoChannelLog.push("custom");
       toast("已撤销");
       return;
-    }else if(op.type === "hl" && item.highlights && item.highlights.length > 0){
-      prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
+    }else if(op.type === "highlights"){
+      prState.redoHistory.push({ type:"highlights", highlights: JSON.parse(JSON.stringify(item.highlights || [])) });
       if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-      item.highlights.pop();
+      item.highlights = JSON.parse(JSON.stringify(op.highlights || []));
       saveState();
       refreshHighlightsRender(item);
       markDirty();
-      _undoChannelLog.push("hl");
-      toast("已撤销一处标注");
+      _undoChannelLog.push("highlights");
+      toast("已撤销标记操作");
       return;
     }
   }
-  /* 双栈都空: 兜底 */
-  if(item.highlights && item.highlights.length > 0){
-    prState.redoHistory.push({ type:"hl", hl: item.highlights[item.highlights.length - 1] });
-    if(prState.redoHistory.length > 50) prState.redoHistory.shift();
-    item.highlights.pop();
-    saveState();
-    refreshHighlightsRender(item);
-    markDirty();
-    _undoChannelLog.push("hl");
-    toast("已撤销一处标注");
-  }else{
-    toast("无可撤销操作");
-  }
+  toast("无可撤销操作");
 }
 
 /* 重做最近一次被撤销的操作(Ctrl+Y / ↷ 按钮) —— 按 undoChannelLog 记录选通道 */
@@ -7728,17 +7718,17 @@ function redoLastAction(){
   prClearPendingSync();
   /* 查询上一步撤销的通道:优先按 undoChannelLog 走(保证严格对应) */
   let ch = _undoChannelLog.pop();
-  if((ch === "custom" || ch === "hl") && prState.redoHistory.length === 0){
+  if((ch === "custom" || ch === "highlights") && prState.redoHistory.length === 0){
     /* custom/hl 有记录但 redoHistory 空 → 实际上是 kb 操作刚被撤销,改走 kb 重做 */
     ch = "kb";
   }
-  if(!ch) ch = prState.redoHistory.length > 0 ? (prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "hl") : "kb";
+  if(!ch) ch = prState.redoHistory.length > 0 ? (prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "highlights") : "kb";
 
   if(ch === "kb"){
     if(_domRedo()) return;
     if(prState.redoHistory.length === 0){ toast("无可重做操作"); return; }
     /* 原生重做失败 fallback 到自定义通道 */
-    ch = prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "hl";
+    ch = prState.redoHistory[prState.redoHistory.length-1].type === "text" ? "custom" : "highlights";
     /* 刚才 pop 出的 kb 实际要走 custom/hl,把 log 记录补回去防错位 */
     _undoChannelLog.push("kb");
   }
@@ -7776,16 +7766,17 @@ function redoLastAction(){
     toast("已重做");
     return;
   }
-  if(ch === "hl"){
+  if(ch === "highlights"){
     const op = prState.redoHistory.pop();
-    if(op && op.hl){
-      prState.history.push({ type:"hl" });
+    if(op && op.type === "highlights"){
+      prState.history.push({ type:"highlights", highlights: JSON.parse(JSON.stringify(item.highlights || [])) });
       if(prState.history.length > 50) prState.history.shift();
-      item.highlights.push(op.hl);
+      item.highlights = JSON.parse(JSON.stringify(op.highlights || []));
       saveState();
       refreshHighlightsRender(item);
       markDirty();
-      toast("已重做一处标注");
+      _lastCustomOpAt = Date.now();
+      toast("已重做标记操作");
       return;
     }
   }
@@ -7940,10 +7931,10 @@ function deleteSelectedText(sel){
    · input 事件防抖 700ms → rebuildFromDom 同步 structured+fullText+highlights
    · 保存(保存标注按钮/退出保存)时强制同步
    ============================================================ */
-/* 从 DOM 提取标注(高亮/加粗/划线/备注) —— 编辑后的标注以 DOM 为准 */
+/* 从 DOM 提取标注(高亮/备注) —— 编辑后的标注以 DOM 为准 */
 function extractHighlightsFromDom(root){
   const out = [];
-  const els = root.querySelectorAll("mark.hl, strong.pr-bold, u.pr-underline, u.pr-note");
+  const els = root.querySelectorAll("mark.hl, u.pr-note");
   for(let i=0; i<els.length; i++){
     const el = els[i];
     const text = el.textContent.replace(/\u00A0/g, " ").trim();
@@ -7951,12 +7942,8 @@ function extractHighlightsFromDom(root){
     if(el.tagName === "MARK"){
       const e2 = { text: text, type: "highlight", color: el.dataset.color || "#FFE08A" };
       out.push(e2);
-    }else if(el.tagName === "STRONG"){
-      out.push({ text: text, type: "bold" });
     }else if(el.classList.contains("pr-note")){
       out.push({ text: text, type: "note", note: el.dataset.note || "" });
-    }else{
-      out.push({ text: text, type: "underline" });
     }
   }
   return out;
@@ -8061,7 +8048,7 @@ function rebuildFromDom(item){
     /* Word流式版面保真: 从DOM更新item.html(剥离标注元素保留文字),标注单独提取,fullText按段落重建 */
     if(item.html && prText.querySelector(".pr-docflow")){
       const clone = prText.cloneNode(true);
-      const annEls = clone.querySelectorAll("mark.hl, strong.pr-bold, u.pr-underline, u.pr-note");
+      const annEls = clone.querySelectorAll("mark.hl, u.pr-note");
       for(let i=0;i<annEls.length;i++){
         const el = annEls[i];
         const txt = document.createTextNode(el.textContent || "");
@@ -8227,6 +8214,7 @@ const KB_HIST_PAUSE = 800;
         if(/^insert|^delete/.test(e.inputType || "")) e.preventDefault();
         return;
       }
+
       if(!prText.classList.contains("pr-layout-mode")) return;
       const sel = window.getSelection();
       if(!sel || sel.rangeCount === 0) return;
@@ -9694,31 +9682,40 @@ async function runAiRead(){
 /* 论文结构化系统已移除: PDF导入原文逐字保存,不做AI排版/改写 */
 
 /* ============================================================
-   翻译选中文字 —— AI翻译,译文插入选区后;再次点击取消译文
+   翻译模式 —— 开启后，每次选中文字自动翻译；再次点击关闭
    ============================================================ */
-async function toggleTranslate(){
-  const btn = document.getElementById("prTranslate");
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item) return;
-
-  /* 已有译文 → 全部取消 */
+function clearTranslations(){
   const existing = document.querySelectorAll(".pr-translation");
-  if(existing.length > 0){
-    for(let i=0; i<existing.length; i++) existing[i].remove();
+  for(let i=0; i<existing.length; i++) existing[i].remove();
+}
+function toggleTranslate(){
+  const btn = document.getElementById("prTranslate");
+  prState.translateMode = !prState.translateMode;
+  if(!prState.translateMode){
+    prState.translateRequestId++;
+    clearTranslations();
     if(btn) btn.classList.remove("on");
-    toast("已取消译文显示");
+    toast("已关闭自动翻译");
     return;
   }
+  if(btn) btn.classList.add("on");
+  toast("自动翻译已开启 · 选中文字即可翻译");
+  translateCurrentSelection();
+}
+async function translateCurrentSelection(){
+  const btn = document.getElementById("prTranslate");
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  if(!item || !prState.translateMode) return;
 
   /* 获取选中文字 */
   const sel = window.getSelection();
   if(!sel || sel.isCollapsed || sel.rangeCount === 0){
-    toast("请先选中要翻译的文字,再点击「翻译」");
     return;
   }
   const selText = sel.toString().replace(/\u00A0/g, "\n").trim();
   if(!selText || selText.length < 2){ toast("选中的是空白"); return; }
   const selectionRange = sel.getRangeAt(0).cloneRange();
+  const requestId = ++prState.translateRequestId;
   const prTextRoot = document.getElementById("prText");
   const isPdfNativeMode = !!(prTextRoot && prTextRoot.classList.contains("pr-pdf-native"));
 
@@ -9729,7 +9726,7 @@ async function toggleTranslate(){
     return;
   }
 
-  if(btn) btn.classList.add("on");
+  clearTranslations();
   toast("AI 翻译中…");
 
   const isZh = /[\u4e00-\u9fa5]/.test(selText);
@@ -9739,8 +9736,8 @@ async function toggleTranslate(){
     { role: "user", content: selText.substring(0, 4000) }
   ];
   const r = await callAI(messages, 2000);
+  if(requestId !== prState.translateRequestId || !prState.translateMode) return;
   if(!r.content){
-    if(btn) btn.classList.remove("on");
     toast("翻译失败: " + (r.error || "未知错误"));
     return;
   }
@@ -9772,7 +9769,8 @@ async function toggleTranslate(){
       prText.appendChild(trEl);
     }
   }
-  toast("翻译完成 · 再次点击「翻译」可取消译文");
+  if(btn) btn.classList.add("on");
+  toast("翻译完成 · 可继续选中下一段自动翻译");
 }
 
 /* ============================================================
