@@ -1216,7 +1216,7 @@
   /* 选中高亮与光标: 文字透明所以只让selection背景突出,不要被opacity压暗 */
   .pr-text .pr-pdf-page .pr-pdf-textLayer::selection,
   .pr-text .pr-pdf-page .pr-pdf-textLayer *::selection{
-    background: rgba(11,87,208,.36);
+    background: rgba(11,87,208,.18);
     color:transparent; /* 保持文字透明不遮挡canvas */
     caret-color:#0b57d0;
   }
@@ -1414,7 +1414,7 @@
     border-radius:4px; transition:width .35s ease;
   }
   mark.hl{
-    background:color-mix(in srgb, var(--hl-color) 18%, transparent);
+    background:color-mix(in srgb, var(--hl-color) 14%, transparent);
     border-radius:2px; padding:0 1px; color:inherit;
     cursor:pointer; transition:filter .15s;
   }
@@ -6986,6 +6986,10 @@ function renderHighlightsAsSvg(item){
   if(!item || !item.highlights || !item.highlights.length) return;
   for(let h=0; h<item.highlights.length; h++){
     const hl = item.highlights[h];
+    /* 兼容旧数据: 若后添加的颜色标注与当前标注重叠，只画最新一层，避免颜色加深。 */
+    if(hl.type === "highlight" && item.highlights.slice(h + 1).some(function(later){
+      return later.type === "highlight" && pdfHighlightsOverlap(hl, later);
+    })) continue;
     drawHighlightInSvg(hl, h);
   }
 }
@@ -7000,6 +7004,7 @@ function showPdfNotePopup(hlIdx, ev){
   popup.classList.add("show");
   const del = popup.querySelector(".note-del");
   if(del) del.onclick = function(){
+    pushHlHistory(item);
     item.highlights.splice(hlIdx, 1);
     saveState(); markDirty(); refreshHighlightsRender(item);
     popup.classList.remove("show");
@@ -7030,7 +7035,29 @@ function capturePdfSelectionRects(range){
       break;
     }
   }
-  return out;
+  return mergePdfRects(out);
+}
+function mergePdfRects(rects){
+  const merged = [];
+  for(let i=0; i<(rects || []).length; i++){
+    const next = rects[i];
+    if(!next || !(next.w > 0) || !(next.h > 0)) continue;
+    let combined = false;
+    for(let j=0; j<merged.length; j++){
+      const prev = merged[j];
+      const samePage = prev.page === next.page;
+      const overlaps = next.x < prev.x + prev.w && next.x + next.w > prev.x && next.y < prev.y + prev.h && next.y + next.h > prev.y;
+      if(!samePage || !overlaps) continue;
+      const left = Math.min(prev.x, next.x), top = Math.min(prev.y, next.y);
+      prev.w = Math.max(prev.x + prev.w, next.x + next.w) - left;
+      prev.h = Math.max(prev.y + prev.h, next.y + next.h) - top;
+      prev.x = left; prev.y = top;
+      combined = true;
+      break;
+    }
+    if(!combined) merged.push({ page:next.page, x:next.x, y:next.y, w:next.w, h:next.h });
+  }
+  return merged;
 }
 function appendPdfNoteBadge(svg, x, y, hlIdx){
   const group = document.createElementNS("http://www.w3.org/2000/svg", "g");
@@ -7059,8 +7086,10 @@ function drawHighlightInSvg(hl, hlIdx){
   const searchText = (hl.text || "").trim();
   if(!searchText) return;
   if(Array.isArray(hl.pdfRects) && hl.pdfRects.length){
-    for(let i=0; i<hl.pdfRects.length; i++){
-      const saved = hl.pdfRects[i];
+    const pdfRects = mergePdfRects(hl.pdfRects);
+    let noteBadgeAdded = false;
+    for(let i=0; i<pdfRects.length; i++){
+      const saved = pdfRects[i];
       const svg = document.getElementById("prPdfSvg_" + saved.page);
       if(!svg) continue;
       const vb = svg.viewBox && svg.viewBox.baseVal;
@@ -7073,14 +7102,15 @@ function drawHighlightInSvg(hl, hlIdx){
       rect.setAttribute("width", String(Math.max(2, saved.w * vw)));
       rect.setAttribute("height", String(Math.max(4, saved.h * vh)));
       rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.18");
+      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.12");
       rect.setAttribute("rx", "2");
       rect.setAttribute("class", "hl-box");
       rect.setAttribute("data-hl-idx", String(hlIdx));
       rect.setAttribute("data-hl-color", rectColor);
       rect.setAttribute("data-hl-type", hl.type || "highlight");
-      if(hl.type === "note"){
+      if(hl.type === "note" && !noteBadgeAdded){
         appendPdfNoteBadge(svg, Math.min(vw - 8, (saved.x + saved.w) * vw + 7), Math.max(8, saved.y * vh + 6), hlIdx);
+        noteBadgeAdded = true;
       }
       svg.appendChild(rect);
     }
@@ -7134,6 +7164,7 @@ function drawHighlightInSvg(hl, hlIdx){
               else{ row.x1 = Math.min(row.x1, x); row.x2 = Math.max(row.x2, x+w); row.h = Math.max(row.h, h); }
             }
             /* 把矩形画到对应页svgLayer */
+            let noteBadgeAdded = false;
             for(let ri=0; ri<rows.length; ri++){
               const row = rows[ri];
               const svg = document.getElementById("prPdfSvg_" + row.page);
@@ -7145,14 +7176,15 @@ function drawHighlightInSvg(hl, hlIdx){
               rect.setAttribute("height", String(Math.max(8, row.h)));
               const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
               rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.18");
+              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.12");
               rect.setAttribute("rx", "2");
               rect.setAttribute("class", "hl-box");
               rect.setAttribute("data-hl-idx", String(hlIdx));
               rect.setAttribute("data-hl-color", rectColor);
               rect.setAttribute("data-hl-type", hl.type || "highlight");
-              if(hl.type === "note"){
+              if(hl.type === "note" && !noteBadgeAdded){
                 appendPdfNoteBadge(svg, Math.min(svg.viewBox.baseVal.width - 8, row.x2 + 7), Math.max(8, row.y + 6), hlIdx);
+                noteBadgeAdded = true;
               }
               /* 点击选中该标注 → 可通过颜色按钮取消(toggleHighlight逻辑) */
               (function(r){
