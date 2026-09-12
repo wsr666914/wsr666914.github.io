@@ -938,6 +938,13 @@
     display:block; font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:600;
     letter-spacing:.16em; text-transform:uppercase; color:var(--teal); opacity:.75; margin-bottom:3px;
   }
+  .pr-translation.pr-pdf-translation{
+    position:fixed; right:24px; bottom:24px; z-index:2147483646;
+    width:min(420px,calc(100vw - 48px)); max-height:42vh; overflow:auto;
+    margin:0; padding:14px 16px; background:#f4fbfa;
+    border:1px solid rgba(47,93,98,.35); border-left:4px solid var(--teal);
+    box-shadow:0 12px 36px rgba(0,0,0,.2); color:var(--ink);
+  }
   @keyframes transIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
 
   /* ===== 参考文献列表 ===== */
@@ -1109,7 +1116,7 @@
   .pr-text.pr-layout-mode{ max-width:none; }
   .pr-text .pr-layout-root{ padding:8px 0; text-align:center; overflow-x:auto; }
   .pr-text .pr-layout-root::before{
-    content:"版面保真·原PDF版式1:1还原(可编辑·可标注;跨文字块标注暂不支持)";
+    content:"PDF只读审阅 · 原版式1:1还原 · 可选中、标注、备注与翻译";
     display:block; margin:0 0 12px; font-size:12px; color:#b58e2b; background:#fdf6e3;
     border:1px solid #ecd9a8; border-radius:6px; padding:6px 10px; text-align:center;
   }
@@ -1129,15 +1136,15 @@
   /* Word流式版面保真: 富文本段落(字号/缩进/对齐/加粗内联style,分栏用column-count) */
   .pr-text .pr-docflow{ column-gap:28px; }
   .pr-text .pr-docflow-p{ margin:0 0 0.55em; break-inside:avoid; }
-  /* ===== PDF原生渲染: canvas + textLayer(可编辑) + svgLayer(标注) =====
+  /* ===== PDF原生渲染: canvas + textLayer(选择) + svgLayer(标注) =====
      - 与Adobe阅读器像素级一致, 不再自己重建HTML版面, 从根上消除双栏重叠/删字跳行/错位重叠
      - canvas 层: pdf.js 绘制原PDF, 不可编辑(只读)
-     - textLayer 层: pdf.js生成的文字span (PDF规范, 与canvas像素对齐), 开启contenteditable做编辑
+     - textLayer 层: pdf.js生成的透明文字span,仅用于框选文字
      - svgLayer 层: 颜色标注/临时高亮/AI解读标识都画SVG矩形在文字上方, 不破坏原DOM  */
   .pr-text.pr-pdf-native{ max-width:none; text-indent:0; }
   .pr-text .pr-pdf-root{ padding:8px 0; text-align:center; overflow-x:auto; }
   .pr-text .pr-pdf-root::before{
-    content:"PDF 阅读器 · 与Adobe阅读器像素级一致(可编辑·可标注·原PDF原貌)";
+    content:"PDF 只读审阅器 · 原PDF原貌 · 可选中、标注、备注与翻译";
     display:block; margin:0 0 12px; font-size:12px; color:#2e7d32; background:#e8f5e9;
     border:1px solid #a5d6a7; border-radius:6px; padding:6px 10px; text-align:center;
   }
@@ -2094,7 +2101,6 @@
           <button class="pr-hl-undo" id="prHlUndo" title="撤销最近一次操作(Ctrl+Z):键盘编辑/删除/排版/标注">↶</button>
           <button class="pr-hl-undo" id="prHlRedo" title="重做(Ctrl+Y / Ctrl+Shift+Z)">↷</button>
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标注">×</button>
-          <button class="pr-hl-fmt pr-pdf-edit-toggle" id="prPdfEditMode" title="进入PDF文字对象编辑模式" hidden>✎ 编辑文字</button>
           <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
@@ -5907,7 +5913,7 @@ function openPaperReader(itemId){
   }
   /* Word式标注应用/取消(核心): 选中文字已有同款标注→移除,没有→添加
      与"先点按钮再选文字"共用同一份数据操作,两种交互等效 */
-  function prApplyOrToggleAnnotation(selText, type, color){
+  function prApplyOrToggleAnnotation(selText, type, color, selectionRange){
     const cur = state.items.find(function(x){ return x.id === prState.itemId; });
     if(!cur) return false;
     const prTextEl = document.getElementById("prText");
@@ -5945,6 +5951,7 @@ function openPaperReader(itemId){
     /* 不存在 → 添加 */
     const entry = { text: selText, type: type };
     if(color) entry.color = color;
+    if(isPdfNativeMode && selectionRange) entry.pdfRects = capturePdfSelectionRects(selectionRange);
     cur.highlights.push(entry);
     pushHlHistory();
     saveState();
@@ -5987,7 +5994,7 @@ function openPaperReader(itemId){
       /* Word式:先选中文字再点颜色 → 直接标注(不用进模式) */
       const live = prGetLiveSelection();
       if(live){
-        prApplyOrToggleAnnotation(live.text, "highlight", color);
+        prApplyOrToggleAnnotation(live.text, "highlight", color, live.sel.getRangeAt(0).cloneRange());
         live.sel.removeAllRanges();
         return;
       }
@@ -6016,7 +6023,7 @@ function openPaperReader(itemId){
       /* Word式:先选中文字再点按钮 → 直接应用/取消 */
       const live = prGetLiveSelection();
       if(live && (fmt === "bold" || fmt === "underline" || fmt === "highlight")){
-        prApplyOrToggleAnnotation(live.text, fmt, null);
+        prApplyOrToggleAnnotation(live.text, fmt, null, live.sel.getRangeAt(0).cloneRange());
         live.sel.removeAllRanges();
         return;
       }
@@ -6026,15 +6033,22 @@ function openPaperReader(itemId){
         if(noteText && noteText.trim()){
           const cur = state.items.find(function(x){ return x.id === prState.itemId; });
           if(cur){
-            if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
-            rebuildFromDom(cur);
+            const prTextEl = document.getElementById("prText");
+            const isPdfNativeMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
+            if(!isPdfNativeMode){
+              if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
+              rebuildFromDom(cur);
+            }
             if(!cur.highlights) cur.highlights = [];
-            cur.highlights.push({ text: live.text, type:"note", note: noteText.trim() });
+            const noteEntry = { text: live.text, type:"note", note: noteText.trim(), color:"#FFF1A8" };
+            if(isPdfNativeMode) noteEntry.pdfRects = capturePdfSelectionRects(live.sel.getRangeAt(0).cloneRange());
+            cur.highlights.push(noteEntry);
             pushHlHistory();
             saveState();
             markDirty();
             live.sel.removeAllRanges();
-            applyHighlightsToDom(cur);
+            if(isPdfNativeMode) drawHighlightInSvg(noteEntry, cur.highlights.length - 1);
+            else applyHighlightsToDom(cur);
             toast("备注已添加");
           }
         }
@@ -6077,7 +6091,7 @@ function openPaperReader(itemId){
       pushHlHistory();
       saveState();
       markDirty();
-      applyHighlightsToDom(cur);
+      refreshHighlightsRender(cur);
       live.sel.removeAllRanges();
       toast("已取消选中文字上的 " + removed.length + " 处标记");
     };
@@ -6222,8 +6236,9 @@ function openPaperReader(itemId){
           const noteText = prompt("为选中文字添加备注:");
           if(!noteText || !noteText.trim()) return;
           hlType = "note";
-          item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
-          drawHighlightInSvg({ text: selectedText, type:"note", color:"#FFF1A8" }, item2.highlights.length - 1);
+          const noteEntry = { text: selectedText, type:"note", note: noteText.trim(), color:"#FFF1A8", pdfRects:capturePdfSelectionRects(sel.getRangeAt(0).cloneRange()) };
+          item2.highlights.push(noteEntry);
+          drawHighlightInSvg(noteEntry, item2.highlights.length - 1);
           pushHlHistory(); saveState(); markDirty(); sel.removeAllRanges();
           toast("备注已添加");
           return;
@@ -6236,6 +6251,7 @@ function openPaperReader(itemId){
           if(hlColor) entry2.color = hlColor;
           else if(hlType === "bold") entry2.color = "#D7F0FF";
           else if(hlType === "underline") entry2.color = "#E7D8FF";
+          entry2.pdfRects = capturePdfSelectionRects(sel.getRangeAt(0).cloneRange());
           item2.highlights.push(entry2);
           drawHighlightInSvg(entry2, item2.highlights.length - 1);
           pushHlHistory();
@@ -6313,7 +6329,10 @@ function openPaperReader(itemId){
   const prRefsBtn = document.getElementById("prReferences");
   if(prRefsBtn) prRefsBtn.onclick = fetchReferences;
   const prTranslateBtn = document.getElementById("prTranslate");
-  if(prTranslateBtn) prTranslateBtn.onclick = function(){ toggleTranslate(); };
+  if(prTranslateBtn){
+    prTranslateBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
+    prTranslateBtn.onclick = function(){ toggleTranslate(); };
+  }
   const prAiCfgBtn = document.getElementById("prAiCfg");
   if(prAiCfgBtn) prAiCfgBtn.onclick = openAiCfgModal;
 
@@ -6385,7 +6404,7 @@ function savePaperHighlights(){
   saveState();
   prState.dirty = false;
   updateSaveBtnState();
-  toast("已保存 · 编辑与标注均会保留");
+  toast("已保存 · 标注与备注会保留");
 }
 
 /* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
@@ -6552,9 +6571,12 @@ async function renderPdfNative(item, prText){
   /* 模式标记 */
   prText.classList.add("pr-pdf-native");
   prText.classList.remove("pr-layout-mode");
-  prText.classList.toggle("pdf-edit-mode", !!prState.pdfEditMode);
-  const pdfEditBtn = document.getElementById("prPdfEditMode");
-  if(pdfEditBtn) pdfEditBtn.hidden = false;
+  prText.contentEditable = "false";
+  prText.classList.remove("pdf-edit-mode");
+  prState.pdfEditMode = false;
+  prState.delMode = false;
+  const pdfDeleteBtn = document.getElementById("prDelMode");
+  if(pdfDeleteBtn){ pdfDeleteBtn.hidden = true; pdfDeleteBtn.classList.remove("on"); }
 
   /* ===== 与PDF.js官方demo 100%对齐的坐标系方案: 只用CSS像素, 不混用pt + transform scale =====
      - 页面容器的宽高 = CSS px = pageW/pt * CSS_PT_TO_PX(=96/72=1.333...) * renderScale
@@ -6608,11 +6630,10 @@ async function renderPdfNative(item, prText){
       + '<div class="pr-pdf-canvasWrap" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:1;">'
       +   '<canvas id="prPdfCanvas_' + p + '" style="display:block;width:100%;height:100%;"></canvas>'
       + '</div>'
-      + '<div class="pr-pdf-textLayer" id="prPdfText_' + p + '" tabindex="0" aria-label="PDF第' + p + '页可编辑文字层" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>'
+      + '<div class="pr-pdf-textLayer" id="prPdfText_' + p + '" tabindex="0" aria-label="PDF第' + p + '页可选择文字层" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:2;"></div>'
       + '<svg class="pr-pdf-svgLayer" id="prPdfSvg_' + p + '" viewBox="0 0 ' + cssPageW + ' ' + cssPageH + '" preserveAspectRatio="none" style="position:absolute;top:0;left:0;width:100%;height:100%;z-index:3;pointer-events:none;">'
       +   '<defs><style>.hl-box{}</style></defs>'
       + '</svg>'
-      + '<div class="pr-pdf-editLayer" id="prPdfEdit_' + p + '" aria-label="PDF第' + p + '页文字编辑对象层"></div>'
       + '</div>';
   }
   pagesHtml += '</div>';
@@ -6674,7 +6695,6 @@ async function renderPdfNative(item, prText){
                sp.dataset.w = String(Math.max(2, Math.round(r.width * 100) / 100));
                sp.dataset.h = String(Math.max(6, Math.round(r.height * 100) / 100));
              }
-             _applyPdfEditsToPage(item, pageNum, textLayerEl);
           };
           if(textLayerTask && textLayerTask.promise && typeof textLayerTask.promise.then === "function"){
             textLayerTask.promise.then(finishTextLayer);
@@ -6717,12 +6737,6 @@ async function renderPdfNative(item, prText){
       }
     }
   }, 500);
-
-  /* ===== 编辑: 不直接改 absolute textLayer span,改用独立对象层 + 固定编辑面板。
-     textLayer只负责选区;编辑层提供稳定点击区域并覆盖显示已修改文字,不改变原PDF画布和版式。 */
-  setTimeout(function(){
-    _attachPdfNativeEditHandlers();
-  }, 650);
 
   return true;
 }
@@ -6961,10 +6975,83 @@ function renderHighlightsAsSvg(item){
     drawHighlightInSvg(hl, h);
   }
 }
+function showPdfNotePopup(hlIdx, ev){
+  const item = state.items.find(function(i){ return i.id === prState.itemId; });
+  const popup = document.getElementById("prNotePopup");
+  const note = item && item.highlights && item.highlights[hlIdx];
+  if(!popup || !note || note.type !== "note") return;
+  popup.innerHTML = escapeHtml(note.note || "") + '<div class="note-del" data-hl-idx="' + hlIdx + '">删除此备注</div>';
+  popup.style.left = Math.max(12, Math.min(ev.clientX, window.innerWidth - 360)) + "px";
+  popup.style.top = Math.max(12, Math.min(ev.clientY + 14, window.innerHeight - 150)) + "px";
+  popup.classList.add("show");
+  const del = popup.querySelector(".note-del");
+  if(del) del.onclick = function(){
+    item.highlights.splice(hlIdx, 1);
+    saveState(); markDirty(); refreshHighlightsRender(item);
+    popup.classList.remove("show");
+    toast("已删除备注");
+  };
+}
+function capturePdfSelectionRects(range){
+  if(!range) return [];
+  const pages = document.querySelectorAll(".pr-pdf-page");
+  const clientRects = Array.prototype.slice.call(range.getClientRects());
+  const out = [];
+  for(let r=0; r<clientRects.length; r++){
+    const cr = clientRects[r];
+    if(cr.width < 1 || cr.height < 1) continue;
+    for(let p=0; p<pages.length; p++){
+      const page = pages[p];
+      const pr = page.getBoundingClientRect();
+      const left = Math.max(cr.left, pr.left), top = Math.max(cr.top, pr.top);
+      const right = Math.min(cr.right, pr.right), bottom = Math.min(cr.bottom, pr.bottom);
+      if(right <= left || bottom <= top || pr.width <= 0 || pr.height <= 0) continue;
+      out.push({
+        page: parseInt(page.dataset.page || String(p+1), 10),
+        x: (left - pr.left) / pr.width,
+        y: (top - pr.top) / pr.height,
+        w: (right - left) / pr.width,
+        h: (bottom - top) / pr.height
+      });
+      break;
+    }
+  }
+  return out;
+}
 /* 根据 hl.text 在 textLayer span 中顺序匹配 → 在 svgLayer 画对应矩形; 支持跨span同一行合并矩形 */
 function drawHighlightInSvg(hl, hlIdx){
   const searchText = (hl.text || "").trim();
   if(!searchText) return;
+  if(Array.isArray(hl.pdfRects) && hl.pdfRects.length){
+    for(let i=0; i<hl.pdfRects.length; i++){
+      const saved = hl.pdfRects[i];
+      const svg = document.getElementById("prPdfSvg_" + saved.page);
+      if(!svg) continue;
+      const vb = svg.viewBox && svg.viewBox.baseVal;
+      const vw = vb && vb.width ? vb.width : svg.clientWidth;
+      const vh = vb && vb.height ? vb.height : svg.clientHeight;
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+      const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
+      rect.setAttribute("x", String(saved.x * vw));
+      rect.setAttribute("y", String(saved.y * vh));
+      rect.setAttribute("width", String(Math.max(2, saved.w * vw)));
+      rect.setAttribute("height", String(Math.max(4, saved.h * vh)));
+      rect.setAttribute("fill", rectColor);
+      rect.setAttribute("fill-opacity", "0.75");
+      rect.setAttribute("rx", "2");
+      rect.setAttribute("class", "hl-box");
+      rect.setAttribute("data-hl-idx", String(hlIdx));
+      rect.setAttribute("data-hl-color", rectColor);
+      rect.setAttribute("data-hl-type", hl.type || "highlight");
+      if(hl.type === "note"){
+        rect.style.pointerEvents = "all";
+        rect.style.cursor = "pointer";
+        rect.addEventListener("click", function(ev){ ev.stopPropagation(); showPdfNotePopup(hlIdx, ev); });
+      }
+      svg.appendChild(rect);
+    }
+    return true;
+  }
   const numPages = prState.pdfNativeNumPages || 0;
   if(!numPages) return;
   const pageW = prState.pdfNativePageW;
@@ -7022,12 +7109,22 @@ function drawHighlightInSvg(hl, hlIdx){
               rect.setAttribute("y", String(Math.max(0, row.y - 1)));
               rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1 + 2)));
               rect.setAttribute("height", String(Math.max(8, row.h + 2)));
-              rect.setAttribute("fill", hl.color || "#FFE08A");
+              const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
+              rect.setAttribute("fill", rectColor);
               rect.setAttribute("fill-opacity", "0.75");
               rect.setAttribute("rx", "2");
               rect.setAttribute("class", "hl-box");
               rect.setAttribute("data-hl-idx", String(hlIdx));
-              rect.setAttribute("data-hl-color", hl.color || "#FFE08A");
+              rect.setAttribute("data-hl-color", rectColor);
+              rect.setAttribute("data-hl-type", hl.type || "highlight");
+              if(hl.type === "note"){
+                rect.style.pointerEvents = "all";
+                rect.style.cursor = "pointer";
+                rect.addEventListener("click", function(ev){
+                  ev.stopPropagation();
+                  showPdfNotePopup(hlIdx, ev);
+                });
+              }
               /* 点击选中该标注 → 可通过颜色按钮取消(toggleHighlight逻辑) */
               (function(r){
                 rect.addEventListener("mousedown", function(ev){
@@ -7081,7 +7178,7 @@ function renderLayoutPaper(item, prText){
       /* PDF坐标系原点在左下,向上为正; CSS原点在左上,向下为正 → 翻转y */
       const top = pg.pageH - b.y - b.size;
       const fw = b.bold ? 'bold' : 'normal';
-      html += '<span class="pr-layout-block" contenteditable="true" data-page="' + p + '" data-x="' + b.x + '" data-top="' + top + '" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(squeezeCjkSpaces(b.str)) + '</span>';
+      html += '<span class="pr-layout-block" contenteditable="false" data-page="' + p + '" data-x="' + b.x + '" data-top="' + top + '" style="left:' + b.x + 'pt;top:' + top + 'pt;font-size:' + b.size + 'pt;font-weight:' + fw + ';">' + escapeHtml(squeezeCjkSpaces(b.str)) + '</span>';
     }
     html += '</div>';
   }
@@ -7109,6 +7206,10 @@ function renderLayoutPaper(item, prText){
     html += '</ol>';
   }
   prText.innerHTML = html;
+  prText.contentEditable = "false";
+  prState.delMode = false;
+  const pdfDeleteBtn = document.getElementById("prDelMode");
+  if(pdfDeleteBtn){ pdfDeleteBtn.hidden = true; pdfDeleteBtn.classList.remove("on"); }
   /* 标记版面保真模式: CSS取消单栏740px限宽,让PDF页自由展开居中,左右留白对称 */
   prText.classList.add("pr-layout-mode");
   return true;
@@ -7120,8 +7221,9 @@ function renderPaperText(item){
   prText.classList.remove("pr-layout-mode");
   prText.classList.remove("pr-pdf-native");
   prText.classList.remove("pdf-edit-mode");
-  const pdfEditBtn = document.getElementById("prPdfEditMode");
-  if(pdfEditBtn) pdfEditBtn.hidden = true;
+  prText.contentEditable = "true";
+  const pdfDeleteBtn = document.getElementById("prDelMode");
+  if(pdfDeleteBtn) pdfDeleteBtn.hidden = false;
   /* 随笔: 纯文章展示 —— 无标题层级/无结构化/无参考文献, 仅按段落渲染正文 */
   if(item.category === "essay"){
     renderEssayText(item, prText);
@@ -7676,10 +7778,12 @@ function redoLastAction(){
 function closePaperReader(){
   clearAiSelectionMark();  /* 移除AI解读临时高亮(非永久标注) */
   _closePdfObjectEditor();
+  const translations = document.querySelectorAll(".pr-translation");
+  for(let i=0; i<translations.length; i++) translations[i].remove();
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
-    const choice = confirm(noun + "有未保存的更改(标注/排版/删除等)。\n\n【确定】保存更改后退出\n【取消】放弃更改,恢复打开时的原文");
+    const choice = confirm(noun + "有未保存的更改(标注、备注等)。\n\n【确定】保存更改后退出\n【取消】放弃更改");
     if(choice){
       savePaperHighlights();
     } else {
@@ -8101,6 +8205,10 @@ const KB_HIST_PAUSE = 800;
        与右栏重叠。beforeinput在DOM修改前触发,可精确拦截跨block操作。
        block内部删除不受限制 → 后面的字自然往前移(补上空),只阻止跨block合并。 */
     prText.addEventListener("beforeinput", function(e){
+      if(prText.classList.contains("pr-pdf-native")){
+        if(/^insert|^delete/.test(e.inputType || "")) e.preventDefault();
+        return;
+      }
       if(!prText.classList.contains("pr-layout-mode")) return;
       const sel = window.getSelection();
       if(!sel || sel.rangeCount === 0) return;
@@ -8144,6 +8252,11 @@ const KB_HIST_PAUSE = 800;
       const mod = e.ctrlKey || e.metaKey;
       if(!mod){
         if(k === "Backspace" || k === "Delete"){
+          if(prText.classList.contains("pr-pdf-native")){
+            e.preventDefault();
+            toast("PDF原文为只读,可使用颜色标注、备注或翻译");
+            return;
+          }
           /* === layout模式: 阻止跨block删除,防止后面行跳到上一行和右栏重叠 ===
              absolute定位的block在删除到边界时,浏览器会合并相邻block内容,
              导致下一行的文字"流"到当前block位置,视觉上跳行+与右栏重叠。
@@ -9587,6 +9700,9 @@ async function toggleTranslate(){
   }
   const selText = sel.toString().replace(/\u00A0/g, "\n").trim();
   if(!selText || selText.length < 2){ toast("选中的是空白"); return; }
+  const selectionRange = sel.getRangeAt(0).cloneRange();
+  const prTextRoot = document.getElementById("prText");
+  const isPdfNativeMode = !!(prTextRoot && prTextRoot.classList.contains("pr-pdf-native"));
 
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
@@ -9611,17 +9727,24 @@ async function toggleTranslate(){
     return;
   }
 
-  /* 在选区末尾插入译文块 */
+  /* PDF保持只读:译文放在独立浮窗;其他文档仍放在选区之后。 */
   let inserted = false;
-  try{
-    const range = sel.getRangeAt(0);
-    let endNode = range.endContainer;
-    if(endNode.nodeType === 3) endNode = endNode.parentNode;
+  if(isPdfNativeMode){
     const trEl = document.createElement("span");
-    trEl.className = "pr-translation";
+    trEl.className = "pr-translation pr-pdf-translation";
     trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
-    if(endNode.after){ endNode.after(trEl); inserted = true; }
-  }catch(e){ /* 忽略,走兜底 */ }
+    document.body.appendChild(trEl);
+    inserted = true;
+  }else{
+    try{
+      let endNode = selectionRange.endContainer;
+      if(endNode.nodeType === 3) endNode = endNode.parentNode;
+      const trEl = document.createElement("span");
+      trEl.className = "pr-translation";
+      trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
+      if(endNode.after){ endNode.after(trEl); inserted = true; }
+    }catch(e){ /* 忽略,走兜底 */ }
+  }
   if(!inserted){
     const prText = document.getElementById("prText");
     if(prText){
