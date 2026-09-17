@@ -7081,6 +7081,19 @@ function appendPdfNoteBadge(svg, x, y, hlIdx){
   group.addEventListener("click", function(ev){ ev.stopPropagation(); showPdfNotePopup(hlIdx, ev); });
   svg.appendChild(group);
 }
+function appendPdfNoteRangeCue(svg, x, y, width){
+  const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+  line.setAttribute("class", "pdf-note-range");
+  line.setAttribute("x1", String(x));
+  line.setAttribute("x2", String(x + width));
+  line.setAttribute("y1", String(y));
+  line.setAttribute("y2", String(y));
+  line.setAttribute("stroke", "#2f5d62");
+  line.setAttribute("stroke-opacity", "0.58");
+  line.setAttribute("stroke-width", "1.2");
+  line.setAttribute("stroke-dasharray", "2 2");
+  svg.appendChild(line);
+}
 /* 根据 hl.text 在 textLayer span 中顺序匹配 → 在 svgLayer 画对应矩形; 支持跨span同一行合并矩形 */
 function drawHighlightInSvg(hl, hlIdx){
   const searchText = (hl.text || "").trim();
@@ -7108,8 +7121,11 @@ function drawHighlightInSvg(hl, hlIdx){
       rect.setAttribute("data-hl-idx", String(hlIdx));
       rect.setAttribute("data-hl-color", rectColor);
       rect.setAttribute("data-hl-type", hl.type || "highlight");
+      if(hl.type === "note"){
+        appendPdfNoteRangeCue(svg, saved.x * vw, Math.max(2, (saved.y + saved.h) * vh - 1), Math.max(2, saved.w * vw));
+      }
       if(hl.type === "note" && !noteBadgeAdded){
-        appendPdfNoteBadge(svg, Math.min(vw - 8, (saved.x + saved.w) * vw + 7), Math.max(8, saved.y * vh + 6), hlIdx);
+        appendPdfNoteBadge(svg, Math.max(8, saved.x * vw - 7), Math.max(8, saved.y * vh + 6), hlIdx);
         noteBadgeAdded = true;
       }
       svg.appendChild(rect);
@@ -7182,8 +7198,11 @@ function drawHighlightInSvg(hl, hlIdx){
               rect.setAttribute("data-hl-idx", String(hlIdx));
               rect.setAttribute("data-hl-color", rectColor);
               rect.setAttribute("data-hl-type", hl.type || "highlight");
+              if(hl.type === "note"){
+                appendPdfNoteRangeCue(svg, Math.max(0, row.x1), Math.max(2, row.y + row.h - 1), Math.max(4, row.x2 - row.x1));
+              }
               if(hl.type === "note" && !noteBadgeAdded){
-                appendPdfNoteBadge(svg, Math.min(svg.viewBox.baseVal.width - 8, row.x2 + 7), Math.max(8, row.y + 6), hlIdx);
+                appendPdfNoteBadge(svg, Math.max(8, row.x1 - 7), Math.max(8, row.y + 6), hlIdx);
                 noteBadgeAdded = true;
               }
               /* 点击选中该标注 → 可通过颜色按钮取消(toggleHighlight逻辑) */
@@ -7626,7 +7645,7 @@ function refreshHighlightsRender(item){
     for(let p=1; p<=n; p++){
       const svg = document.getElementById("prPdfSvg_" + p);
       if(!svg) continue;
-      const olds = svg.querySelectorAll("rect.hl-box, .pdf-note-badge");
+      const olds = svg.querySelectorAll("rect.hl-box, .pdf-note-badge, .pdf-note-range");
       for(let k=0; k<olds.length; k++){
         if(olds[k].parentNode) olds[k].parentNode.removeChild(olds[k]);
       }
