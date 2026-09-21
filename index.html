@@ -1414,7 +1414,7 @@
     border-radius:4px; transition:width .35s ease;
   }
   mark.hl{
-    background:color-mix(in srgb, var(--hl-color) 14%, transparent);
+    background:color-mix(in srgb, var(--hl-color) 24%, transparent);
     border-radius:2px; padding:0 1px; color:inherit;
     cursor:pointer; transition:filter .15s;
   }
@@ -7115,7 +7115,7 @@ function drawHighlightInSvg(hl, hlIdx){
       rect.setAttribute("width", String(Math.max(2, saved.w * vw)));
       rect.setAttribute("height", String(Math.max(4, saved.h * vh)));
       rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.12");
+      rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.22");
       rect.setAttribute("rx", "2");
       rect.setAttribute("class", "hl-box");
       rect.setAttribute("data-hl-idx", String(hlIdx));
@@ -7192,7 +7192,7 @@ function drawHighlightInSvg(hl, hlIdx){
               rect.setAttribute("height", String(Math.max(8, row.h)));
               const rectColor = hl.color || (hl.type === "note" ? "#FFF1A8" : "#FFE08A");
               rect.setAttribute("fill", hl.type === "note" ? "transparent" : rectColor);
-              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.12");
+              rect.setAttribute("fill-opacity", hl.type === "note" ? "0" : "0.22");
               rect.setAttribute("rx", "2");
               rect.setAttribute("class", "hl-box");
               rect.setAttribute("data-hl-idx", String(hlIdx));
