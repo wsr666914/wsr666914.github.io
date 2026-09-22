@@ -1444,12 +1444,12 @@
   .pr-hl-fmt:hover{ background:var(--paper-deep); color:var(--ink); border-color:var(--ink-mute); }
   .pr-hl-fmt.active{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
   .pr-text u.pr-note{
-    text-decoration:none; border-bottom:1px dashed var(--teal); cursor:pointer;
+    position:relative; text-decoration:none; border-bottom:1px dashed var(--teal); cursor:pointer;
     color:inherit;
   }
   .pr-text u.pr-note::after{
-    content:"✦"; color:var(--teal); font-size:.65em; vertical-align:super;
-    margin-left:2px; font-family:system-ui,sans-serif;
+    content:"✦"; position:absolute; left:100%; top:-.45em; margin-left:2px;
+    color:var(--teal); font-size:.65em; line-height:1; font-family:system-ui,sans-serif;
   }
   .pr-text u.pr-note:hover{ border-bottom-style:solid; }
   .pr-note-popup{
@@ -7241,8 +7241,10 @@ function appendPdfNoteBadge(svg, x, y, hlIdx){
 function appendPdfNoteRangeCue(svg, x, y, width){
   const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
   line.setAttribute("class", "pdf-note-range");
+  /* Range 的右端可能包含最后一个字的字距/选区余量,虚线只收在文字实际范围内。 */
+  const inset = Math.min(2, Math.max(0.5, width * 0.025));
   line.setAttribute("x1", String(x));
-  line.setAttribute("x2", String(x + width));
+  line.setAttribute("x2", String(x + Math.max(2, width - inset)));
   line.setAttribute("y1", String(y));
   line.setAttribute("y2", String(y));
   line.setAttribute("stroke", "#2f5d62");
