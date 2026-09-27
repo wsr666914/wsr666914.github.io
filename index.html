@@ -2086,7 +2086,7 @@
       </div>
     </div>
     <div class="modal-field">
-      <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ —— 双引擎解析(Zotero同款GROBID云端引擎+本地几何),自动识别双栏排版/章节结构/参考文献/真实标题">⇪ 导入文档</button></label>
+      <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ；大文件自动低内存逐页处理，扫描件或乱码文字层自动OCR">⇪ 导入文档</button></label>
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
       <div class="pp-convert-tip">
         <div class="pp-convert-head">☁ PDF 排版不理想？先在成熟平台转为 Word(排版无损)再导入:</div>
@@ -3364,12 +3364,7 @@ async function hydrateLargeFields(){
         }catch(_){}
       }
     }
-    /* PDF原始字节(Uint8Array) - 存在则能走Canvas原生渲染,与Adobe阅读器一致
-       (PDF字节不写localStorage, 只在IDB内存态, 内存挂到it._pdfBytes, 供_getPdfNativeDoc快速查找) */
-    try{
-      const pb = await idbGet(id + "|pdfBytes");
-      if(pb && (pb instanceof Uint8Array || Array.isArray(pb))) it._pdfBytes = pb;
-    }catch(_){}
+    /* 原PDF不在启动时预读：多篇大论文会瞬间占满内存，打开某一篇时再按需从IDB读取。 */
   }
 }
 
@@ -5042,13 +5037,26 @@ function parseDocxToLayout(arrayBuffer){
   });
 }
 
-function extractPdfTextEnhanced(pdf, onPageDone){
+/* PDF文字层质量判断：有些扫描件/乱码PDF会提取出大量标点，但几乎没有真实文字。
+   这种情况必须视为扫描件并启用OCR，不能只按“字符总数”判断。 */
+function pdfTextNeedsOcr(text, pageCount){
+  const compact = String(text || "").replace(/\s/g, "");
+  if(!compact.length) return true;
+  const meaningful = (compact.match(/[A-Za-z0-9\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]/g) || []).length;
+  const minMeaningful = Math.max(16, Math.min(240, Math.max(1, pageCount || 1) * 6));
+  return meaningful < minMeaningful || meaningful / compact.length < 0.32;
+}
+
+function extractPdfTextEnhanced(pdf, onPageDone, options){
   const numPages = pdf.numPages;
-  /* 并行提取: 6路worker并发处理各页(原串行逐页,大PDF提速数倍);页序按页码索引保持 */
+  const lowMemory = !!(options && options.lowMemory) || numPages > 160;
+  const keepImages = !lowMemory && numPages <= 100;
+  const keepBlocks = !lowMemory && numPages <= 160;
+  /* 大PDF自动切到低内存模式：逐页提取、不抓取图片/坐标副本，原版面仍由原PDF画布保留。 */
   const pageData = new Array(numPages);   /* 每页: {lines:[], first:"", last:"", images:[]} */
   const allImages = [];                    /* 全文图片: {page, dataUrl, y, x, w, h} */
   const allBlocks = [];                    /* 全文文字块(版面保真还原用): {x,y,str,w,bold,size,page,pageW,pageH} */
-  const CONC = Math.max(1, Math.min(6, numPages));
+  const CONC = lowMemory ? 1 : Math.max(1, Math.min(4, numPages));
   let next = 0;
   let doneCount = 0;
   function pageDone(){
@@ -5063,7 +5071,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
 
       /* 并行获取文本 + 图片 */
       const textPromise = page.getTextContent();
-      const imgPromise = page.getOperatorList().then(function(ops){
+      const imgPromise = keepImages ? page.getOperatorList().then(function(ops){
         const imgs = [];
         const OPS = pdfjsLib.OPS;
         const imgKeys = {};
@@ -5114,7 +5122,7 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           }
         }
         return imgs;
-      }).catch(function(){ return []; });
+      }).catch(function(){ return []; }) : Promise.resolve([]);
 
       return Promise.all([textPromise, imgPromise]).then(function(results){
         const tc = results[0];
@@ -5141,9 +5149,11 @@ function extractPdfTextEnhanced(pdf, onPageDone){
           items.push({ x: it.transform[4], y: it.transform[5], str: squeezeCjkSpaces(it.str), w: it.width || 0, bold: bold, size: fsize });
         }
         /* 同步收集本页文字块到全文(保留原始坐标/字号/页码,供查看器绝对定位1:1还原版面) */
-        for(let bi=0; bi<items.length; bi++){
-          const bk = items[bi];
-          allBlocks.push({ x: bk.x, y: bk.y, str: bk.str, w: bk.w||0, bold: bk.bold, size: bk.size, page: p, pageW: pageW, pageH: pageH });
+        if(keepBlocks){
+          for(let bi=0; bi<items.length; bi++){
+            const bk = items[bi];
+            allBlocks.push({ x: bk.x, y: bk.y, str: bk.str, w: bk.w||0, bold: bk.bold, size: bk.size, page: p, pageW: pageW, pageH: pageH });
+          }
         }
 
         /* --- 行分组: 先按y分带(y容差4),栏布局交给layoutRowsFromBands --- */
@@ -5300,7 +5310,11 @@ function extractPdfTextEnhanced(pdf, onPageDone){
     if(next >= numPages) return Promise.resolve();
     const p = next + 1;
     next++;
-    return extractOne(p).then(worker);
+    return extractOne(p).catch(function(){
+      /* 单页损坏不能拖垮整份论文；保留页位，打开原PDF时该页仍可显示并尝试OCR。 */
+      pageData[p-1] = { lines:[], first:"", last:"", images:[], boldLines:[], sizeHeads:[] };
+      pageDone();
+    }).then(worker);
   }
   const workers = [];
   for(let i=0; i<CONC; i++) workers.push(worker());
@@ -5956,7 +5970,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, translateMode:false, translateRequestId:0, chat:[] };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, pdfPageObserver:null, translateMode:false, translateRequestId:0, chat:[] };
 
 /* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照。
    注意: 键盘编辑不再调用此函数(改用浏览器原生undo)。
@@ -6916,15 +6930,16 @@ async function _getPdfNativeDoc(item){
   if(_pdfNativeCache[key]) return _pdfNativeCache[key];
   /* 优先读hydrateLargeFields挂好的 item._pdfBytes, 省一次IDB round-trip */
   let bytes = null;
-  if(item._pdfBytes && (item._pdfBytes instanceof Uint8Array || Array.isArray(item._pdfBytes))){
+  if(item._pdfBytes && (item._pdfBytes instanceof Blob || item._pdfBytes instanceof Uint8Array || Array.isArray(item._pdfBytes))){
     bytes = item._pdfBytes;
   }else{
     try{ bytes = await idbGet(key + "|pdfBytes"); }catch(_){ bytes = null; }
   }
-  if(!bytes || !bytes.length) return null;
+  if(!bytes || (!(bytes instanceof Blob) && !bytes.length) || (bytes instanceof Blob && !bytes.size)) return null;
   if(!window.pdfjsLib) return null;
   try{
-    const pdf = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+    const pdfData = bytes instanceof Blob ? new Uint8Array(await bytes.arrayBuffer()) : bytes.slice(0);
+    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
     _pdfNativeCache[key] = { pdf: pdf, bytes: bytes, pages: [] };
     return _pdfNativeCache[key];
   }catch(_){ return null; }
@@ -7010,9 +7025,11 @@ async function renderPdfNative(item, prText){
   prState.pdfNativeCacheKey = String(item.id);
 
   /* ===== 每页 canvas+textLayer 都用同一个 renderScale 的 viewport 渲染, span定位与canvas像素级对齐 ===== */
-  for(let p=1; p<=pdf.numPages; p++){
-    (function(pageNum){
-      pdf.getPage(pageNum).then(function(page){
+  const renderedPdfPages = {};
+  function renderPdfPage(pageNum){
+    if(renderedPdfPages[pageNum]) return;
+    renderedPdfPages[pageNum] = true;
+    pdf.getPage(pageNum).then(function(page){
         const viewport = page.getViewport({ scale: renderScale });
         const canvas = document.getElementById("prPdfCanvas_" + pageNum);
         if(!canvas) return;
@@ -7028,8 +7045,8 @@ async function renderPdfNative(item, prText){
           if(!textLayerEl) return;
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
-          const nativeChars = (tc.items || []).map(function(it){ return it.str || ""; }).join("").replace(/\s/g, "").length;
-          if(nativeChars < 6){
+          const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
+          if(pdfTextNeedsOcr(nativeText, 1)){
             const savedOcr = cache.ocrPages && cache.ocrPages[pageNum];
             if(savedOcr && savedOcr.words && savedOcr.words.length){
               _renderPdfOcrWords(textLayerEl, pageNum, savedOcr, cssPageW, cssPageH);
@@ -7096,8 +7113,28 @@ async function renderPdfNative(item, prText){
             setTimeout(finishTextLayer, 40);
           }
         });
+    }).catch(function(){
+      delete renderedPdfPages[pageNum];
+    });
+  }
+  /* 超过40页的论文按滚动位置加载，避免一次创建几百张画布占满内存。 */
+  const lazyPdfPages = pdf.numPages > 40 && typeof IntersectionObserver !== "undefined";
+  if(lazyPdfPages){
+    if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} }
+    const wrap = document.getElementById("prTextWrap");
+    prState.pdfPageObserver = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting) renderPdfPage(parseInt(entry.target.dataset.page, 10));
       });
-    })(p);
+    }, { root: wrap || null, rootMargin:"1200px 0px" });
+    for(let p=1; p<=pdf.numPages; p++){
+      const el = document.getElementById("prPdfPage_" + p);
+      if(el) prState.pdfPageObserver.observe(el);
+    }
+    renderPdfPage(1);
+    if(pdf.numPages > 1) renderPdfPage(2);
+  }else{
+    for(let p=1; p<=pdf.numPages; p++) renderPdfPage(p);
   }
 
   setTimeout(function(){ renderHighlightsAsSvg(item); }, 500);
@@ -8216,6 +8253,7 @@ function redoLastAction(){
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 async function closePaperReader(){
+  if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
   clearAiSelectionMark();  /* 移除AI解读临时高亮(非永久标注) */
   _closePdfObjectEditor();
   const translations = document.querySelectorAll(".pr-translation");
@@ -11781,28 +11819,44 @@ function renderGallery(){
         const input = document.createElement("input");
         input.type = "file";
         input.accept = ".txt,.md,.text,.pdf";
-        input.onchange = function(){
+        input.onchange = async function(){
           const file = this.files[0];
           if(!file) return;
-          if(file.size > 10*1024*1024){ toast("文件过大(超10MB)"); return; }
+          const lowMemoryUpload = file.size > 32*1024*1024;
+          const deferPdfUpload = file.size > 128*1024*1024;
+          if(lowMemoryUpload) toast("检测到大PDF，将逐页低内存导入，请保持页面打开", 5000);
           const fname = file.name.toLowerCase();
           if(fname.endsWith(".pdf")){
             /* PDF 并行提取(双栏检测+页眉页脚过滤) → 原文直接写入 */
             if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
             toast("正在并行解析PDF……", 2000);
+            let originalStored = false;
+            try{ originalStored = await idbSet(String(target.id) + "|pdfBytes", file); }catch(_){}
+            if(!originalStored){
+              toast("浏览器可用空间不足，无法保存原PDF；请释放空间或先导出已有数据", 6000);
+              return;
+            }
+            if(deferPdfUpload){
+              target.fullText = "超大PDF已完整保留：打开全文后将按页显示原文并按需OCR。";
+              target.ocrOnly = true;
+              target.layout = null;
+              saveState();
+              render();
+              toast("超大PDF已接收 · 为避免内存溢出，将在阅读时按页处理", 6000);
+              return;
+            }
             const reader = new FileReader();
             reader.onload = function(){
               const pdfBytes = new Uint8Array(this.result);
-              /* 保存原始PDF字节到IDB,供阅读器canvas原生渲染使用 */
-              try{ idbSet(String(target.id) + "|pdfBytes", pdfBytes.slice(0)); }catch(_){}
-              pdfjsLib.getDocument({data: pdfBytes.slice(0)}).promise.then(function(pdf){
+              /* 原PDF以File/Blob直接存IDB，避免大文件重复复制。 */
+              pdfjsLib.getDocument({data: pdfBytes}).promise.then(function(pdf){
                 ppProgressShow("正在并行解析 PDF(" + pdf.numPages + " 页)…");
                 return extractPdfTextEnhanced(pdf, function(d, t){
                   ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
-                });
+                }, { lowMemory: lowMemoryUpload });
               }).then(function(res){
                 ppProgressHide(300);
-                if(!res || !res.text || res.text.trim().length < 50){
+                if(!res || pdfTextNeedsOcr(res.text, res.pages)){
                   target.fullText = "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。";
                   target.ocrOnly = true;
                   target.layout = null;
@@ -11824,8 +11878,21 @@ function renderGallery(){
                 toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
               }).catch(function(e){
                 ppProgressHide(0);
-                toast("PDF解析失败:" + (e.message || "未知错误"));
+                target.fullText = "PDF文字层解析失败：原PDF已完整保留，打开全文后将逐页尝试OCR。";
+                target.ocrOnly = true;
+                target.layout = null;
+                saveState();
+                render();
+                toast("原PDF已保存 · 文字层解析失败，打开全文将自动OCR", 5000);
               });
+            };
+            reader.onerror = function(){
+              target.fullText = "大PDF已完整保留：打开全文后将逐页显示原页面并尝试OCR。";
+              target.ocrOnly = true;
+              target.layout = null;
+              saveState();
+              render();
+              toast("文件过大，已改为保留原PDF并在阅读时逐页OCR", 5000);
             };
             reader.readAsArrayBuffer(file);
           }else{
@@ -12984,7 +13051,7 @@ let paperEntryHtml = null;   /* Word导入的流式版面保真HTML(字号/缩�
 let paperEntryPdfBytes = null; /* PDF原始字节(Uint8Array),Canvas原生渲染用,与Adobe阅读器像素级一致,入册时存IDB */
 let paperEntryOcrOnly = false; /* 扫描件：先保留原PDF，打开阅读器后自动生成可选文字层 */
 if(paperEntrySubmit){
-  paperEntrySubmit.onclick = function(){
+  paperEntrySubmit.onclick = async function(){
     const title = paperTitleInput ? paperTitleInput.value : "";
     const fullText = paperFullTextInput ? paperFullTextInput.value : "";
     const isEssay = paperEntryCategory === "essay";
@@ -13025,9 +13092,14 @@ if(paperEntrySubmit){
       result.images = paperEntryImages;
     }
     /* 原始PDF字节存IDB(key=id|pdfBytes),供阅读器canvas原生渲染,不进localStorage(5MB小得可怜) */
-    if(result && paperEntryPdfBytes && paperEntryPdfBytes.length){
+    const hasPdfPayload = paperEntryPdfBytes && ((paperEntryPdfBytes instanceof Blob && paperEntryPdfBytes.size) || paperEntryPdfBytes.length);
+    if(result && hasPdfPayload){
       try{
-        idbSet(String(result.id) + "|pdfBytes", paperEntryPdfBytes.slice(0));
+        const pdfPayload = paperEntryPdfBytes instanceof Blob ? paperEntryPdfBytes : paperEntryPdfBytes.slice(0);
+        const stored = await idbSet(String(result.id) + "|pdfBytes", pdfPayload);
+        if(!stored){
+          toast("论文文字已保存，但原PDF因浏览器空间不足未能完整保存；请先导出备份或释放空间", 6000);
+        }
       }catch(_){}
     }
     if(result) result.ocrOnly = !!paperEntryOcrOnly;
@@ -13051,7 +13123,11 @@ if(paperPdfBtn){
     input.onchange = function(){
       const file = this.files[0];
       if(!file) return;
-      if(file.size > 20*1024*1024){ toast("文件过大(超20MB)"); return; }
+      const lowMemoryImport = file.size > 32*1024*1024;
+      const deferPdfParsing = file.size > 128*1024*1024;
+      if(lowMemoryImport){
+        toast("检测到大文件，将使用低内存逐页模式；解析时间会更长，请保持页面打开", 5000);
+      }
       const fname = file.name.toLowerCase();
       if(fname.endsWith(".docx")){
         /* ---- Word(.docx)导入: 优先JSZip版面保真还原(字号/缩进/双栏),失败回退mammoth纯文本 ---- */
@@ -13132,15 +13208,15 @@ if(paperPdfBtn){
           }
           const pdfBytes = buf.slice(pdfOff);
           /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
-          paperEntryPdfBytes = pdfBytes.slice(0);
+          paperEntryPdfBytes = new Blob([pdfBytes], { type:"application/pdf" });
           /* CAJ双引擎赛马(与PDF一致): 本地几何 + GROBID云端(Zotero同款) */
           ppProgressShow("检测到内嵌PDF · 双引擎解析中(Zotero同款GROBID + 本地几何)…");
           const localP = pdfjsLib.getDocument({data: pdfBytes.slice(0)}).promise.then(function(pdf){
             return extractPdfTextEnhanced(pdf, function(d, t){
               ppProgressUpdate(70 * d / t, "解析CAJ · 第 " + d + "/" + t + " 页");
-            });
+            }, { lowMemory: lowMemoryImport });
           });
-          const grobidP = Promise.race([
+          const grobidP = lowMemoryImport ? Promise.resolve(null) : Promise.race([
             grobidParsePdf(pdfBytes),
             new Promise(function(r){ setTimeout(function(){ r(null); }, 25000); })
           ]).then(function(tei){
@@ -13153,7 +13229,7 @@ if(paperPdfBtn){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
             ppProgressHide(300);
-            const isScannedCaj = !res || !res.text || res.text.trim().length < 50;
+            const isScannedCaj = !res || pdfTextNeedsOcr(res.text, res.pages);
             if(paperFullTextInput){
               paperFullTextInput.value = isScannedCaj ? "扫描版 CAJ/PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。" : res.text;
               updatePaperEntryStats();
@@ -13190,14 +13266,29 @@ if(paperPdfBtn){
       if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
       paperPdfBtn.classList.add("busy");
       paperPdfBtn.innerHTML = "⇪ 解析中…";
-      ppProgressShow("双引擎解析 PDF 中(Zotero同款GROBID + 本地几何)…");
+      ppProgressShow(lowMemoryImport ? "大PDF低内存逐页解析中（保留原文件，损坏页自动跳过）…" : "双引擎解析 PDF 中(Zotero同款GROBID + 本地几何)…");
+      paperEntryPdfBytes = file;
+      if(deferPdfParsing){
+        paperPdfBtn.classList.remove("busy");
+        paperPdfBtn.innerHTML = "⇪ 导入文档";
+        ppProgressHide(0);
+        if(paperFullTextInput){ paperFullTextInput.value = "超大PDF已完整保留：为避免浏览器内存溢出，入册后将在阅读时按页显示原文并按需OCR。"; updatePaperEntryStats(); }
+        paperEntryFromPdf = true;
+        paperEntryOcrOnly = true;
+        paperEntryImages = null;
+        paperEntryStructured = null;
+        paperEntryLayout = null;
+        if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
+        toast("超大PDF已接收 · 不再整份展开，整理入册后按页读取", 6000);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = function(){
         const rawBytes = new Uint8Array(this.result);
-        /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
-        paperEntryPdfBytes = rawBytes.slice(0);
-        /* 本地路: pdf.js几何解析(需副本,pdf.js会消耗buffer) */
-        const localP = pdfjsLib.getDocument({data: rawBytes.slice(0)}).promise.then(function(pdf){
+        /* 把浏览器File/Blob直接存入IDB，避免为大PDF再复制一份巨大Uint8Array。 */
+        /* 本地路: 大文件逐页低内存提取，不抓取额外图片/坐标副本。 */
+        const pdfData = lowMemoryImport ? rawBytes : rawBytes.slice(0);
+        const localP = pdfjsLib.getDocument({data: pdfData}).promise.then(function(pdf){
           /* 读取PDF元数据标题(知网论文通常嵌入真实标题) */
           pdf.getMetadata().then(function(meta){
             const mt = (meta && meta.info && meta.info.Title) ? meta.info.Title.trim() : "";
@@ -13207,11 +13298,11 @@ if(paperPdfBtn){
           }).catch(function(){});
           return extractPdfTextEnhanced(pdf, function(d, t){
             ppProgressUpdate(70 * d / t, "本地几何解析 · 第 " + d + "/" + t + " 页");
-          });
+          }, { lowMemory: lowMemoryImport });
         });
         /* 云端路: GROBID(Zotero同款),25秒总预算(空间休眠时不拖慢导入) */
-        ppProgressUpdate(72, "GROBID 云端引擎解析中(Zotero 同款 · 双栏阅读顺序精确恢复)…");
-        const grobidP = Promise.race([
+        if(!lowMemoryImport) ppProgressUpdate(72, "GROBID 云端引擎解析中(Zotero 同款 · 双栏阅读顺序精确恢复)…");
+        const grobidP = lowMemoryImport ? Promise.resolve(null) : Promise.race([
           grobidParsePdf(rawBytes),
           new Promise(function(r){ setTimeout(function(){ r(null); }, 25000); })
         ]).then(function(tei){
@@ -13227,7 +13318,7 @@ if(paperPdfBtn){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
           ppProgressHide(300);
-          const isScannedPdf = !res || !res.text || res.text.trim().length < 50;
+          const isScannedPdf = !res || pdfTextNeedsOcr(res.text, res.pages);
           if(paperFullTextInput){
             paperFullTextInput.value = isScannedPdf ? "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。" : res.text;
             updatePaperEntryStats();
@@ -13265,8 +13356,28 @@ if(paperPdfBtn){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
           ppProgressHide(0);
-          toast("PDF解析失败:" + (e.message || "未知错误"));
+          if(paperFullTextInput){ paperFullTextInput.value = "PDF文字层解析失败：原PDF已完整保留，入册后打开全文将逐页尝试OCR。"; updatePaperEntryStats(); }
+          paperEntryFromPdf = true;
+          paperEntryOcrOnly = true;
+          paperEntryImages = null;
+          paperEntryStructured = null;
+          paperEntryLayout = null;
+          if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
+          toast("原PDF已保留 · 文字层解析失败，仍可整理入册并自动OCR", 5000);
         });
+      };
+      reader.onerror = function(){
+        paperPdfBtn.classList.remove("busy");
+        paperPdfBtn.innerHTML = "⇪ 导入文档";
+        ppProgressHide(0);
+        if(paperFullTextInput){ paperFullTextInput.value = "大PDF已完整保留：入册后打开全文将逐页显示原页面并尝试OCR。"; updatePaperEntryStats(); }
+        paperEntryFromPdf = true;
+        paperEntryOcrOnly = true;
+        paperEntryImages = null;
+        paperEntryStructured = null;
+        paperEntryLayout = null;
+        if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
+        toast("文件过大，已改为保留原PDF并在阅读时逐页OCR；可继续整理入册", 6000);
       };
       reader.readAsArrayBuffer(file);
     };
