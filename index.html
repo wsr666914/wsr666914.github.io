@@ -6770,7 +6770,8 @@ let _pdfNativeCache = {};
 let _pdfOcrWorker = null;
 let _pdfOcrWorkerPromise = null;
 let _pdfOcrQueue = Promise.resolve();
-const PDF_OCR_STORE_VERSION = 1;
+/* 升级中文模型加载后，让旧的英文/数字残缺识别缓存自动重新生成。 */
+const PDF_OCR_STORE_VERSION = 2;
 function _setPdfOcrStatus(message, visible){
   const el = document.getElementById("prOcrStatus");
   if(!el) return;
@@ -6783,15 +6784,18 @@ function _getPdfOcrWorker(){
   if(!window.Tesseract || typeof window.Tesseract.createWorker !== "function"){
     return Promise.reject(new Error("OCR 组件未加载"));
   }
-  _pdfOcrWorkerPromise = window.Tesseract.createWorker("chi_sim+eng", 1, {
+  /* Tesseract.js v5 要求多语言以数组传入；字符串“chi_sim+eng”会导致中文训练数据
+     在部分浏览器中没有正确加载，于是只剩数字和英文可识别。 */
+  _pdfOcrWorkerPromise = window.Tesseract.createWorker(["chi_sim", "eng"], 1, {
     logger:function(msg){
       if(msg && msg.status === "recognizing text" && typeof msg.progress === "number"){
         _setPdfOcrStatus("正在识别扫描文字… " + Math.round(msg.progress * 100) + "%", true);
       }
     }
   }).then(function(worker){
-    _pdfOcrWorker = worker;
-    return worker;
+    return Promise.resolve(worker.setParameters({ tessedit_pageseg_mode:"3", preserve_interword_spaces:"1" }))
+      .catch(function(){})
+      .then(function(){ _pdfOcrWorker = worker; return worker; });
   }).catch(function(err){
     _pdfOcrWorkerPromise = null;
     throw err;
@@ -6916,6 +6920,9 @@ async function renderPdfNative(item, prText){
   if(!cache || !cache.pdf) return false;
   const pdf = cache.pdf;
   await _loadPdfOcrPages(item, cache);
+  /* 旧版已导入论文的 item.ocrOnly 可能还是 false；根据整篇文字密度再次判断，
+     让历史记录也能转入中文 OCR，不必要求用户重新导入。 */
+  const forceOcr = !!item.ocrOnly || pdfTextNeedsOcr(item.fullText || "", pdf.numPages);
   /* 模式标记 */
   prText.classList.add("pr-pdf-native");
   prText.classList.remove("pr-layout-mode");
@@ -7011,7 +7018,7 @@ async function renderPdfNative(item, prText){
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
           const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
-          if(item.ocrOnly || pdfTextNeedsOcr(nativeText, 1)){
+          if(forceOcr || pdfTextNeedsOcr(nativeText, 1)){
             const savedOcr = cache.ocrPages && cache.ocrPages[pageNum];
             if(savedOcr && savedOcr.words && savedOcr.words.length){
               _renderPdfOcrWords(textLayerEl, pageNum, savedOcr, cssPageW, cssPageH);
