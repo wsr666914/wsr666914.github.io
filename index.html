@@ -1768,6 +1768,25 @@
   }
   .login-submit:hover{ background:var(--accent-deep); }
   .login-submit:active{ transform:scale(.98); }
+  .login-guest{
+    width:100%; margin-top:10px; padding:9px 11px;
+    background:transparent; color:var(--teal); border:1px solid rgba(47,93,98,.35);
+    border-radius:8px; font-family:"Cormorant Garamond","Noto Serif SC",serif;
+    font-size:14px; font-weight:600; letter-spacing:.06em; cursor:pointer;
+    transition:background .2s, border-color .2s, transform .15s;
+  }
+  .login-guest:hover{ background:rgba(47,93,98,.08); border-color:var(--teal); }
+  .login-guest:active{ transform:scale(.98); }
+  .login-forgot{
+    display:block; margin:9px auto 0; color:var(--ink-mute); font-size:12px;
+    text-align:center; text-decoration:none; font-family:"Newsreader","Noto Serif SC",serif;
+  }
+  .login-forgot:hover{ color:var(--accent); text-decoration:underline; }
+  .forgot-divider{
+    margin:18px 0 12px; padding-top:12px; border-top:1px dashed var(--line-soft);
+    color:var(--ink-mute); text-align:center; font-size:12px;
+    font-family:"Newsreader","Noto Serif SC",serif;
+  }
   .login-hint{
     min-height:18px; text-align:center; font-size:13px;
     color:var(--accent); margin-top:12px; font-style:italic;
@@ -1824,6 +1843,7 @@
         <span>换设备?名号栏输入<b>身份码</b>+暗语即可同步云端数据</span>
         <a href="#" id="loginViewCode">查看我的身份码 →</a>
       </div>
+      <a href="#" class="login-forgot" id="forgotPassLink">忘记暗语？找回或重置</a>
     </div>
     <!-- 注册表单 -->
     <div class="login-form" id="registerForm" style="display:none;">
@@ -1841,8 +1861,9 @@
       </div>
       <button class="login-submit" id="registerSubmit">立册 · REGISTER</button>
     </div>
+    <button class="login-guest" id="guestEntry">游客进入 · 本机使用</button>
     <div class="login-hint" id="loginHint"></div>
-    <div class="login-note">每位访客的志录各自独立储存。注册即生成<b>身份码</b>:任意设备凭身份码+暗语登录,云端同步全部志录。</div>
+    <div class="login-note">注册账号可跨设备同步；游客模式无需注册，数据仅保存在当前设备。</div>
   </div>
 </div>
 
@@ -2176,9 +2197,15 @@
       <code id="syncCodeValue" class="sync-code-value">—</code>
       <button class="sync-copy-btn" id="syncCopyBtn">复制</button>
     </div>
+    <div class="sync-code-box" style="margin-top:8px;">
+      <span style="font-size:12px;color:var(--ink-mute);margin-right:8px;">恢复码</span>
+      <code id="recoveryCodeValue" class="sync-code-value">—</code>
+      <button class="sync-copy-btn" id="recoveryCopyBtn">复制</button>
+    </div>
     <div class="sync-note">
       · 下方为<b>今日身份码</b>(末尾4位每日自动更换),仅在当日有效,次日零点失效,防盗号<br>
       · 在其他设备登录页名号栏输入今日身份码 + 暗语,即可同步全部志录<br>
+      · <b>恢复码</b>用于忘记暗语时重置云端账号,请与身份码分开保存<br>
       · 昨日码已失效;若今日码未刷新,重新打开本弹窗即取最新值<br>
       · 身份码与暗语同等重要,请勿泄露给他人;数据经云端KV暂存,本机存储为主
     </div>
@@ -2200,6 +2227,39 @@
     <div class="modal-row">
       <button class="modal-btn" id="syncCodeCloseBtn">我已保存,关闭</button>
     </div>
+  </div>
+</div>
+
+<!-- 忘记暗语弹窗 -->
+<div class="modal-bg" id="forgotPassModal">
+  <div class="modal forgot-modal">
+    <h3>找回 / 重置暗语</h3>
+    <div class="ai-cfg-tip">如果还在原来的浏览器中，可直接本机重置；如果要找回云端账号，需要输入此前保存的身份码和恢复码。</div>
+    <div class="form-group">
+      <label>本机账号名号</label>
+      <input type="text" id="forgotLocalUser" autocomplete="off" placeholder="仅限当前浏览器已有账号">
+    </div>
+    <div class="form-group">
+      <label>新的暗语 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 须含大写字母+数字</span></label>
+      <input type="password" id="forgotNewPass" autocomplete="new-password" placeholder="如 Abc123">
+    </div>
+    <div class="form-group">
+      <label>确认新的暗语</label>
+      <input type="password" id="forgotNewPass2" autocomplete="new-password" placeholder="再输一遍">
+    </div>
+    <button class="modal-btn" id="forgotLocalSubmit" type="button">本机重置并登录</button>
+    <div class="forgot-divider">— 云端账号恢复 —</div>
+    <div class="form-group">
+      <label>身份码（可带今日末尾 4 位）</label>
+      <input type="text" id="forgotSyncCode" autocomplete="off" placeholder="SY-…">
+    </div>
+    <div class="form-group">
+      <label>恢复码</label>
+      <input type="text" id="forgotRecoveryCode" autocomplete="off" placeholder="注册后生成并提示保存的 RC-…">
+    </div>
+    <button class="modal-btn" id="forgotCloudSubmit" type="button">验证恢复码并更新云端暗语</button>
+    <div class="login-hint" id="forgotHint"></div>
+    <div class="modal-row"><button class="modal-btn" id="forgotCloseBtn" type="button">关闭</button></div>
   </div>
 </div>
 
@@ -2450,6 +2510,7 @@ const TRASH_RETAIN_MS = 7 * 24 * 60 * 60 * 1000;
    ============================================================ */
 const USERS_KEY = "shuyingshidan_users";
 const SESSION_KEY = "shuyingshidan_session";
+const GUEST_USER = "__guest__";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
 const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayYearFilter: null, essayMonthFilter: null, subcatFilter: null };
 let currentUser = null;
@@ -2498,8 +2559,16 @@ function hideLoginScreen(){
 function updateNavUser(){
   const navUser = document.getElementById("navUser");
   const logoutBtn = document.getElementById("logoutBtn");
-  if(navUser) navUser.textContent = currentUser || "";
+  if(navUser) navUser.textContent = currentUser === GUEST_USER ? "游客" : (currentUser || "");
   if(logoutBtn) logoutBtn.style.display = currentUser ? "" : "none";
+}
+
+/* 游客模式: 不要求注册或云端服务,每个浏览器独立保存在本机。 */
+function enterGuestMode(){
+  setSession(GUEST_USER);
+  hideLoginScreen();
+  afterLogin();
+  toast("已进入游客模式 · 数据仅保存在本机");
 }
 
 function doRegister(){
@@ -2522,7 +2591,8 @@ function doRegister(){
   /* 生成身份码(多设备同步凭证,云端存储key) + 每日动态种子(防盗号) */
   const syncCode = genSyncCode();
   const secret = genSecret();
-  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode, sec: secret };
+  const recoveryCode = genRecoveryCode();
+  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode, sec: secret, rh: hashPass(recoveryCode), recoveryCode: recoveryCode };
   saveUsers(users);
   hint.textContent = "";
   // 注册成功直接登录
@@ -2626,10 +2696,89 @@ function doLogin(){
   syncCheckOnLogin();
 }
 
+function _validateNewPassword(pass, pass2, hint){
+  if(!pass || pass.length < 1){ hint.textContent = "请输入新的暗语"; return false; }
+  if(!/[A-Z]/.test(pass) || !/[0-9]/.test(pass)){
+    hint.textContent = "新的暗语须含大写字母与数字(如 Abc123)"; return false;
+  }
+  if(pass !== pass2){ hint.textContent = "两次新的暗语不一致"; return false; }
+  return true;
+}
+
+function resetLocalPassword(){
+  const hint = document.getElementById("forgotHint");
+  const u = (document.getElementById("forgotLocalUser").value || "").trim();
+  const p = document.getElementById("forgotNewPass").value || "";
+  const p2 = document.getElementById("forgotNewPass2").value || "";
+  if(!hint) return;
+  if(!u){ hint.textContent = "请输入本机已有的账号名号"; return; }
+  const users = getUsers();
+  if(!users[u]){ hint.textContent = "本机没有这个账号；请改用下方身份码 + 恢复码恢复"; return; }
+  if(!_validateNewPassword(p, p2, hint)) return;
+  users[u].pass = hashPass(p);
+  saveUsers(users);
+  setSession(u);
+  hideLoginScreen();
+  const modal = document.getElementById("forgotPassModal");
+  if(modal) modal.classList.remove("show");
+  afterLogin();
+  toast("暗语已重置 · 已登录");
+}
+
+async function resetCloudPassword(){
+  const hint = document.getElementById("forgotHint");
+  const codeInput = (document.getElementById("forgotSyncCode").value || "").trim();
+  const recovery = (document.getElementById("forgotRecoveryCode").value || "").trim().toUpperCase();
+  const p = document.getElementById("forgotNewPass").value || "";
+  const p2 = document.getElementById("forgotNewPass2").value || "";
+  if(!hint) return;
+  if(!isSyncCode(codeInput)){ hint.textContent = "身份码格式不正确"; return; }
+  if(!recovery){ hint.textContent = "请输入恢复码"; return; }
+  if(!_validateNewPassword(p, p2, hint)) return;
+  const sp = splitSyncCode(codeInput);
+  hint.textContent = "正在验证身份码和恢复码…";
+  const pulled = await syncPull(sp.code);
+  if(!pulled.ok || !pulled.data){ hint.textContent = pulled.reason || "云端账号读取失败"; return; }
+  const data = pulled.data;
+  if(data.sec){
+    if(!sp.suffix){ hint.textContent = "该账号需要输入今日完整身份码(末尾4位)"; return; }
+    if(sp.suffix !== dailySuffix(data.sec, todayStr())){ hint.textContent = "身份码今日校验位不正确,请从账号弹窗复制最新身份码"; return; }
+  }
+  if(!data.rh){ hint.textContent = "该账号尚未生成恢复码；请在原设备登录一次后，在身份码弹窗中保存恢复码"; return; }
+  if(hashPass(recovery) !== data.rh){ hint.textContent = "恢复码不正确"; return; }
+  data.ph = hashPass(p);
+  data.ts = Date.now();
+  hint.textContent = "验证通过，正在更新云端账号…";
+  const ok = await syncWritePayload(sp.code, data);
+  if(!ok){ hint.textContent = "云端更新失败，请稍后重试"; return; }
+  const users = getUsers();
+  users[data.u] = { pass:data.ph, createdAt:Date.now(), code:sp.code, sec:data.sec || null, rh:data.rh, recoveryCode:recovery };
+  saveUsers(users);
+  setSession(data.u);
+  if(Array.isArray(data.items)){
+    state.items = data.items;
+    state.pendingReview = data.pendingReview || [];
+    state.trash = data.trash || [];
+    saveState();
+  }
+  hideLoginScreen();
+  const modal = document.getElementById("forgotPassModal");
+  if(modal) modal.classList.remove("show");
+  afterLogin();
+  toast("云端暗语已更新 · 已登录");
+}
+
+function openForgotPassword(){
+  const modal = document.getElementById("forgotPassModal");
+  const hint = document.getElementById("forgotHint");
+  if(hint) hint.textContent = "";
+  if(modal) modal.classList.add("show");
+}
+
 /* ============================================================
    身份码 · 多设备同步 (textdb.online 云端KV,CORS开放国内可达)
    身份码 = SY-XXXX24位随机,同时是云端存储key
-   云端数据: {v,u(名号),ph(暗语哈希),ts(时间戳),items,pendingReview,trash}
+   云端数据: {v,u(名号),ph(暗语哈希),rh(恢复码哈希),ts(时间戳),items,pendingReview,trash}
    写入限流: 每IP每日500次 → 防抖6秒合并推送
    ============================================================ */
 const SYNC_BASE = "https://textdb.online";
@@ -2656,6 +2805,27 @@ function genSecret(){
   const ch = "abcdefghijkmnpqrstuvwxyz23456789";
   let s = ""; for(let i=0;i<16;i++) s += ch.charAt(Math.floor(Math.random()*ch.length));
   return s;
+}
+/* 恢复码只在账号创建/补发时展示一次;云端仅保存哈希,不保存明文。 */
+function genRecoveryCode(){
+  const ch = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = ""; for(let i=0;i<16;i++) s += ch.charAt(Math.floor(Math.random()*ch.length));
+  return "RC-" + s;
+}
+function ensureRecoveryForUser(username){
+  if(!username || username === GUEST_USER) return null;
+  const users = getUsers();
+  const acc = users[username];
+  if(!acc) return null;
+  if(!acc.rh || !acc.recoveryCode){
+    const code = genRecoveryCode();
+    acc.rh = hashPass(code);
+    acc.recoveryCode = code;
+    users[username] = acc;
+    saveUsers(users);
+    return code;
+  }
+  return acc.recoveryCode;
 }
 function todayStr(){
   const d = new Date();
@@ -2695,6 +2865,19 @@ async function syncWriteOne(key, valueStr){
   const j = await res.json().catch(function(){ return null; });
   return !!(j && j.status === 1);
 }
+/* 写入完整云端账号数据,与同步推送共用分块协议。 */
+async function syncWritePayload(code, payload){
+  let bodyStr = "";
+  try{ bodyStr = JSON.stringify(payload); }catch(e){ return false; }
+  if(bodyStr.length <= SYNC_CHUNK) return await syncWriteOne(code, bodyStr);
+  const n = Math.ceil(bodyStr.length / SYNC_CHUNK);
+  for(let i=0; i<n; i++){
+    const ok = await syncWriteOne(code + "_p" + (i+1), bodyStr.slice(i*SYNC_CHUNK, (i+1)*SYNC_CHUNK));
+    if(!ok) return false;
+    if(i < n-1) await new Promise(function(r){ setTimeout(r, 350); });
+  }
+  return await syncWriteOne(code, JSON.stringify({ chunked:true, n:n, ts:payload.ts }));
+}
 /* 带超时的 fetch: 避免云端无响应时永久卡在"识别中" */
 async function fetchWithTimeout(url, opts, ms){
   const ctl = (typeof AbortController !== "undefined") ? new AbortController() : null;
@@ -2720,6 +2903,7 @@ async function syncPushNow(){
     u: currentUser,
     ph: acc.pass,
     sec: acc.sec || null, /* 每日动态种子(防盗号),随数据同步到云端 */
+    rh: acc.rh || null, /* 恢复码哈希,用于忘记暗语时验证 */
     ts: Date.now(),
     items: state.items,
     pendingReview: state.pendingReview || [],
@@ -2732,27 +2916,11 @@ async function syncPushNow(){
     toast("数据量较大,同步中(~" + Math.ceil(bodyStr.length/2800) + "块分块上传),请勿关闭页面", 5000);
   }
   try{
-    if(bodyStr.length <= SYNC_CHUNK){
-      /* 小数据: 单条直写 */
-      const ok = await syncWriteOne(code, bodyStr);
-      if(ok){
-        try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
-      }else{
-        toast("云端同步失败(服务波动),稍后自动重试", 4000);
-      }
+    const ok = await syncWritePayload(code, payload);
+    if(ok){
+      try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
     }else{
-      /* 大数据: 分块写 key_p1..pn,主key最后写原子标记 */
-      const n = Math.ceil(bodyStr.length / SYNC_CHUNK);
-      for(let i=0; i<n; i++){
-        const ok = await syncWriteOne(code + "_p" + (i+1), bodyStr.slice(i*SYNC_CHUNK, (i+1)*SYNC_CHUNK));
-        if(!ok){ toast("云端同步中断(第" + (i+1) + "/" + n + "块),稍后重试", 4000); return; }
-        if(i < n-1) await new Promise(function(r){ setTimeout(r, 350); }); /* 块间间隔防限流 */
-      }
-      /* 主key原子标记(最后写,读方以此为准) */
-      const ok = await syncWriteOne(code, JSON.stringify({ chunked: true, n: n, ts: payload.ts }));
-      if(ok){
-        try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
-      }
+      toast("云端同步失败(服务波动),稍后自动重试", 4000);
     }
   }catch(e){
     /* 网络失败静默,下次操作再推 */
@@ -2824,10 +2992,12 @@ function showSyncCodeModal(){
   const code = getMySyncCode();
   const modal = document.getElementById("syncCodeModal");
   const codeEl = document.getElementById("syncCodeValue");
+  const recoveryEl = document.getElementById("recoveryCodeValue");
   if(!modal || !codeEl) return;
   if(!code){
-    codeEl.textContent = "当前账号尚未生成身份码(注册于早期版本)";
-    toast("该账号无身份码:重新注册可获取");
+    codeEl.textContent = currentUser === GUEST_USER ? "游客模式不使用云端身份码" : "当前账号尚未生成身份码(注册于早期版本)";
+    if(recoveryEl) recoveryEl.textContent = currentUser === GUEST_USER ? "游客模式无需恢复码" : "—";
+    if(currentUser !== GUEST_USER) toast("该账号无身份码:重新注册可获取");
     return;
   }
   const users = getUsers();
@@ -2841,6 +3011,7 @@ function showSyncCodeModal(){
   }
   /* 显示今日身份码: 真实码 + 今日4位校验位(每日不同, 昨日码失效) */
   codeEl.textContent = todaySyncCode(code, sec);
+  if(recoveryEl) recoveryEl.textContent = ensureRecoveryForUser(currentUser) || "—";
   modal.classList.add("show");
   /* 刷新本机容量显示 */
   refreshStorageInfo();
@@ -2898,7 +3069,7 @@ function exportAllData(){
   const payload = {
     exporter: "shuyingshidan_v2",
     exportedAt: new Date().toISOString(),
-    user: { name: currentUser, pass: acc.pass || null, code: acc.code || null, sec: acc.sec || null },
+    user: { name: currentUser, pass: acc.pass || null, code: acc.code || null, sec: acc.sec || null, rh: acc.rh || null, recoveryCode: acc.recoveryCode || null },
     items: state.items,
     pendingReview: state.pendingReview || [],
     trash: state.trash || [],
@@ -2941,6 +3112,8 @@ function handleImportFile(f){
         if(obj.user.pass) users[currentUser].pass = obj.user.pass;
         if(obj.user.code) users[currentUser].code = obj.user.code;
         if(obj.user.sec) users[currentUser].sec = obj.user.sec;
+        if(obj.user.rh) users[currentUser].rh = obj.user.rh;
+        if(obj.user.recoveryCode) users[currentUser].recoveryCode = obj.user.recoveryCode;
         saveUsers(users);
       }
       saveState();
@@ -3014,6 +3187,18 @@ function afterLogin(){
         showSyncCodeModal();
         toast("已为该账号生成身份码(多设备同步已开通,请妥善保存)", 5000);
       }, 1200);
+    }
+  }catch(e){ /* 静默 */ }
+  /* 老账号补发恢复码: 登录后在身份码弹窗中保存,以后可在异地重置暗语。 */
+  try{
+    if(currentUser && currentUser !== GUEST_USER){
+      const before = getUsers()[currentUser];
+      const hadRecovery = !!(before && before.rh);
+      const recovery = ensureRecoveryForUser(currentUser);
+      if(recovery && !hadRecovery){
+        scheduleSyncPush();
+        setTimeout(function(){ showSyncCodeModal(); toast("已生成恢复码,请与身份码分开保存", 5000); }, 1400);
+      }
     }
   }catch(e){ /* 静默 */ }
   updateTrashBtn();      /* 导航徽章 */
@@ -13135,6 +13320,23 @@ function toast(msg, duration){
   // 注册按钮
   const registerSubmit = document.getElementById("registerSubmit");
   if(registerSubmit) registerSubmit.onclick = doRegister;
+  const guestEntry = document.getElementById("guestEntry");
+  if(guestEntry) guestEntry.onclick = enterGuestMode;
+  const forgotPassLink = document.getElementById("forgotPassLink");
+  if(forgotPassLink) forgotPassLink.onclick = function(e){ e.preventDefault(); openForgotPassword(); };
+  const forgotCloseBtn = document.getElementById("forgotCloseBtn");
+  if(forgotCloseBtn) forgotCloseBtn.onclick = function(){
+    const modal = document.getElementById("forgotPassModal");
+    if(modal) modal.classList.remove("show");
+  };
+  const forgotModal = document.getElementById("forgotPassModal");
+  if(forgotModal) forgotModal.addEventListener("click", function(e){
+    if(e.target === forgotModal) forgotModal.classList.remove("show");
+  });
+  const forgotLocalSubmit = document.getElementById("forgotLocalSubmit");
+  if(forgotLocalSubmit) forgotLocalSubmit.onclick = resetLocalPassword;
+  const forgotCloudSubmit = document.getElementById("forgotCloudSubmit");
+  if(forgotCloudSubmit) forgotCloudSubmit.onclick = resetCloudPassword;
   // 回车提交
   const loginUser = document.getElementById("loginUser");
   const loginPass = document.getElementById("loginPass");
@@ -13283,6 +13485,20 @@ function toast(msg, duration){
       }catch(e){ toast("复制失败,请手动选中复制"); }
     }
   };
+  const recoveryCopyBtn = document.getElementById("recoveryCopyBtn");
+  if(recoveryCopyBtn) recoveryCopyBtn.onclick = function(){
+    const code = (document.getElementById("recoveryCodeValue").textContent || "").trim();
+    if(!code || code === "—" || code.indexOf("无需") >= 0){ toast("当前没有可复制的恢复码"); return; }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(code).then(function(){ toast("恢复码已复制"); });
+    }else{
+      try{
+        const ta = document.createElement("textarea");
+        ta.value = code; document.body.appendChild(ta); ta.select(); document.execCommand("copy");
+        document.body.removeChild(ta); toast("恢复码已复制");
+      }catch(e){ toast("复制失败,请手动选中复制"); }
+    }
+  };
   const loginViewCodeLink = document.getElementById("loginViewCode");
   if(loginViewCodeLink) loginViewCodeLink.onclick = function(e){
     e.preventDefault();
@@ -13305,7 +13521,7 @@ function toast(msg, duration){
   try{ savedUser = localStorage.getItem(SESSION_KEY); }catch(e){}
   if(savedUser){
     const users = getUsers();
-    if(users[savedUser]){
+    if(savedUser === GUEST_USER || users[savedUser]){
       // 会话有效,直接登录
       setSession(savedUser);
       hideLoginScreen();
