@@ -2130,7 +2130,7 @@
           <button class="pr-hl-undo" id="prHlUndo" title="撤销上一步(Ctrl+Z)">↶</button>
           <button class="pr-hl-undo" id="prHlRedo" title="重做(Ctrl+Y / Ctrl+Shift+Z)">↷</button>
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标记（可逐步撤回）">×</button>
-          <button class="pr-hl-save" id="prHlSave" title="保存标注,下次进入仍可见">✓ 保存</button>
+          <button class="pr-hl-save" id="prHlSave" title="立即保存文字修改、标注和备注,下次进入仍可见">✓ 保存修改</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">✕ 取消标记</button>
@@ -2202,10 +2202,16 @@
       <code id="recoveryCodeValue" class="sync-code-value">—</code>
       <button class="sync-copy-btn" id="recoveryCopyBtn">复制</button>
     </div>
+    <div class="form-group" style="margin-top:14px;">
+      <label>自定义简短身份码 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 6–16位字母/数字</span></label>
+      <input type="text" id="syncCustomInput" autocomplete="off" placeholder="例如 mylibrary88">
+      <button class="modal-btn" id="syncCustomSave" type="button" style="margin-top:8px;">设置我的简码</button>
+    </div>
     <div class="sync-note">
       · 下方为<b>今日身份码</b>(末尾4位每日自动更换),仅在当日有效,次日零点失效,防盗号<br>
       · 在其他设备登录页名号栏输入今日身份码 + 暗语,即可同步全部志录<br>
-      · <b>恢复码</b>用于忘记暗语时重置云端账号,请与身份码分开保存<br>
+      · <b>恢复码</b>用于忘记暗语时重置云端暗语,请与身份码分开保存<br>
+      · 身份码可改成自己容易记的简码;设置后请重新保存今日身份码<br>
       · 昨日码已失效;若今日码未刷新,重新打开本弹窗即取最新值<br>
       · 身份码与暗语同等重要,请勿泄露给他人;数据经云端KV暂存,本机存储为主
     </div>
@@ -2792,12 +2798,12 @@ function genSyncCode(){
 }
 /* 身份码格式校验: 接受纯身份码 SY-xxxx 或 今日动态码 SY-xxxx-aaaa(4位日历校验位) */
 function isSyncCode(s){
-  return /^SY-[0-9a-zA-Z]{16,40}(-[0-9a-z]{4})?$/.test((s || "").trim());
+  return /^SY-[0-9a-zA-Z]{6,40}(-[0-9a-z]{4})?$/.test((s || "").trim());
 }
 /* 拆分身份码: 返回 {code: 真实云端key, suffix: 后缀或null} */
 function splitSyncCode(s){
   const t = (s || "").trim();
-  const m = t.match(/^(SY-[0-9a-zA-Z]{16,40})(?:-([0-9a-z]{4}))?$/);
+  const m = t.match(/^(SY-[0-9a-zA-Z]{6,40})(?:-([0-9a-z]{4}))?$/);
   return m ? { code: m[1], suffix: m[2] || null } : null;
 }
 /* 每日动态种子(防盗号: 身份码本体不变, 仅末尾4位随日期更换, 昨日码今日失效) */
@@ -3015,6 +3021,35 @@ function showSyncCodeModal(){
   modal.classList.add("show");
   /* 刷新本机容量显示 */
   refreshStorageInfo();
+}
+
+async function setCustomSyncCode(){
+  const input = document.getElementById("syncCustomInput");
+  const raw = (input && input.value || "").trim().toLowerCase();
+  if(!currentUser || currentUser === GUEST_USER){ toast("游客模式不能设置云端身份码"); return; }
+  if(!/^[a-z0-9]{6,16}$/.test(raw)){ toast("简码须为6–16位字母或数字"); return; }
+  const newCode = "SY-" + raw;
+  const users = getUsers();
+  const acc = users[currentUser];
+  if(!acc) return;
+  const oldCode = acc.code || "";
+  if(newCode === oldCode){ toast("这就是当前身份码"); return; }
+  const existing = await syncPull(newCode);
+  if(existing.ok && existing.data && existing.data.u && existing.data.u !== currentUser){
+    toast("这个简码已被占用,请换一个"); return;
+  }
+  const payload = {
+    v: 1, u: currentUser, ph: acc.pass, sec: acc.sec || null, rh: acc.rh || null,
+    ts: Date.now(), items: state.items, pendingReview: state.pendingReview || [], trash: state.trash || []
+  };
+  const ok = await syncWritePayload(newCode, payload);
+  if(!ok){ toast("简码保存失败,请检查网络后重试"); return; }
+  acc.code = newCode;
+  users[currentUser] = acc;
+  saveUsers(users);
+  if(input) input.value = "";
+  showSyncCodeModal();
+  toast("身份码已改为 SY-" + raw + " · 请保存今日完整身份码");
 }
 
 /* ===== 容量/导入导出 工具函数 ===== */
@@ -3472,20 +3507,20 @@ function _stripLargeFields(items){
   return slim;
 }
 /* 把所有大字段异步写入 IDB(失败忽略) */
+let _lastStateSavePromise = Promise.resolve();
 function _flushLargeFieldsToIdb(){
-  const arr = state.items;
-  Promise.resolve().then(function(){
-    for(let i=0; i<arr.length; i++){
-      (function(it){
-        const id = String(it.id);
-        for(let f=0; f<LARGE_FIELDS.length; f++){
-          const fk = LARGE_FIELDS[f];
-          if(_hasValue(it[fk])) idbSet(id + "|" + fk, it[fk]);
-          else idbDel(id + "|" + fk);
-        }
-      })(arr[i]);
+  const arr = state.items.slice();
+  const jobs = [];
+  for(let i=0; i<arr.length; i++){
+    const it = arr[i];
+    const id = String(it.id);
+    for(let f=0; f<LARGE_FIELDS.length; f++){
+      const fk = LARGE_FIELDS[f];
+      jobs.push(_hasValue(it[fk]) ? idbSet(id + "|" + fk, it[fk]) : idbDel(id + "|" + fk));
     }
-  });
+  }
+  _lastStateSavePromise = Promise.all(jobs).catch(function(){ return []; });
+  return _lastStateSavePromise;
 }
 function saveState(){
   try{
@@ -6599,8 +6634,8 @@ function updateSaveBtnState(){
   if(prState.dirty) btn.classList.add("dirty");
   else btn.classList.remove("dirty");
 }
-/* 保存标注(显式保存) —— Word式编辑后先从DOM同步全文再落盘 */
-function savePaperHighlights(){
+/* 保存标注(显式保存) —— Word式编辑后先从DOM同步全文,再等待IDB写入完成 */
+async function savePaperHighlights(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(item){
     /* 未保存的编辑立即同步(防抖可能还没触发) */
@@ -6609,9 +6644,10 @@ function savePaperHighlights(){
     prState.kbHistPushed = false;
   }
   saveState();
+  await _lastStateSavePromise;
   prState.dirty = false;
   updateSaveBtnState();
-  toast("已保存 · 标注与备注会保留");
+  toast("已保存 · 修改、标注与备注会保留");
 }
 
 /* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
@@ -8179,7 +8215,7 @@ function redoLastAction(){
 }
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
-function closePaperReader(){
+async function closePaperReader(){
   clearAiSelectionMark();  /* 移除AI解读临时高亮(非永久标注) */
   _closePdfObjectEditor();
   const translations = document.querySelectorAll(".pr-translation");
@@ -8187,9 +8223,9 @@ function closePaperReader(){
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
-    const choice = confirm(noun + "有未保存的更改(标注、备注等)。\n\n【确定】保存更改后退出\n【取消】放弃更改");
+    const choice = confirm(noun + "有未保存的更改(文字、标注、备注等)。\n\n【确定】保存更改后退出\n【取消】放弃更改");
     if(choice){
-      savePaperHighlights();
+      await savePaperHighlights();
     } else {
       /* 真实恢复快照: 回滚到打开阅读器时的原始数据 */
       const item = state.items.find(function(i){ return i.id === prState.itemId; });
@@ -13384,6 +13420,8 @@ function toast(msg, duration){
     const m = document.getElementById("syncCodeModal");
     if(m) m.classList.remove("show");
   };
+  const syncCustomSave = document.getElementById("syncCustomSave");
+  if(syncCustomSave) syncCustomSave.onclick = setCustomSyncCode;
   /* 导出/导入数据(身份码弹窗内) */
   const expBtn = document.getElementById("exportDataBtn");
   if(expBtn) expBtn.onclick = exportAllData;
