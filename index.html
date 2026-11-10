@@ -100,6 +100,32 @@
   .hero .lede{ max-width:640px; font-size:clamp(15px, 1.6vw, 17px); color:var(--ink-soft); line-height:1.85; font-style:italic; }
   .hero::after{ content:""; display:block; margin-top:30px; height:1px; background:linear-gradient(90deg, transparent, var(--line) 12%, var(--line) 88%, transparent); }
 
+  /* ============ 论文工作台 ============ */
+  .paper-workspace{ max-width:var(--maxw); margin:0 auto; padding:0 28px 30px; scroll-margin-top:72px; }
+  .paper-workspace-card{
+    display:grid; grid-template-columns:minmax(0,1fr) auto; gap:22px; align-items:center;
+    padding:24px 26px; border:1px solid rgba(47,93,98,.28); border-radius:14px;
+    background:linear-gradient(120deg, rgba(47,93,98,.08), rgba(255,252,244,.74));
+    box-shadow:var(--shadow); transition:border-color .2s, box-shadow .2s;
+  }
+  .paper-workspace-card.is-active{ border-color:var(--teal); box-shadow:0 10px 26px rgba(47,93,98,.13); }
+  .paper-workspace-kicker{ font-family:"JetBrains Mono", monospace; font-size:10px; letter-spacing:.2em; color:var(--teal); text-transform:uppercase; }
+  .paper-workspace h2{ margin:7px 0 7px; font-size:clamp(22px,3vw,31px); font-weight:600; line-height:1.2; }
+  .paper-workspace p{ max-width:650px; margin:0; color:var(--ink-soft); font-size:14px; line-height:1.75; }
+  .paper-workspace-actions{ display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+  .paper-workspace-btn{
+    border:1px solid var(--teal); border-radius:8px; padding:9px 13px; cursor:pointer;
+    background:var(--teal); color:#fffdf7; font-family:"Newsreader","Noto Serif SC",serif; font-size:14px;
+    white-space:nowrap; transition:transform .15s, background .15s;
+  }
+  .paper-workspace-btn:hover{ background:#1e555a; transform:translateY(-1px); }
+  .paper-workspace-btn.secondary{ background:transparent; color:var(--teal); }
+  .paper-workspace-btn.secondary:hover{ background:rgba(47,93,98,.08); }
+  .paper-workspace-back{ display:none; }
+  body.paper-focus .paper-workspace-back{ display:inline-block; }
+  body.paper-focus .composer, body.paper-focus .stats{ display:none; }
+  body.paper-focus .filters{ padding-top:0; }
+
   /* ============ 录入区 ============ */
   .composer{ max-width:var(--maxw); margin:0 auto; padding:0 28px 48px; }
   .composer-card{
@@ -1670,6 +1696,9 @@
   @media(max-width:680px){
     .hero{ padding:40px 20px 24px; }
     .composer, .stats, .filters, .toolbar, .gallery{ padding-left:20px; padding-right:20px; }
+    .paper-workspace{ padding-left:20px; padding-right:20px; }
+    .paper-workspace-card{ grid-template-columns:1fr; padding:20px 18px; gap:16px; }
+    .paper-workspace-actions{ justify-content:flex-start; }
     .topbar-inner{ padding:12px 20px; }
     .composer-card{ padding:18px 16px 14px; }
     .composer-row{ flex-direction:column; }
@@ -1881,6 +1910,7 @@
     <nav class="topnav">
       <a href="#add">录入</a>
       <a href="#archive">志录</a>
+      <a href="#" id="navPaperWorkspace" title="进入论文工作台">§ 论文工作台</a>
       <a href="#" id="exportBtn">导出</a>
       <a href="#" id="importBtn" title="导入JSON备份文件恢复数据">导入</a>
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
@@ -1899,6 +1929,22 @@
   <p class="lede">
     一处安放阅读、影像与饮食的私家志录。键入其名,自归其类 —— 书入书架,影入影屉,馐馔入食单。无须点选,无须调试。所录皆存于本机,可托诸静态托管,无后端之累。
   </p>
+</section>
+
+<section class="paper-workspace" id="paperWorkspace" aria-label="论文工作台">
+  <div class="paper-workspace-card" id="paperWorkspaceCard">
+    <div>
+      <div class="paper-workspace-kicker">Research reading / paper workspace</div>
+      <h2>论文工作台</h2>
+      <p>把论文导入、阅读、颜色标注与备注集中在这里。进入后只聚焦论文；原来的藏书、观影、食单和全部志录仍完整保留。</p>
+    </div>
+    <div class="paper-workspace-actions">
+      <button class="paper-workspace-btn" id="paperWorkspaceEnter" type="button">进入论文工作台</button>
+      <button class="paper-workspace-btn secondary" id="paperWorkspaceImport" type="button">＋ 导入论文</button>
+      <button class="paper-workspace-btn secondary" id="paperWorkspaceLibrary" type="button">我的论文 <span id="paperWorkspaceCount">0</span></button>
+      <button class="paper-workspace-btn secondary paper-workspace-back" id="paperWorkspaceBack" type="button">返回全部志录</button>
+    </div>
+  </div>
 </section>
 
 <section class="composer" id="add">
@@ -2523,6 +2569,8 @@ const SESSION_KEY = "shuyingshidan_session";
 const GUEST_USER = "__guest__";
 let STORAGE_KEY = "shuyingshidan_v2"; // 登录后按用户名细分
 const state = { items: [], pendingReview: [], trash: [], filter: "all", search: "", composerCategory: null, bulkMode: false, bulkSelected: {}, galleryLimit: 120, essayYearFilter: null, essayMonthFilter: null, subcatFilter: null };
+/* 仅用于当前页面内的论文专注视图，不写入 URL，也不影响既有分类数据。 */
+let paperWorkspaceActive = false;
 let currentUser = null;
 
 /* 简易哈希(非加密级,静态站足够区分) */
@@ -6860,7 +6908,8 @@ function _updateOcrOnlyPaperText(item, cache){
 function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, renderScale){
   const run = function(){
     _setPdfOcrStatus("扫描件无可用文字层，正在识别第 " + pageNum + " 页…", true);
-    const ocrScale = Math.max(2, Math.min(3, renderScale * 1.8));
+    /* 中文期刊常见双栏小字号；约300dpi能保住笔画细节，仍按单页队列控制内存。 */
+    const ocrScale = Math.max(3.5, Math.min(4.5, renderScale * 2.4));
     const ocrViewport = page.getViewport({ scale:ocrScale });
     const canvas = document.createElement("canvas");
     canvas.width = Math.round(ocrViewport.width);
@@ -11215,7 +11264,52 @@ function migrateItems(){
 /* ============================================================
    渲染
    ============================================================ */
+function refreshPaperWorkspace(){
+  const papers = state.items.filter(function(item){ return item.category === "paper"; });
+  const count = document.getElementById("paperWorkspaceCount");
+  const card = document.getElementById("paperWorkspaceCard");
+  const enter = document.getElementById("paperWorkspaceEnter");
+  if(count) count.textContent = papers.length;
+  if(card) card.classList.toggle("is-active", paperWorkspaceActive);
+  if(enter) enter.textContent = paperWorkspaceActive ? "论文工作台已打开" : "进入论文工作台";
+  document.body.classList.toggle("paper-focus", paperWorkspaceActive);
+}
+
+function openPaperWorkspace(openImport){
+  paperWorkspaceActive = true;
+  state.filter = "paper";
+  state.search = "";
+  state.essayYearFilter = null;
+  state.essayMonthFilter = null;
+  state.subcatFilter = null;
+  state.galleryLimit = 120;
+  const search = document.getElementById("searchInput");
+  if(search) search.value = "";
+  exitBulkMode();
+  if(openImport){
+    openPaperEntryModal("paper");
+  }else{
+    const workspace = document.getElementById("paperWorkspace");
+    if(workspace) workspace.scrollIntoView({ behavior:"smooth", block:"start" });
+  }
+}
+
+function closePaperWorkspace(scrollToWorkspace){
+  paperWorkspaceActive = false;
+  state.filter = "all";
+  state.search = "";
+  state.galleryLimit = 120;
+  const search = document.getElementById("searchInput");
+  if(search) search.value = "";
+  exitBulkMode();
+  if(scrollToWorkspace !== false){
+    const workspace = document.getElementById("paperWorkspace");
+    if(workspace) workspace.scrollIntoView({ behavior:"smooth", block:"start" });
+  }
+}
+
 function render(){
+  refreshPaperWorkspace();
   renderStats();
   renderFilters();
   renderEssayMonthBar();
@@ -11338,6 +11432,15 @@ function renderStats(){
 function renderFilters(){
   const el = document.getElementById("filters");
   if(!el) return;
+  if(paperWorkspaceActive){
+    const paperCount = state.items.filter(function(item){ return item.category === "paper"; }).length;
+    el.innerHTML = '<span class="label">论文工作台</span>' +
+      '<button class="chip active" data-paper-workspace="papers">' + catIcon("paper", 14) + '全部论文<span class="count">' + paperCount + '</span></button>' +
+      '<button class="chip" data-paper-workspace="back">返回全部志录</button>';
+    const back = el.querySelector('[data-paper-workspace="back"]');
+    if(back) back.onclick = closePaperWorkspace;
+    return;
+  }
   const total = state.items.length;
   const counts = {};
   for(const cat in CATEGORIES) counts[cat] = 0;
@@ -11640,8 +11743,8 @@ function renderGallery(){
   }
 
   if(items.length === 0){
-    const big = state.items.length===0 ? "志录尚虚" : "未有所录";
-    const small = state.items.length===0 ? "键入名目 —— 书名、影名、菜名、论文名……自可入册" : "试调整筛选或检索之词";
+    const big = paperWorkspaceActive ? (q ? "未找到匹配的论文" : "还没有论文") : (state.items.length===0 ? "志录尚虚" : "未有所录");
+    const small = paperWorkspaceActive ? (q ? "请试试其他关键词。" : "点击上方「导入论文」，即可开始阅读、标注与备注。") : (state.items.length===0 ? "键入名目 —— 书名、影名、菜名、论文名……自可入册" : "试调整筛选或检索之词");
     el.innerHTML = '<div class="empty"><div class="big">' + big + '</div><div class="small">' + small + '</div></div>';
     return;
   }
@@ -13005,6 +13108,21 @@ function updatePaperEntryStats(){
     '<span><b>' + sections + '</b> 节</span>';
 }
 if(paperBtn) paperBtn.onclick = function(){ openPaperEntryModal("paper"); };
+const navPaperWorkspace = document.getElementById("navPaperWorkspace");
+if(navPaperWorkspace) navPaperWorkspace.onclick = function(e){ e.preventDefault(); openPaperWorkspace(false); };
+const paperWorkspaceEnter = document.getElementById("paperWorkspaceEnter");
+if(paperWorkspaceEnter) paperWorkspaceEnter.onclick = function(){ openPaperWorkspace(false); };
+const paperWorkspaceImport = document.getElementById("paperWorkspaceImport");
+if(paperWorkspaceImport) paperWorkspaceImport.onclick = function(){ openPaperWorkspace(true); };
+const paperWorkspaceLibrary = document.getElementById("paperWorkspaceLibrary");
+if(paperWorkspaceLibrary) paperWorkspaceLibrary.onclick = function(){ openPaperWorkspace(false); };
+const paperWorkspaceBack = document.getElementById("paperWorkspaceBack");
+if(paperWorkspaceBack) paperWorkspaceBack.onclick = closePaperWorkspace;
+document.querySelectorAll('.topnav a[href="#add"], .topnav a[href="#archive"]').forEach(function(link){
+  link.addEventListener("click", function(){
+    if(paperWorkspaceActive) closePaperWorkspace(false);
+  });
+});
 const essayBtn = document.getElementById("essayBtn");
 if(essayBtn) essayBtn.onclick = function(){ openPaperEntryModal("essay"); };
 if(paperEntryCancel) paperEntryCancel.onclick = closePaperEntryModal;
