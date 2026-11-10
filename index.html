@@ -1822,6 +1822,18 @@
       linear-gradient(135deg,#F8F9F8,#F4F0F5 54%,#F5F7F1);
     background-attachment:fixed;
   }
+  .login-screen{ background:radial-gradient(ellipse 65% 55% at 12% 12%,rgba(177,206,218,.48),transparent 75%),radial-gradient(ellipse 65% 55% at 91% 85%,rgba(220,196,217,.5),transparent 75%),linear-gradient(130deg,#F5F8F8,#F4F1F7 58%,#F7F6F0); }
+  .login-card{ max-width:420px; padding:32px; border-color:#D7E1E7; border-radius:20px; background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(248,248,251,.96)); box-shadow:0 24px 70px -30px rgba(55,76,109,.36); }
+  .login-card::before{ height:4px; background:linear-gradient(90deg,#89ADB9,#8B99BC,#B9A4BE); border-radius:20px 20px 0 0; }
+  .login-brand .mark,.login-tab.active{ color:#496B83; }
+  .login-tab.active{ border-bottom-color:#7996AD; }
+  .login-field input:focus{ border-color:#7E9DB0; box-shadow:0 0 0 3px rgba(150,181,199,.18); }
+  .login-submit{ background:linear-gradient(120deg,#3E6277,#696383); color:#fff; }
+  .login-submit:hover{ background:linear-gradient(120deg,#345B72,#5C5678); }
+  .login-guest{ color:#44677C; border-color:#BACDD8; background:linear-gradient(120deg,#F8FBFB,#F4F3F9); }
+  .login-guest:hover{ border-color:#839EAF; background:#EDF4F6; }
+  .login-sync-tip{ border-color:#D6E2E9; background:linear-gradient(120deg,#EFF5F7,#F3F0F7); }
+  .login-hint{ color:#9C5365; }
   .topbar{ background:linear-gradient(105deg,rgba(252,253,251,.94),rgba(246,247,251,.91)); backdrop-filter:blur(16px); }
   .composer-card{ background:linear-gradient(132deg,rgba(255,255,255,.95),rgba(246,248,247,.9) 57%,rgba(250,244,248,.92)); border-color:rgba(149,166,167,.28); box-shadow:0 18px 45px -32px rgba(42,66,78,.32); }
   .composer-input{ background:linear-gradient(120deg,#FCFDFC,#F8F9F9); }
@@ -1860,6 +1872,45 @@
   body.paper-focus .card-paper-btn{ background:linear-gradient(120deg,#45687C,#666E91); color:white; border-color:transparent; }
   body.paper-focus .card-upload-btn,body.paper-focus .card-cnki-btn{ background:linear-gradient(115deg,rgba(244,249,250,.92),rgba(240,237,247,.9)); }
   body.paper-focus .gallery .empty{ padding:70px 20px; }
+  body.paper-focus .card-head{ justify-content:flex-end; align-items:center; }
+  body.paper-focus .card-cat{ margin-right:auto; }
+  body.paper-focus .card-edit{ opacity:1; border:0; min-height:36px; padding:6px 10px; font:600 12px/1.2 var(--ui-font); }
+  body.paper-focus .card-del{ opacity:1; min-height:36px; padding:7px 13px; border:1px solid rgba(153,100,106,.3); border-radius:9px; background:linear-gradient(120deg,rgba(251,244,243,.96),rgba(247,239,245,.95)); color:#86545F; font:650 12px/1.2 var(--ui-font); white-space:nowrap; }
+  body.paper-focus .card-del:hover{ color:#6E3847; border-color:#A87580; background:linear-gradient(120deg,#F9EDEB,#F2E5EC); }
+  body.paper-focus .card-del:focus-visible{ outline:2px solid #8B617D; outline-offset:2px; }
+  .sync-modal{ max-height:min(82vh,720px); overflow:auto; background:linear-gradient(145deg,#FDFEFC,#F7F5FA); }
+  .sync-intro,.sync-help{ font:400 13px/1.65 var(--ui-font) !important; color:#59677A !important; font-style:normal !important; }
+  .sync-intro{ margin:5px 0 18px !important; }
+  .sync-help{ margin:8px 0 18px !important; }
+  .sync-guest-tip{ display:none; padding:14px; border-radius:10px; background:linear-gradient(120deg,#ECF2F5,#F2EDF4); color:#52677B !important; font:400 13px/1.6 var(--ui-font) !important; }
+  .sync-modal.is-guest .sync-guest-tip{ display:block; }
+  .sync-modal.is-guest .sync-signed-in{ display:none; }
+  .sync-code-box{ margin-bottom:0; background:linear-gradient(120deg,#F0F5F6,#F3F0F6); border-color:#D9E0E8; }
+  .sync-code-value{ min-width:0; color:#33556C; }
+  .sync-copy-btn{ border-color:#B6C9D3; color:#365D75; background:#FCFDFE; }
+  .sync-more{ border-top:1px solid #DDE3E7; padding-top:12px; }
+  .sync-more summary{ cursor:pointer; color:#435F77; font:650 13px/1.5 var(--ui-font); padding:5px 0 10px; }
+  .sync-more summary:focus-visible{ outline:2px solid #6F8BA1; outline-offset:3px; }
+  .sync-more .form-group{ padding-top:12px; }
+  .sync-more .form-group .modal-btn{ margin-top:8px; }
+  .sync-field-hint{ font-weight:400; color:#718091; }
+  .sync-recovery-box{ flex-wrap:wrap; padding:10px 12px; }
+  .sync-recovery-box>span{ font:600 12px/1.4 var(--ui-font); color:#59677A; }
+  .sync-recovery-box code{ font-size:12px; }
+  .sync-modal .modal-row{ margin-top:18px; }
+  .choice-modal{ max-width:450px; background:linear-gradient(145deg,#FDFEFC,#F3F2F7); border-color:#D7DFE7; }
+  .choice-modal h3{ color:#293F54; }
+  .choice-modal p{ margin:10px 0 22px; white-space:pre-line; font:400 14px/1.65 var(--ui-font); color:#526275; }
+  .choice-actions{ display:flex; flex-wrap:wrap; justify-content:flex-end; gap:8px; }
+  .choice-actions .modal-btn{ font:650 13px/1.3 var(--ui-font); min-height:40px; }
+  .choice-actions .modal-btn.primary{ background:linear-gradient(120deg,#3D6178,#666486); border-color:transparent; color:#fff; }
+  .choice-actions .modal-btn.danger{ background:linear-gradient(120deg,#A5696D,#885A73); border-color:transparent; color:#fff; }
+  .note-entry-modal{ max-width:490px; background:linear-gradient(145deg,#FDFEFC,#F4F2F8); }
+  .note-entry-preview{ margin:10px 0 14px; padding:10px 12px; border-left:3px solid #9BAEC5; background:rgba(225,233,242,.5); color:#526478; font:400 13px/1.6 var(--ui-font); max-height:92px; overflow:auto; }
+  .note-entry-modal textarea{ width:100%; min-height:108px; resize:vertical; padding:12px; border:1px solid #C8D7E0; border-radius:10px; background:#FCFDFE; color:#293F54; font:400 14px/1.6 var(--ui-font); outline:none; }
+  .note-entry-modal textarea:focus{ border-color:#7295AA; box-shadow:0 0 0 3px rgba(117,152,178,.16); }
+  .note-entry-modal .choice-actions{ margin-top:16px; }
+  @media(max-width:680px){ .choice-actions .modal-btn{ flex:1 1 auto; } .sync-code-box{ flex-wrap:wrap; } }
   button,.topnav a{ transform-origin:center; }
   button:active:not(:disabled),.topnav a:active{ transform:scale(.96) !important; }
   button.press-release,.topnav a.press-release{ animation:buttonSpring .42s both !important; }
@@ -1897,8 +1948,8 @@
     <!-- 登录表单 -->
     <div class="login-form" id="loginForm">
       <div class="login-field">
-        <label>名号</label>
-        <input type="text" id="loginUser" autocomplete="off" placeholder="自取一名" />
+        <label>名号或同步码</label>
+        <input type="text" id="loginUser" autocomplete="off" placeholder="输入名号；换设备时输入同步码" />
       </div>
       <div class="login-field">
         <label>暗语</label>
@@ -1906,8 +1957,7 @@
       </div>
       <button class="login-submit" id="loginSubmit">入册 · LOGIN</button>
       <div class="login-sync-tip">
-        <span>换设备?名号栏输入<b>身份码</b>+暗语即可同步云端数据</span>
-        <a href="#" id="loginViewCode">查看我的身份码 →</a>
+        <span>换设备时，用同步码和暗语登录。</span>
       </div>
       <a href="#" class="login-forgot" id="forgotPassLink">忘记暗语？找回或重置</a>
     </div>
@@ -1926,7 +1976,7 @@
         <input type="password" id="regPass2" placeholder="再输一遍" />
       </div>
       <div class="login-field">
-        <label>身份码 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 6–16位字母/数字，可自定</span></label>
+        <label>同步码 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 自己设置，6–16位字母或数字</span></label>
         <input type="text" id="regSyncCode" autocomplete="off" placeholder="例如 mylibrary88" />
       </div>
       <button class="login-submit" id="registerSubmit">立册 · REGISTER</button>
@@ -1946,7 +1996,7 @@
     <nav class="topnav">
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站</a>
-      <a href="#" id="navSyncCode" class="nav-code-btn" title="查看身份码:其他设备登录时输入身份码+暗语即可同步本账号数据">⌁ 身份码</a>
+      <a href="#" id="navSyncCode" class="nav-code-btn" title="查看跨设备登录所需的同步码">⌁ 跨设备</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -2293,46 +2343,66 @@
 <!-- 身份码弹窗(多设备同步凭证) -->
 <div class="modal-bg" id="syncCodeModal">
   <div class="modal sync-modal">
-    <h3>⌁ 我的身份码</h3>
-    <div class="sync-tip">身份码是该账号的云端同步凭证。在<b>任意设备</b>的登录页名号栏输入身份码+暗语,即可同步该账号全部志录(含论文全文、标注、回收站)。</div>
-    <div class="sync-code-box">
-      <code id="syncCodeValue" class="sync-code-value">—</code>
-      <button class="sync-copy-btn" id="syncCopyBtn">复制</button>
-    </div>
-    <div class="sync-code-box" style="margin-top:8px;">
-      <span style="font-size:12px;color:var(--ink-mute);margin-right:8px;">恢复码</span>
-      <code id="recoveryCodeValue" class="sync-code-value">—</code>
-      <button class="sync-copy-btn" id="recoveryCopyBtn">复制</button>
-    </div>
-    <div class="form-group" style="margin-top:14px;">
-      <label>自定义简短身份码 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 6–16位字母/数字</span></label>
-      <input type="text" id="syncCustomInput" autocomplete="off" placeholder="例如 mylibrary88">
-      <button class="modal-btn" id="syncCustomSave" type="button" style="margin-top:8px;">设置我的简码</button>
-    </div>
-    <div class="sync-note">
-      · 这是<b>固定身份码</b>，不会每天变化；在其他设备登录页名号栏输入身份码 + 暗语即可同步全部志录<br>
-      · <b>恢复码</b>用于忘记暗语时重置云端暗语,请与身份码分开保存<br>
-      · 身份码可改成自己容易记的简码；设置后保存新的身份码即可<br>
-      · 为保护账号安全，登录暗语不会以明文保存或显示；忘记时请使用恢复码重置<br>
-      · 身份码与暗语同等重要,请勿泄露给他人;数据经云端KV暂存,本机存储为主
-    </div>
-    <button class="btn-ghost" id="syncPasswordResetBtn" type="button" style="margin-top:10px;">修改登录暗语</button>
-    <!-- 容量显示 + 数据导入导出 -->
-    <div class="storage-info-panel">
-      <div class="storage-info-row" id="storageInfoRow">
-        <span class="storage-info-label">💾 本机存储：</span>
-        <span class="storage-info-value">计算中…</span>
+    <h3>⌁ 跨设备使用</h3>
+    <p class="sync-intro">在另一台设备登录时，输入同步码和暗语。</p>
+    <p class="sync-guest-tip">游客数据只保存在当前设备。注册账号后才可以跨设备使用。</p>
+    <div class="sync-signed-in">
+      <div class="sync-code-box">
+        <code id="syncCodeValue" class="sync-code-value">—</code>
+        <button class="sync-copy-btn" id="syncCopyBtn" type="button">复制同步码</button>
       </div>
-      <div class="storage-info-actions">
-        <button class="modal-btn" id="exportDataBtn" type="button">⬇ 导出全部数据</button>
-        <button class="modal-btn" id="importDataBtn" type="button">⬆ 导入数据备份</button>
-        <button class="modal-btn" id="cleanStorageBtn" type="button" style="background:#fff3e0;color:#e65100;border-color:#ffb74d;">🧹 清理存储</button>
-        <input type="file" id="importDataInput" accept=".zip,.json,application/zip,application/json" style="display:none;">
-      </div>
-      <div class="storage-info-tip">ZIP 备份包含志录、批注和这台设备上仍存有的原 PDF。恢复时直接选择 ZIP，旧 JSON 备份也可导入。</div>
+      <p class="sync-help">同步码用于找到你的记录；登录时仍需输入暗语。</p>
+      <details class="sync-more" id="syncMore">
+        <summary>账号设置与数据备份</summary>
+        <div class="form-group">
+          <label>修改同步码 <span class="sync-field-hint">6–16位字母或数字</span></label>
+          <input type="text" id="syncCustomInput" autocomplete="off" placeholder="设置自己记得住的同步码">
+          <button class="modal-btn" id="syncCustomSave" type="button">保存同步码</button>
+        </div>
+        <div class="sync-code-box sync-recovery-box">
+          <span>恢复码</span>
+          <code id="recoveryCodeValue" class="sync-code-value">—</code>
+          <button class="sync-copy-btn" id="recoveryCopyBtn" type="button">复制</button>
+        </div>
+        <p class="sync-help">忘记暗语时用恢复码重置。请单独保存。</p>
+        <button class="btn-ghost" id="syncPasswordResetBtn" type="button">修改登录暗语</button>
+        <div class="storage-info-panel">
+          <div class="storage-info-row" id="storageInfoRow">
+            <span class="storage-info-label">本机存储：</span>
+            <span class="storage-info-value">计算中…</span>
+          </div>
+          <div class="storage-info-actions">
+            <button class="modal-btn" id="exportDataBtn" type="button">导出全部数据</button>
+            <button class="modal-btn" id="importDataBtn" type="button">导入数据备份</button>
+            <button class="modal-btn" id="cleanStorageBtn" type="button">清理存储</button>
+            <input type="file" id="importDataInput" accept=".zip,.json,application/zip,application/json" style="display:none;">
+          </div>
+          <div class="storage-info-tip">备份包含志录、批注和本机仍存有的原 PDF。</div>
+        </div>
+      </details>
     </div>
     <div class="modal-row">
-      <button class="modal-btn" id="syncCodeCloseBtn">我已保存,关闭</button>
+      <button class="modal-btn primary" id="syncCodeCloseBtn">完成</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="choiceModal">
+  <div class="modal choice-modal" role="dialog" aria-modal="true" aria-labelledby="choiceTitle" aria-describedby="choiceMessage">
+    <h3 id="choiceTitle"></h3>
+    <p id="choiceMessage"></p>
+    <div class="choice-actions" id="choiceActions"></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="noteEntryModal">
+  <div class="modal note-entry-modal" role="dialog" aria-modal="true" aria-labelledby="noteEntryTitle">
+    <h3 id="noteEntryTitle">添加备注</h3>
+    <div class="note-entry-preview" id="noteEntryPreview"></div>
+    <textarea id="noteEntryText" aria-label="备注内容" maxlength="2000" placeholder="写下你对选中文字的想法"></textarea>
+    <div class="choice-actions">
+      <button class="modal-btn" id="noteEntryCancel" type="button">取消</button>
+      <button class="modal-btn primary" id="noteEntrySave" type="button">保存备注</button>
     </div>
   </div>
 </div>
@@ -2341,7 +2411,7 @@
 <div class="modal-bg" id="forgotPassModal">
   <div class="modal forgot-modal">
     <h3>找回 / 重置暗语</h3>
-    <div class="ai-cfg-tip">如果还在原来的浏览器中，可直接本机重置；如果要找回云端账号，需要输入此前保存的身份码和恢复码。</div>
+    <div class="ai-cfg-tip">如果还在原来的浏览器中，可直接本机重置；如果要找回云端账号，需要输入此前保存的同步码和恢复码。</div>
     <div class="form-group">
       <label>本机账号名号</label>
       <input type="text" id="forgotLocalUser" autocomplete="off" placeholder="仅限当前浏览器已有账号">
@@ -2357,7 +2427,7 @@
     <button class="modal-btn" id="forgotLocalSubmit" type="button">本机重置并登录</button>
     <div class="forgot-divider">— 云端账号恢复 —</div>
     <div class="form-group">
-      <label>身份码</label>
+      <label>同步码</label>
       <input type="text" id="forgotSyncCode" autocomplete="off" placeholder="SY-…">
     </div>
     <div class="form-group">
@@ -2694,16 +2764,16 @@ async function doRegister(){
     hint.textContent = "暗语须含大写字母与数字(如 Abc123)"; return;
   }
   if(p !== p2){ hint.textContent = "两次暗语不一致"; return; }
-  if(!/^[a-z0-9]{6,16}$/.test(rawCode)){ hint.textContent = "身份码须为6–16位字母或数字"; return; }
+  if(!/^[a-z0-9]{6,16}$/.test(rawCode)){ hint.textContent = "同步码须为6–16位字母或数字"; return; }
   const users = getUsers();
   if(users[u]){ hint.textContent = "此名号已被取用,请换一名"; return; }
   const isFirstUser = (Object.keys(users).length === 0);
   const syncCode = "SY-" + rawCode;
-  hint.textContent = "正在检查身份码…";
+  hint.textContent = "正在检查同步码…";
   const existing = await syncPull(syncCode);
-  if(existing.ok){ hint.textContent = "这个身份码已被占用，请换一个"; return; }
+  if(existing.ok){ hint.textContent = "这个同步码已被占用，请换一个"; return; }
   if(existing.reason !== "云端无此身份码的数据"){
-    hint.textContent = existing.reason || "身份码检查失败，请稍后再试";
+    hint.textContent = existing.reason || "同步码检查失败，请稍后再试";
     return;
   }
   const recoveryCode = genRecoveryCode();
@@ -2733,22 +2803,22 @@ async function doLogin(){
   const p = document.getElementById("loginPass").value || "";
   const hint = document.getElementById("loginHint");
   if(!hint) return;
-  if(u.length < 1){ hint.textContent = "请输入名号(或身份码)"; return; }
+  if(u.length < 1){ hint.textContent = "请输入名号或同步码"; return; }
   if(p.length < 1){ hint.textContent = "请输入暗语"; return; }
   /* 身份码登录: 新设备凭身份码+暗语从云端拉取账号数据 */
   if(isSyncCode(u)){
     const sp = splitSyncCode(u); /* 兼容旧版带后缀的身份码，实际使用固定主码 */
-    if(!sp){ hint.textContent = "身份码格式有误"; return; }
+    if(!sp){ hint.textContent = "同步码格式有误"; return; }
     const realCode = sp.code;
-    hint.textContent = "身份码识别中,正在连接云端…";
+    hint.textContent = "正在连接云端…";
     syncPull(realCode).then(async function(r){
       if(!r.ok){
-        hint.textContent = r.reason || "身份码登录失败";
+        hint.textContent = r.reason || "同步码登录失败";
         return;
       }
       const d = r.data;
       if(d.ph !== hashPass(p)){
-        hint.textContent = "暗语有误(与身份码绑定的暗语不一致)";
+        hint.textContent = "暗语有误";
         return;
       }
       /* 落地账号(本地没有则建立,身份码固定且可自定义) */
@@ -2776,8 +2846,7 @@ async function doLogin(){
   }
   const users = getUsers();
   if(!users[u]){
-    const host = location.host;
-    hint.textContent = "无此名号,请先注册(注意:" + host + " 与其他地址的数据各自独立;若已在他处注册,可用身份码登录同步)";
+    hint.textContent = "没有找到这个账号。换设备时，请输入同步码和暗语。";
     return;
   }
   if(users[u].pass !== hashPass(p)){ hint.textContent = "暗语有误"; return; }
@@ -2806,7 +2875,7 @@ async function resetLocalPassword(){
   if(!hint) return;
   if(!u){ hint.textContent = "请输入本机已有的账号名号"; return; }
   const users = getUsers();
-  if(!users[u]){ hint.textContent = "本机没有这个账号；请改用下方身份码 + 恢复码恢复"; return; }
+  if(!users[u]){ hint.textContent = "本机没有这个账号；请用同步码和恢复码找回"; return; }
   if(!_validateNewPassword(p, p2, hint)) return;
   users[u].pass = hashPass(p);
   saveUsers(users);
@@ -2824,15 +2893,15 @@ async function resetCloudPassword(){
   const p = document.getElementById("forgotNewPass").value || "";
   const p2 = document.getElementById("forgotNewPass2").value || "";
   if(!hint) return;
-  if(!isSyncCode(codeInput)){ hint.textContent = "身份码格式不正确"; return; }
+  if(!isSyncCode(codeInput)){ hint.textContent = "同步码格式不正确"; return; }
   if(!recovery){ hint.textContent = "请输入恢复码"; return; }
   if(!_validateNewPassword(p, p2, hint)) return;
   const sp = splitSyncCode(codeInput);
-  hint.textContent = "正在验证身份码和恢复码…";
+  hint.textContent = "正在验证同步码和恢复码…";
   const pulled = await syncPull(sp.code);
   if(!pulled.ok || !pulled.data){ hint.textContent = pulled.reason || "云端账号读取失败"; return; }
   const data = pulled.data;
-  if(!data.rh){ hint.textContent = "该账号尚未生成恢复码；请在原设备登录一次后，在身份码弹窗中保存恢复码"; return; }
+  if(!data.rh){ hint.textContent = "该账号尚未生成恢复码；请在原设备的「跨设备」中保存恢复码"; return; }
   if(hashPass(recovery) !== data.rh){ hint.textContent = "恢复码不正确"; return; }
   data.ph = hashPass(p);
   data.ts = Date.now();
@@ -3059,8 +3128,11 @@ function showSyncCodeModal(){
   const codeEl = document.getElementById("syncCodeValue");
   const recoveryEl = document.getElementById("recoveryCodeValue");
   if(!modal || !codeEl) return;
+  modal.querySelector(".sync-modal").classList.toggle("is-guest", currentUser === GUEST_USER);
+  const more = document.getElementById("syncMore");
+  if(more) more.open = false;
   if(!code){
-    codeEl.textContent = currentUser === GUEST_USER ? "游客模式不使用云端身份码" : "当前账号尚未生成身份码(注册于早期版本)";
+    codeEl.textContent = currentUser === GUEST_USER ? "游客模式没有同步码" : "当前账号尚未生成同步码";
     if(recoveryEl) recoveryEl.textContent = currentUser === GUEST_USER ? "游客模式无需恢复码" : "—";
     if(!currentUser) return;
   }else{
@@ -3068,37 +3140,35 @@ function showSyncCodeModal(){
     if(recoveryEl) recoveryEl.textContent = ensureRecoveryForUser(currentUser) || "—";
   }
   modal.classList.add("show");
-  /* 刷新本机容量显示 */
-  refreshStorageInfo();
 }
 
 async function setCustomSyncCode(){
   const input = document.getElementById("syncCustomInput");
   const raw = (input && input.value || "").trim().toLowerCase();
-  if(!currentUser || currentUser === GUEST_USER){ toast("游客模式不能设置云端身份码"); return; }
-  if(!/^[a-z0-9]{6,16}$/.test(raw)){ toast("简码须为6–16位字母或数字"); return; }
+  if(!currentUser || currentUser === GUEST_USER){ toast("游客模式不能设置同步码"); return; }
+  if(!/^[a-z0-9]{6,16}$/.test(raw)){ toast("同步码须为6–16位字母或数字"); return; }
   const newCode = "SY-" + raw;
   const users = getUsers();
   const acc = users[currentUser];
   if(!acc) return;
   const oldCode = acc.code || "";
-  if(newCode === oldCode){ toast("这就是当前身份码"); return; }
+  if(newCode === oldCode){ toast("这就是当前同步码"); return; }
   const existing = await syncPull(newCode);
   if(existing.ok && existing.data && existing.data.u && existing.data.u !== currentUser){
-    toast("这个简码已被占用,请换一个"); return;
+    toast("这个同步码已被占用，请换一个"); return;
   }
   const payload = {
     v: 1, u: currentUser, ph: acc.pass, sec: acc.sec || null, rh: acc.rh || null,
     ts: Date.now(), items: state.items, pendingReview: state.pendingReview || [], trash: state.trash || []
   };
   const ok = await syncWritePayload(newCode, payload);
-  if(!ok){ toast("简码保存失败,请检查网络后重试"); return; }
+  if(!ok){ toast("同步码保存失败，请检查网络后重试"); return; }
   acc.code = newCode;
   users[currentUser] = acc;
   saveUsers(users);
   if(input) input.value = "";
   showSyncCodeModal();
-  toast("身份码已改为 SY-" + raw + " · 请保存新的固定身份码");
+  toast("同步码已更新，请保存新码");
 }
 
 /* ===== 容量/导入导出 工具函数 ===== */
@@ -3240,8 +3310,9 @@ async function handleImportFile(f){
       throw new Error("备份含无效记录");
     }
     if(STORAGE_KEY !== storageKey) return;
-    if(!confirm(merge ? "将旧 JSON 备份中的条目合并到当前志录，跳过同名条目。继续吗？" :
-      "将用备份覆盖当前账号的志录和回收站。建议先导出当前备份。继续吗？")) return;
+    if(!await confirmInApp(merge ? "合并备份？" : "恢复备份并覆盖当前记录？",
+      merge ? "将旧备份中的条目合并到当前志录，跳过同名条目。" : "当前志录和回收站会被备份覆盖。建议先导出当前数据。",
+      merge ? "合并备份" : "确认覆盖")) return;
 
     const papers = new Map();
     for(const item of records){
@@ -3380,7 +3451,7 @@ async function afterLogin(){
       setTimeout(function(){
         syncPushNow();
         showSyncCodeModal();
-        toast("已为该账号生成身份码(多设备同步已开通,请妥善保存)", 5000);
+        toast("已生成同步码，请保存", 5000);
       }, 1200);
     }
   }catch(e){ /* 静默 */ }
@@ -3392,11 +3463,11 @@ async function afterLogin(){
       const recovery = ensureRecoveryForUser(currentUser);
       if(recovery && !hadRecovery){
         scheduleSyncPush();
-        setTimeout(function(){ showSyncCodeModal(); toast("已生成恢复码,请与身份码分开保存", 5000); }, 1400);
+        setTimeout(function(){ showSyncCodeModal(); toast("已生成恢复码，请在「账号设置与数据备份」中保存", 5000); }, 1400);
       }
     }
   }catch(e){ /* 静默 */ }
-  updateTrashBtn();      /* 导航徽章 */
+  updateTrashBtn();
   render();
   renderComposerCats();
   updatePredict();
@@ -6056,13 +6127,13 @@ function openPaperReader(itemId){
   for(let i=0; i<hlColors.length; i++){
     /* mousedown不夺焦点:保住用户刚做的选区(Word式"先选文字后点按钮") */
     hlColors[i].addEventListener("mousedown", function(e){ e.preventDefault(); });
-    hlColors[i].onclick = function(){
+    hlColors[i].onclick = async function(){
       const color = this.dataset.color;
       if(color === "clear"){
         /* 橡皮擦:清除全部标注 */
         const cur = state.items.find(function(x){ return x.id === prState.itemId; });
         if(cur && cur.highlights && cur.highlights.length > 0){
-          if(confirm("确定清除全部标注?共 " + cur.highlights.length + " 处")){
+          if(await confirmInApp("清除全部标注？", "共 " + cur.highlights.length + " 处标注，清除后可逐步撤销。", "清除标注")){
             clearAllHighlights();
           }
         } else {
@@ -6098,14 +6169,15 @@ function openPaperReader(itemId){
   for(let i=0; i<fmtBtns.length; i++){
     if(fmtBtns[i].id === "prDelMode" || fmtBtns[i].id === "prTranslate") continue;
     fmtBtns[i].addEventListener("mousedown", function(e){ e.preventDefault(); });
-    fmtBtns[i].onclick = function(){
+    fmtBtns[i].onclick = async function(){
       const fmt = this.dataset.fmt;
       if(!fmt) return;
       /* Word式:先选中文字再点按钮 → 直接应用/取消 */
       const live = prGetLiveSelection();
       /* 备注模式:有选区时弹输入框 */
       if(live && fmt === "note"){
-        const noteText = prompt("为选中文字添加备注:");
+        const noteRange = live.sel.getRangeAt(0).cloneRange();
+        const noteText = await showNoteDialog(live.text);
         if(noteText && noteText.trim()){
           const cur = state.items.find(function(x){ return x.id === prState.itemId; });
           if(cur){
@@ -6117,7 +6189,7 @@ function openPaperReader(itemId){
             }
             if(!cur.highlights) cur.highlights = [];
             const noteEntry = { text: live.text, type:"note", note: noteText.trim(), color:"#FFF1A8" };
-            if(isPdfNativeMode) noteEntry.pdfRects = capturePdfSelectionRects(live.sel.getRangeAt(0).cloneRange());
+            if(isPdfNativeMode) noteEntry.pdfRects = capturePdfSelectionRects(noteRange);
             pushHlHistory(cur);
             cur.highlights.push(noteEntry);
             saveState();
@@ -6250,7 +6322,7 @@ function openPaperReader(itemId){
   /* 文本选中后自动标注 */
   const prTextWrap = document.getElementById("prTextWrap");
   if(prTextWrap){
-    prTextWrap.onmouseup = function(e){
+    prTextWrap.onmouseup = async function(e){
       /* 点击备注元素时显示/隐藏弹窗 */
       const noteEl = e.target.closest("u.pr-note");
       const popup = document.getElementById("prNotePopup");
@@ -6313,10 +6385,11 @@ function openPaperReader(itemId){
         let hlType = "highlight";
         let hlColor = prState.activeColor || null;
         if(prState.activeFmt === "note"){
-          const noteText = prompt("为选中文字添加备注:");
+          const noteRange = sel.getRangeAt(0).cloneRange();
+          const noteText = await showNoteDialog(selectedText);
           if(!noteText || !noteText.trim()) return;
           hlType = "note";
-          const noteEntry = { text: selectedText, type:"note", note: noteText.trim(), color:"#FFF1A8", pdfRects:capturePdfSelectionRects(sel.getRangeAt(0).cloneRange()) };
+          const noteEntry = { text: selectedText, type:"note", note: noteText.trim(), color:"#FFF1A8", pdfRects:capturePdfSelectionRects(noteRange) };
           pushHlHistory(item2);
           item2.highlights.push(noteEntry);
           drawHighlightInSvg(noteEntry, item2.highlights.length - 1);
@@ -6345,7 +6418,7 @@ function openPaperReader(itemId){
 
       if(prState.activeFmt === "note"){
         /* 备注模式: 弹出输入框 */
-        const noteText = prompt("为选中文字添加备注:");
+        const noteText = await showNoteDialog(selectedText);
         if(noteText && noteText.trim()){
           pushHlHistory(item2);
           item2.highlights.push({ text: selectedText, type:"note", note: noteText.trim() });
@@ -8097,10 +8170,15 @@ async function closePaperReader(){
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
-    const choice = confirm(noun + "有未保存的更改(文字、标注、备注等)。\n\n【确定】保存更改后退出\n【取消】放弃更改");
-    if(choice){
+    const choice = await showChoiceDialog(noun + "有未保存的更改", "文字、标注和备注尚未保存。", [
+      { label:"继续编辑", value:"cancel" },
+      { label:"放弃更改", value:"discard", tone:"danger" },
+      { label:"保存并退出", value:"save", tone:"primary" }
+    ]);
+    if(!choice || choice === "cancel") return;
+    if(choice === "save"){
       if(!await savePaperHighlights()) return;
-    } else {
+    } else if(choice === "discard") {
       /* 放弃这一次的修改，恢复上次保存时的版本。 */
       const item = state.items.find(function(i){ return i.id === prState.itemId; });
       if(item && prState.snapshot){
@@ -8172,7 +8250,7 @@ window.addEventListener("beforeunload", function(event){
 /* ============================================================
    删除选中文字 —— 从 fullText 中定位并删除(需确认)
    ============================================================ */
-function deleteSelectedText(sel){
+async function deleteSelectedText(sel){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item) return;
   const prTextEl = document.getElementById("prText");
@@ -8185,7 +8263,7 @@ function deleteSelectedText(sel){
     if(!sel.rangeCount){ toast("请重新选择要删除的文字"); return; }
     const range = sel.getRangeAt(0).cloneRange();
     const n = txt.trim().length;
-    if(!confirm("确定删除选中的 " + n + " 字?\n删除后可点「↶ 撤销」恢复。")) return;
+    if(!await confirmInApp("删除选中文字？", "共 " + n + " 字，删除后可点「撤销」恢复。", "删除文字")) return;
     prClearPendingSync();
     rebuildFromDom(item);
     pushTextHistory(item);
@@ -8213,7 +8291,7 @@ function deleteSelectedText(sel){
     return;
   }
   const n = txt.trim().length;
-  if(!confirm("确定删除选中的 " + n + " 字?\n删除后可点「↶ 撤销」恢复。")) return;
+  if(!await confirmInApp("删除选中文字？", "共 " + n + " 字，删除后可点「撤销」恢复。", "删除文字")) return;
   pushTextHistory(item);
   /* 同步删除结构化排版中的对应文本 */
   applyDeletionToStructured(item, target);
@@ -10896,12 +10974,90 @@ function autoFetchMeta(item){
   }).catch(function(){ /* 静默失败 */ });
 }
 
+function showChoiceDialog(title, message, choices){
+  const modal = document.getElementById("choiceModal");
+  const titleEl = document.getElementById("choiceTitle");
+  const messageEl = document.getElementById("choiceMessage");
+  const actions = document.getElementById("choiceActions");
+  const previousFocus = document.activeElement;
+  titleEl.textContent = title;
+  messageEl.textContent = message;
+  actions.replaceChildren();
+  modal.classList.add("show");
+  return new Promise(function(resolve){
+    function finish(value){
+      modal.classList.remove("show");
+      modal.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onEscape);
+      if(previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll:true });
+      resolve(value);
+    }
+    function onBackdrop(e){ if(e.target === modal) finish(null); }
+    function onEscape(e){ if(e.key === "Escape"){ e.preventDefault(); finish(null); } }
+    choices.forEach(function(choice){
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "modal-btn" + (choice.tone ? " " + choice.tone : "");
+      button.textContent = choice.label;
+      button.onclick = function(){ finish(choice.value); };
+      actions.appendChild(button);
+    });
+    modal.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onEscape);
+    actions.querySelector("button").focus({ preventScroll:true });
+  });
+}
+
+async function confirmInApp(title, message, label){
+  return await showChoiceDialog(title, message, [
+    { label:"取消", value:"cancel" },
+    { label:label || "确认", value:"confirm", tone:"danger" }
+  ]) === "confirm";
+}
+
+function showNoteDialog(selectedText){
+  const modal = document.getElementById("noteEntryModal");
+  const preview = document.getElementById("noteEntryPreview");
+  const input = document.getElementById("noteEntryText");
+  const cancel = document.getElementById("noteEntryCancel");
+  const save = document.getElementById("noteEntrySave");
+  const previousFocus = document.activeElement;
+  preview.textContent = selectedText.length > 120 ? selectedText.slice(0, 120) + "…" : selectedText;
+  input.value = "";
+  modal.classList.add("show");
+  return new Promise(function(resolve){
+    function finish(value){
+      modal.classList.remove("show");
+      modal.removeEventListener("click", onBackdrop);
+      document.removeEventListener("keydown", onKeydown);
+      cancel.onclick = null;
+      save.onclick = null;
+      if(previousFocus && previousFocus.isConnected) previousFocus.focus({ preventScroll:true });
+      resolve(value);
+    }
+    function onBackdrop(e){ if(e.target === modal) finish(null); }
+    function onKeydown(e){
+      if(e.key === "Escape"){ e.preventDefault(); finish(null); }
+      if(e.key === "Enter" && (e.ctrlKey || e.metaKey)){ e.preventDefault(); submit(); }
+    }
+    function submit(){ if(input.value.trim()) finish(input.value.trim()); else input.focus(); }
+    cancel.onclick = function(){ finish(null); };
+    save.onclick = submit;
+    modal.addEventListener("click", onBackdrop);
+    document.addEventListener("keydown", onKeydown);
+    input.focus({ preventScroll:true });
+  });
+}
+
 /* 删除条目: 确认弹窗 → 移入回收站(保留7天,可恢复) */
-function removeItem(id){
+async function removeItem(id){
   const it = state.items.find(function(i){ return i.id === id; });
-  if(!it) return;
-  const catName = CATEGORIES[it.category] ? CATEGORIES[it.category].name : it.category;
-  if(!confirm("确定删除「" + it.name + "」(" + catName + ")?\n删除后进入回收站,可恢复。")) return;
+  if(!it) return false;
+  const choice = await showChoiceDialog("移入回收站？", "「" + it.name + "」将保留 7 天，期间可以恢复。", [
+    { label:"继续保留", value:"cancel" },
+    { label:"移入回收站", value:"delete", tone:"danger" }
+  ]);
+  if(choice !== "delete") return false;
   if(!state.trash) state.trash = [];
   /* 完整备份原条目数据(含论文全文/标注/图片) */
   state.trash.push(Object.assign({}, it, { deletedAt: Date.now() }));
@@ -10910,6 +11066,7 @@ function removeItem(id){
   render();
   updateTrashBtn();
   toast("已移入回收站 · 可在顶部「回收站」恢复");
+  return true;
 }
 
 /* ===== 回收站界面 ===== */
@@ -10973,12 +11130,12 @@ function openTrashModal(){
     /* 彻底删除 */
     const fBtns = list.querySelectorAll(".trash-forever-btn");
     for(let i=0; i<fBtns.length; i++){
-      fBtns[i].onclick = function(){
+      fBtns[i].onclick = async function(){
         const row = this.closest(".trash-item");
         const tid = row ? row.dataset.tid : "";
         const t = state.trash.find(function(x){ return x.id === tid; });
         if(!t) return;
-        if(!confirm("彻底删除「" + t.name + "」?此操作不可恢复。")) return;
+        if(!await confirmInApp("彻底删除？", "「" + t.name + "」将无法恢复。", "彻底删除")) return;
         state.trash = state.trash.filter(function(x){ return x.id !== tid; });
         saveState();
         updateTrashBtn();
@@ -11181,12 +11338,12 @@ function renderStats(){
   /* 绑定各门类清空按钮 */
   const clears = el.querySelectorAll(".stat-clear[data-clear-cat]");
   for(let i=0; i<clears.length; i++){
-    clears[i].onclick = function(){
+    clears[i].onclick = async function(){
       const cat = this.dataset.clearCat;
       const c = CATEGORIES[cat];
       const cnt = state.items.filter(function(it){ return it.category === cat; }).length;
       if(cnt === 0){ toast(c.name + "已虚"); return; }
-      if(confirm("确定清空「" + c.name + "」分类下全部 " + cnt + " 条志录?\n将移入回收站,可恢复。")){
+      if(await confirmInApp("清空「" + c.name + "」？", cnt + " 条志录将移入回收站，7 天内可恢复。", "移入回收站")){
         if(!state.trash) state.trash = [];
         const now = Date.now();
         const removed = state.items.filter(function(it){ return it.category === cat; });
@@ -11360,12 +11517,12 @@ function renderSubcatBar(){
   chips.innerHTML = html;
   const btns = chips.querySelectorAll(".bb-chip");
   for(let i=0; i<btns.length; i++){
-    btns[i].onclick = function(e){
+    btns[i].onclick = async function(e){
       const delEl = e.target && e.target.classList && e.target.classList.contains("bb-del") ? e.target : null;
       if(delEl){
         e.stopPropagation();
         const dn = delEl.dataset.del;
-        if(dn && confirm("删除" + subLbl + "小门类「" + dn + "」?\n(该" + subLbl + "下的" + cObj.name + "不会被删, 仅去掉" + subLbl + "归类)")){
+        if(dn && await confirmInApp("删除「" + dn + "」小门类？", "相关" + cObj.name + "记录不会删除，只会取消这个小门类归类。", "删除小门类")){
           removeSubcatItem(cat, dn);
           state.items.forEach(function(it){ if(it.category === cat && it.subCategory === dn) it.subCategory = ""; });
           saveState();
@@ -11575,7 +11732,7 @@ function renderGallery(){
     html += '<div class="card-head">';
     html += '<div class="card-cat">' + catIcon(it.category, 16) + ' ' + c.name + '</div>';
     html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
-    html += '<button class="card-del" data-id="' + it.id + '" title="删除">×</button>';
+    html += '<button class="card-del" data-id="' + it.id + '" title="移入回收站" aria-label="删除' + escapeHtml(it.name) + '">' + (paperWorkspaceActive ? '移入回收站' : '×') + '</button>';
     html += '</div>';
     /* 饮品(品牌)/护肤(功效)/美食(城市): 小门类标签 */
     if((it.category === "beverage" || it.category === "skincare" || it.category === "food" || it.category === "treatise") && it.subCategory){
@@ -11614,7 +11771,6 @@ function renderGallery(){
   for(let i=0; i<dels.length; i++){
     dels[i].onclick = function(){
       removeItem(this.dataset.id);
-      toast("已删除");
     };
   }
   const edits = el.querySelectorAll(".card-edit");
@@ -12050,10 +12206,10 @@ if(bulkAllBtn){
 }
 const bulkDeleteBtn = document.getElementById("bulkDelete");
 if(bulkDeleteBtn){
-  bulkDeleteBtn.onclick = function(){
+  bulkDeleteBtn.onclick = async function(){
     const ids = state.bulkSelected ? Object.keys(state.bulkSelected) : [];
     if(ids.length === 0){ toast("请先勾选要删除的条目"); return; }
-    if(!confirm("确定删除所选 " + ids.length + " 条志录?\n将移入回收站,可恢复。")) return;
+    if(!await confirmInApp("删除所选记录？", ids.length + " 条志录将移入回收站，7 天内可恢复。", "移入回收站")) return;
     if(!state.trash) state.trash = [];
     const now = Date.now();
     const removed = state.items.filter(function(i){ return state.bulkSelected[i.id]; });
@@ -13222,9 +13378,9 @@ function toast(msg, duration){
     if(m) m.classList.remove("show");
   };
   const trashEmptyBtn = document.getElementById("trashEmptyBtn");
-  if(trashEmptyBtn) trashEmptyBtn.onclick = function(){
+  if(trashEmptyBtn) trashEmptyBtn.onclick = async function(){
     if(!state.trash || !state.trash.length){ toast("回收站已为空"); return; }
-    if(!confirm("彻底清空回收站全部 " + state.trash.length + " 条记录?此操作不可恢复。")) return;
+    if(!await confirmInApp("清空回收站？", "全部 " + state.trash.length + " 条记录将无法恢复。", "彻底清空")) return;
     state.trash = [];
     saveState();
     updateTrashBtn();
@@ -13239,6 +13395,8 @@ function toast(msg, duration){
     const m = document.getElementById("syncCodeModal");
     if(m) m.classList.remove("show");
   };
+  const syncMore = document.getElementById("syncMore");
+  if(syncMore) syncMore.addEventListener("toggle", function(){ if(this.open) refreshStorageInfo(); });
   const syncCustomSave = document.getElementById("syncCustomSave");
   if(syncCustomSave) syncCustomSave.onclick = setCustomSyncCode;
   const syncPasswordResetBtn = document.getElementById("syncPasswordResetBtn");
@@ -13256,8 +13414,8 @@ function toast(msg, duration){
   };
   /* 清理存储: 精简meta(去掉webSnippets等大字段) + 清空回收站 + 清空待审核 */
   const cleanBtn = document.getElementById("cleanStorageBtn");
-  if(cleanBtn) cleanBtn.onclick = function(){
-    if(!confirm("确定清理存储空间吗？\n\n将执行以下操作:\n1. 精简所有条目的概要数据(删除旧的网页抓取片段)\n2. 清空回收站\n3. 清空待审核列表\n\n此操作不可撤销,建议先导出数据备份。")) return;
+  if(cleanBtn) cleanBtn.onclick = async function(){
+    if(!await confirmInApp("清理存储空间？", "将精简旧概要、清空回收站和待审核列表。此操作不可撤销，建议先导出备份。", "确认清理")) return;
     let metaCleaned = 0;
     let spaceBefore = 0, spaceAfter = 0;
     try{ spaceBefore = JSON.stringify(state.items).length; }catch(_){}
@@ -13307,7 +13465,7 @@ function toast(msg, duration){
         return it.category === "literature" || it.category === "movie" || it.category === "novel";
       });
       if(targets.length === 0){ toast("没有文学/影视条目需要清理"); return; }
-      if(!confirm("将彻底删除 " + targets.length + " 条文学/影视条目的概要数据,释放存储空间。是否继续?")) return;
+      if(!await confirmInApp("清理旧概要？", targets.length + " 条文学/影视记录的概要将被删除，原条目仍保留。", "确认清理")) return;
       const oldText = regenMetaBtn.textContent;
       regenMetaBtn.disabled = true;
       let done = 0;
@@ -13332,15 +13490,15 @@ function toast(msg, duration){
   const syncCopyBtn = document.getElementById("syncCopyBtn");
   if(syncCopyBtn) syncCopyBtn.onclick = function(){
     const code = (document.getElementById("syncCodeValue").textContent || "").trim();
-    if(!code || code === "—" || code.indexOf("尚未") >= 0){ toast("无身份码可复制"); return; }
+    if(!code || code === "—" || code.indexOf("尚未") >= 0){ toast("没有可复制的同步码"); return; }
     if(navigator.clipboard && navigator.clipboard.writeText){
-      navigator.clipboard.writeText(code).then(function(){ toast("身份码已复制"); });
+      navigator.clipboard.writeText(code).then(function(){ toast("同步码已复制"); });
     }else{
       try{
         const ta = document.createElement("textarea");
         ta.value = code; document.body.appendChild(ta);
         ta.select(); document.execCommand("copy"); document.body.removeChild(ta);
-        toast("身份码已复制");
+        toast("同步码已复制");
       }catch(e){ toast("复制失败,请手动选中复制"); }
     }
   };
@@ -13357,19 +13515,6 @@ function toast(msg, duration){
         document.body.removeChild(ta); toast("恢复码已复制");
       }catch(e){ toast("复制失败,请手动选中复制"); }
     }
-  };
-  const loginViewCodeLink = document.getElementById("loginViewCode");
-  if(loginViewCodeLink) loginViewCodeLink.onclick = function(e){
-    e.preventDefault();
-    /* 未登录:找本机任一有身份码的账号展示 */
-    const users = getUsers();
-    const names = Object.keys(users);
-    let code = null;
-    for(let i=0; i<names.length; i++){ if(users[names[i]].code){ code = users[names[i]].code; break; } }
-    if(!code){ toast("本机无含身份码的账号,登录后可在顶栏「⌁ 身份码」查看"); return; }
-    const modal = document.getElementById("syncCodeModal");
-    const codeEl = document.getElementById("syncCodeValue");
-    if(modal && codeEl){ codeEl.textContent = code; modal.classList.add("show"); }
   };
   updateNavAiState();
 })();
