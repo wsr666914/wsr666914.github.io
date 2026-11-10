@@ -2137,6 +2137,7 @@
     </div>
     <div class="modal-field">
       <label>论文全文 <button class="paper-pdf-btn" id="paperPdfBtn" title="导入本地文件:PDF / Word(.docx) / CAJ；大文件自动低内存逐页处理，扫描件或乱码文字层自动OCR">⇪ 导入文档</button></label>
+      <input id="paperPdfFile" type="file" accept=".pdf,.docx,.caj" hidden />
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
       <div class="pp-convert-tip">
         <div class="pp-convert-head">☁ PDF 排版不理想？先在成熟平台转为 Word(排版无损)再导入:</div>
@@ -2622,10 +2623,9 @@ function updateNavUser(){
 }
 
 /* 游客模式: 不要求注册或云端服务,每个浏览器独立保存在本机。 */
-function enterGuestMode(){
+async function enterGuestMode(){
   setSession(GUEST_USER);
-  hideLoginScreen();
-  afterLogin();
+  if(!await afterLogin()) return;
   toast("已进入游客模式 · 数据仅保存在本机");
 }
 
@@ -2671,15 +2671,14 @@ async function doRegister(){
       }
     }catch(e){}
   }
-  hideLoginScreen();
-  afterLogin();
+  if(!await afterLogin()) return;
   toast("立册成功 · 欢迎," + u);
   /* 异步首推云端 + 展示身份码弹窗 */
   syncPushNow();
   setTimeout(function(){ showSyncCodeModal(); }, 900);
 }
 
-function doLogin(){
+async function doLogin(){
   const u = (document.getElementById("loginUser").value || "").trim();
   const p = document.getElementById("loginPass").value || "";
   const hint = document.getElementById("loginHint");
@@ -2692,7 +2691,7 @@ function doLogin(){
     if(!sp){ hint.textContent = "身份码格式有误"; return; }
     const realCode = sp.code;
     hint.textContent = "身份码识别中,正在连接云端…";
-    syncPull(realCode).then(function(r){
+    syncPull(realCode).then(async function(r){
       if(!r.ok){
         hint.textContent = r.reason || "身份码登录失败";
         return;
@@ -2717,11 +2716,10 @@ function doLogin(){
         state.pendingReview = d.pendingReview || [];
         state.trash = d.trash || [];
         try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(d.ts || 0)); }catch(e){}
-        saveState();
+        if(!await saveState()){ clearSession(); return; }
       }
       hint.textContent = "";
-      hideLoginScreen();
-      afterLogin();
+      if(!await afterLogin()) return;
       toast("云端登录成功 · " + d.u + "(已同步 " + (d.items ? d.items.length : 0) + " 条志录)");
     });
     return;
@@ -2735,8 +2733,7 @@ function doLogin(){
   if(users[u].pass !== hashPass(p)){ hint.textContent = "暗语有误"; return; }
   hint.textContent = "";
   setSession(u);
-  hideLoginScreen();
-  afterLogin();
+  if(!await afterLogin()) return;
   toast("欢迎归来 · " + u);
   /* 云端检查: 其他设备有更新则拉取(多设备联通) */
   syncCheckOnLogin();
@@ -2751,7 +2748,7 @@ function _validateNewPassword(pass, pass2, hint){
   return true;
 }
 
-function resetLocalPassword(){
+async function resetLocalPassword(){
   const hint = document.getElementById("forgotHint");
   const u = (document.getElementById("forgotLocalUser").value || "").trim();
   const p = document.getElementById("forgotNewPass").value || "";
@@ -2764,10 +2761,9 @@ function resetLocalPassword(){
   users[u].pass = hashPass(p);
   saveUsers(users);
   setSession(u);
-  hideLoginScreen();
   const modal = document.getElementById("forgotPassModal");
   if(modal) modal.classList.remove("show");
-  afterLogin();
+  if(!await afterLogin()) return;
   toast("暗语已重置 · 已登录");
 }
 
@@ -2801,12 +2797,11 @@ async function resetCloudPassword(){
     state.items = data.items;
     state.pendingReview = data.pendingReview || [];
     state.trash = data.trash || [];
-    saveState();
+    if(!await saveState()){ clearSession(); return; }
   }
-  hideLoginScreen();
   const modal = document.getElementById("forgotPassModal");
   if(modal) modal.classList.remove("show");
-  afterLogin();
+  if(!await afterLogin()) return;
   toast("云端暗语已更新 · 已登录");
 }
 
@@ -3191,14 +3186,27 @@ function doLogout(){
 }
 
 /* 登录后初始化数据 */
-function afterLogin(){
-  state.items = [];
-  state.pendingReview = [];
-  state.trash = [];
+async function afterLogin(){
+  const key = STORAGE_KEY;
+  let saved;
+  try{
+    saved = await loadState();
+    if(saved.legacy) await hydrateLargeFields(saved.items);
+  }catch(e){
+    if(key === STORAGE_KEY){
+      clearSession();
+      showLoginScreen();
+      const hint = document.getElementById("loginHint");
+      if(hint) hint.textContent = "无法读取本机志录。请检查浏览器存储后重新登录。";
+    }
+    return false;
+  }
+  if(key !== STORAGE_KEY) return false;
+  state.items = saved.items;
+  state.pendingReview = saved.pendingReview || [];
+  state.trash = saved.trash || [];
   /* === 外部拓宽浏览器存储空间 ===
-     1. 请求持久化存储: 浏览器不再自动清理, 配额可扩大到磁盘可用空间的一定比例
-     2. 使用 IndexedDB 存储大字段(已在 saveState 中实现)
-     3. 启动时自动清理旧数据中的大字段(已在 loadState 中实现) */
+     请求持久化存储，降低浏览器自动清理本机数据的风险。 */
   try{
     if(navigator.storage && navigator.storage.persist){
       navigator.storage.persist().then(function(granted){
@@ -3210,7 +3218,6 @@ function afterLogin(){
       }).catch(function(){});
     }
   }catch(_){}
-  loadState();
   loadBeverageBrands();
   loadSkincareFuncs();
   loadFoodCities();
@@ -3247,11 +3254,7 @@ function afterLogin(){
   updatePredict();
   updateNavUser();
   updatePendingBtn();
-  /* 从 IndexedDB 挂回大字段(layout/images),完成后刷新渲染,确保PDF版面完整 */
-  hydrateLargeFields().then(function(){
-    try{ render(); }catch(_){}
-    try{ loadReading(); }catch(_){}
-  });
+  hideLoginScreen();
   if(state.items.length === 0){
     setTimeout(function(){ toast("点击「载入示例」可速览其效"); }, 600);
   }
@@ -3263,6 +3266,7 @@ function afterLogin(){
       if(it && it.fullText) setTimeout(function(){ openPaperReader(rid); }, 250);
     }
   }catch(e){ /* 静默 */ }
+  return true;
 }
 
 /* ============== IndexedDB 大字段存储 (突破 localStorage 5MB 上限) ==============
@@ -3330,34 +3334,11 @@ function _hasValue(v){
   if(typeof v === "object") return Object.keys(v).length > 0;
   return true;
 }
-/* 将 items 中的大字段(layout/images/fullText/structured/meta)拆分到 IDB,返回瘦身后的 items 副本 */
-async function splitLargeFieldsToIdb(items){
-  const slim = [];
+/* 从 IDB 读取大字段(layout/images/fullText/structured/meta/pdfBytes)挂回 state.items */
+async function hydrateLargeFields(items = state.items){
+  if(!Array.isArray(items)) return;
   for(let i=0; i<items.length; i++){
     const it = items[i];
-    const id = String(it.id);
-    const cp = {};
-    for(const k in it){
-      if(LARGE_FIELDS.indexOf(k) >= 0) continue;
-      cp[k] = it[k];
-    }
-    for(let f=0; f<LARGE_FIELDS.length; f++){
-      const fk = LARGE_FIELDS[f];
-      if(_hasValue(it[fk])){
-        try{ await idbSet(id + "|" + fk, it[fk]); }catch(_){ cp[fk] = it[fk]; }
-      }else{
-        try{ await idbDel(id + "|" + fk); }catch(_){}
-      }
-    }
-    slim.push(cp);
-  }
-  return slim;
-}
-/* 从 IDB 读取大字段(layout/images/fullText/structured/meta/pdfBytes)挂回 state.items */
-async function hydrateLargeFields(){
-  if(!Array.isArray(state.items)) return;
-  for(let i=0; i<state.items.length; i++){
-    const it = state.items[i];
     const id = String(it.id);
     /* layout / images / fullText / structured / meta: 若本地无值则从 IDB 恢复 */
     for(let f=0; f<LARGE_FIELDS.length; f++){
@@ -3373,242 +3354,82 @@ async function hydrateLargeFields(){
   }
 }
 
-function loadState(){
-  try{
-    let raw = localStorage.getItem(STORAGE_KEY);
-    let arr = null;
-    if(raw){
-      try{ arr = JSON.parse(raw); }catch(e){ arr = null; }
-    }
-    /* 主数据损坏/为空 → 尝试从备份恢复 */
-    if(!Array.isArray(arr)){
-      const braw = localStorage.getItem(STORAGE_KEY + "_bak");
-      if(braw){
-        try{
-          const barr = JSON.parse(braw);
-          if(Array.isArray(barr) && barr.length > 0){
-            arr = barr;
-            toast("检测到数据异常,已自动从备份恢复 " + barr.length + " 条志录");
-          }
-        }catch(e){ /* 备份也坏,放弃 */ }
-      }
-    }
-    if(Array.isArray(arr)) state.items = arr;
-    const praw = localStorage.getItem(STORAGE_KEY + "_pending");
-    if(praw){
-      const parr = JSON.parse(praw);
-      if(Array.isArray(parr)) state.pendingReview = parr;
-    }
-    /* 回收站 */
-    const traw = localStorage.getItem(STORAGE_KEY + "_trash");
-    if(traw){
-      try{
-        const tarr = JSON.parse(traw);
-        if(Array.isArray(tarr)) state.trash = tarr;
-      }catch(e){ /* 忽略损坏的回收站数据 */ }
-    }
-  }catch(e){ console.warn("load failed", e); }
 
-  /* === 启动时同步瘦身: 清理 _bak, 剥离主数据/回收站/待审核的大字段 ===
-     大字段异步写入 IDB, 但 localStorage 立即可瘦身, 保证录入不报错 */
-  try{
-    /* 1. 立即删除 _bak 备份(不再需要, 释放一倍空间) */
-    try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
+const STATE_IN_IDB = '{"storage":"indexeddb","version":1}';
 
-    /* 2. 检测是否含大字段 */
-    function _hasLargeField(str){
-      if(!str) return false;
-      for(let f=0; f<LARGE_FIELDS.length; f++){
-        if(str.indexOf('"' + LARGE_FIELDS[f] + '"') >= 0) return true;
-      }
-      return false;
-    }
-
-    /* 3. 主数据瘦身 */
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if(raw && _hasLargeField(raw)){
-      try{
-        const arr = JSON.parse(raw);
-        if(Array.isArray(arr)){
-          const slim = _stripLargeFields(arr);
-          try{
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
-            state.items = slim;
-            /* 大字段异步写 IDB, 完成后从 IDB 恢复到内存 */
-            splitLargeFieldsToIdb(arr).then(function(){
-              hydrateLargeFields();
-            });
-          }catch(_){ /* 写不下就先不管, 下次 saveState 会再试 */ }
-        }
-      }catch(_){}
-    }
-
-    /* 4. 回收站瘦身 */
-    const traw = localStorage.getItem(STORAGE_KEY + "_trash");
-    if(traw && _hasLargeField(traw)){
-      try{
-        const tarr = JSON.parse(traw);
-        if(Array.isArray(tarr)){
-          const slimT = _stripLargeFields(tarr);
-          try{ localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(slimT)); }catch(_){}
-          state.trash = slimT;
-        }
-      }catch(_){}
-    }
-
-    /* 5. 待审核瘦身 */
-    const praw = localStorage.getItem(STORAGE_KEY + "_pending");
-    if(praw && _hasLargeField(praw)){
-      try{
-        const parr = JSON.parse(praw);
-        if(Array.isArray(parr)){
-          const slimP = _stripLargeFields(parr);
-          try{ localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(slimP)); }catch(_){}
-          state.pendingReview = slimP;
-        }
-      }catch(_){}
-    }
-
-    /* 6. 彻底删除文学/影视已有条目的概要(meta字段) */
-    try{
-      let raw2 = localStorage.getItem(STORAGE_KEY);
-      if(raw2){
-        const arr2 = JSON.parse(raw2);
-        if(Array.isArray(arr2)){
-          let changed = false;
-          for(let i=0; i<arr2.length; i++){
-            const it = arr2[i];
-            if((it.category === "literature" || it.category === "movie") && it.meta){
-              delete it.meta;
-              changed = true;
-            }
-          }
-          if(changed){
-            try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(arr2)); }catch(_){}
-            state.items = arr2;
-          }
-        }
-      }
-    }catch(_){}
-  }catch(_){}
-}
-/* 剥离所有大字段,返回瘦身版 items(不写 IDB,纯内存操作,快速) */
-function _stripLargeFields(items){
-  const slim = [];
-  for(let i=0; i<items.length; i++){
-    const it = items[i];
-    const cp = {};
-    for(const k in it){
-      if(LARGE_FIELDS.indexOf(k) >= 0) continue;
-      cp[k] = it[k];
-    }
-    slim.push(cp);
+/* 旧版本用数组和独立回收站键，新版本把整份志录作为一个快照保存。 */
+async function loadState(){
+  const key = STORAGE_KEY;
+  let raw = localStorage.getItem(key);
+  const storedInIdb = raw === STATE_IN_IDB;
+  if(storedInIdb){
+    raw = await idbGet(key + "|state");
+    if(!raw) throw new Error("无法读取本机数据库");
   }
-  return slim;
-}
-/* 把所有大字段异步写入 IDB(失败忽略) */
-let _lastStateSavePromise = Promise.resolve();
-function _flushLargeFieldsToIdb(){
-  const arr = state.items.slice();
-  const jobs = [];
-  for(let i=0; i<arr.length; i++){
-    const it = arr[i];
-    const id = String(it.id);
-    for(let f=0; f<LARGE_FIELDS.length; f++){
-      const fk = LARGE_FIELDS[f];
-      jobs.push(_hasValue(it[fk]) ? idbSet(id + "|" + fk, it[fk]) : idbDel(id + "|" + fk));
-    }
+  let saved;
+  try{ saved = JSON.parse(raw); }catch(e){
+    if(storedInIdb) throw e;
   }
-  _lastStateSavePromise = Promise.all(jobs).catch(function(){ return []; });
-  return _lastStateSavePromise;
+  if(saved && Array.isArray(saved.items)) return saved;
+  if(storedInIdb) throw new Error("本机备份格式异常");
+  if(!Array.isArray(saved)){
+    try{ saved = JSON.parse(localStorage.getItem(key + "_bak")); }catch(_){}
+  }
+  function legacyList(suffix){
+    try{
+      const list = JSON.parse(localStorage.getItem(key + suffix));
+      if(Array.isArray(list)) return list;
+    }catch(_){}
+    return [];
+  }
+  return {
+    items: Array.isArray(saved) ? saved : [],
+    pendingReview: legacyList("_pending"),
+    trash: legacyList("_trash"),
+    legacy: true
+  };
 }
-function saveState(){
+
+let pendingStateSave = null;
+function saveState(items = state.items){
+  const key = STORAGE_KEY;
+  let snapshot;
   try{
-    /* 先尝试完整写(含大字段) */
-    let fullStr = "";
-    let quotaOk = false;
-    try{
-      fullStr = JSON.stringify(state.items);
-      try{
-        localStorage.setItem(STORAGE_KEY + "_wtest", fullStr);
-        localStorage.removeItem(STORAGE_KEY + "_wtest");
-        quotaOk = true;
-      }catch(_t){ quotaOk = false; }
-    }catch(_s){ quotaOk = false; }
-
-    if(quotaOk){
-      /* localStorage 装得下 → 完整存 */
-      localStorage.setItem(STORAGE_KEY, fullStr);
-    }else{
-      /* localStorage 超限 → 剥离所有大字段(layout/images/fullText/structured/meta),
-         大字段靠 IDB,localStorage 只存元数据 */
-      const slimItems = _stripLargeFields(state.items);
-      const main = JSON.stringify(slimItems);
-      localStorage.setItem(STORAGE_KEY, main);
-      toast("存储空间紧张,大内容已自动转存本地数据库", 3000);
-    }
-    /* 大字段异步双写 IDB(作冗余) */
-    _flushLargeFieldsToIdb();
-    /* 不再写 _bak 备份,释放 localStorage 空间 */
-    try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
-    /* 回收站/待审核也剥离大字段,避免占用 localStorage */
-    try{
-      const slimPending = _stripLargeFields(state.pendingReview || []);
-      localStorage.setItem(STORAGE_KEY + "_pending", JSON.stringify(slimPending));
-    }catch(_){}
-    try{
-      const slimTrash = _stripLargeFields(state.trash || []);
-      localStorage.setItem(STORAGE_KEY + "_trash", JSON.stringify(slimTrash));
-    }catch(_){}
-  }
-  catch(e){
-    const isQuota = (e && (e.name === "QuotaExceededError" || e.code === 22 || e.code === 1014)) || false;
-    if(isQuota){
-      /* 降级策略1: 清 _bak + 清回收站 + 清待审核, 释放空间 */
-      try{ localStorage.removeItem(STORAGE_KEY + "_bak"); }catch(_){}
-      try{ localStorage.removeItem(STORAGE_KEY + "_trash"); state.trash = []; }catch(_){}
-      try{ localStorage.removeItem(STORAGE_KEY + "_pending"); state.pendingReview = []; }catch(_){}
-      try{
-        const slimItems = _stripLargeFields(state.items);
-        const main = JSON.stringify(slimItems);
-        localStorage.setItem(STORAGE_KEY, main);
-        _flushLargeFieldsToIdb();
-        toast("存储空间紧张,已自动清空回收站并保存成功", 3000);
-        scheduleSyncPush();
-        return;
-      }catch(e2){ /* 仍失败,进入降级策略2 */ }
-
-      /* 降级策略2: 只保留最近 200 条条目 */
-      try{
-        const keep = state.items.slice(-200);
-        const slimItems = _stripLargeFields(keep);
-        const main = JSON.stringify(slimItems);
-        localStorage.setItem(STORAGE_KEY, main);
-        state.items = keep;
-        _flushLargeFieldsToIdb();
-        toast("存储空间严重不足,已只保留最近 200 条记录", 4000);
-        scheduleSyncPush();
-        return;
-      }catch(e3){ /* 仍失败,进入降级策略3 */ }
-
-      /* 降级策略3: 只保留最近 50 条条目 */
-      try{
-        const keep = state.items.slice(-50);
-        const slimItems = _stripLargeFields(keep);
-        const main = JSON.stringify(slimItems);
-        localStorage.setItem(STORAGE_KEY, main);
-        state.items = keep;
-        _flushLargeFieldsToIdb();
-        toast("存储空间严重不足,已只保留最近 50 条记录", 4000);
-        scheduleSyncPush();
-        return;
-      }catch(e4){}
-    }
+    snapshot = JSON.stringify({ items:items, pendingReview:state.pendingReview || [], trash:state.trash || [] });
+  }catch(e){
     console.warn("save failed", e);
-    toast("保存失败:浏览器存储空间不足,请尽快「导出数据」备份", 5000);
+    toast("保存失败，当前改动仍在页面中。请保留页面并重试。", 5500);
+    return Promise.resolve(false);
   }
-  /* 云端同步(防抖6秒合并推送,身份码账号生效) */
-  scheduleSyncPush();
+
+  async function writeSnapshot(){
+    const storedInIdb = localStorage.getItem(key) === STATE_IN_IDB;
+    if(!storedInIdb){
+      try{
+        localStorage.setItem(key, snapshot);
+        return true;
+      }catch(e){
+        if(e.name !== "QuotaExceededError" && e.code !== 22 && e.code !== 1014) throw e;
+      }
+    }
+    /* 数据库写入成功后再切换读取位置。失败时原有快照和内存记录仍可用。 */
+    if(!await idbSet(key + "|state", snapshot)) return false;
+    if(!storedInIdb) localStorage.setItem(key, STATE_IN_IDB);
+    return true;
+  }
+
+  const write = pendingStateSave ? pendingStateSave.then(writeSnapshot) : writeSnapshot();
+  const result = write.catch(function(e){
+    console.warn("save failed", e);
+    return false;
+  }).then(function(ok){
+    if(!ok) toast("保存失败，当前改动仍在页面中。请保留页面，检查浏览器存储后重试。", 5500);
+    else if(STORAGE_KEY === key) scheduleSyncPush();
+    return ok;
+  });
+  pendingStateSave = result;
+  result.then(function(){ if(pendingStateSave === result) pendingStateSave = null; });
+  return result;
 }
 
 /* ===== 回收站: 删除内容保留7天后自动清空 ===== */
@@ -5983,7 +5804,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, pdfPageObserver:null, translateMode:false, translateRequestId:0, chat:[] };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, revision:0, saving:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, pdfPageObserver:null, translateMode:false, translateRequestId:0, chat:[] };
 
 /* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照。
    注意: 键盘编辑不再调用此函数(改用浏览器原生undo)。
@@ -6056,6 +5877,19 @@ function replaceColorHighlight(item, entry){
   item.highlights.push(entry);
 }
 
+function snapshotPaper(item){
+  return JSON.parse(JSON.stringify({
+    fullText: item.fullText,
+    outline: item.outline,
+    analysis: item.analysis,
+    highlights: item.highlights || [],
+    description: item.description,
+    structured: item.structured || null,
+    layout: item.layout || null,
+    pdfEdits: item.pdfEdits || []
+  }));
+}
+
 /* 打开论文查看器 */
 function openPaperReader(itemId){
   const item = state.items.find(function(i){ return i.id === itemId; });
@@ -6076,17 +5910,7 @@ function openPaperReader(itemId){
   prState._pdfRenderFallback = false;
   prState.pdfNativeCacheKey = null;
   prState.pdfNativeNumPages = 0;
-  /* 快照: 打开时的原始数据副本,退出选「取消」时恢复 */
-  prState.snapshot = JSON.parse(JSON.stringify({
-    fullText: item.fullText,
-    outline: item.outline,
-    analysis: item.analysis,
-    highlights: item.highlights,
-    description: item.description,
-    structured: item.structured || null,
-    layout: item.layout || null,
-    pdfEdits: Array.isArray(item.pdfEdits) ? item.pdfEdits : []
-  }));
+  prState.snapshot = snapshotPaper(item);
   updateSaveBtnState();
 
   /* 标题 + 元信息 */
@@ -6652,29 +6476,43 @@ function openPaperReader(itemId){
 /* 标记为有未保存改动 */
 function markDirty(){
   prState.dirty = true;
+  prState.revision++;
   updateSaveBtnState();
 }
 /* 更新保存按钮状态 */
 function updateSaveBtnState(){
   const btn = document.getElementById("prHlSave");
   if(!btn) return;
+  btn.disabled = prState.saving;
   if(prState.dirty) btn.classList.add("dirty");
   else btn.classList.remove("dirty");
 }
-/* 保存标注(显式保存) —— Word式编辑后先从DOM同步全文,再等待IDB写入完成 */
+/* 确认本机写入完成后，才清除未保存状态。 */
 async function savePaperHighlights(){
+  if(prState.saving) return false;
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(item){
-    /* 未保存的编辑立即同步(防抖可能还没触发) */
+  if(!item) return false;
+  prState.saving = true;
+  updateSaveBtnState();
+  try{
     if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
     rebuildFromDom(item);
     prState.kbHistPushed = false;
+    const revision = prState.revision;
+    const snapshot = snapshotPaper(item);
+    if(!await saveState()) return false;
+    prState.snapshot = snapshot;
+    if(prState.revision !== revision){
+      toast("先前改动已保存，保存期间又有新改动，请再次保存。");
+      return false;
+    }
+    prState.dirty = false;
+    toast("已保存到本机 · 修改、标注与备注会保留");
+    return true;
+  }finally{
+    prState.saving = false;
+    updateSaveBtnState();
   }
-  saveState();
-  await _lastStateSavePromise;
-  prState.dirty = false;
-  updateSaveBtnState();
-  toast("已保存 · 修改、标注与备注会保留");
 }
 
 /* 渲染论文全文 (按行渲染,标题识别+段落间距) —— 每次调用都重建 DOM */
@@ -7267,7 +7105,8 @@ function _syncPdfEditsFromDom(item){
   if(!item) return;
   const prText = document.getElementById("prText");
   if(!prText || !prText.classList.contains("pr-pdf-native")) return;
-  const edits = [];
+  const savedEdits = Array.isArray(item.pdfEdits) ? item.pdfEdits : [];
+  const edits = new Map(savedEdits.map(function(ed){ return [ed.page + ":" + ed.span, ed]; }));
   const spans = prText.querySelectorAll(".pr-pdf-textLayer > span");
   for(let i=0; i<spans.length; i++){
     const sp = spans[i];
@@ -7275,9 +7114,11 @@ function _syncPdfEditsFromDom(item){
     const spanIndex = parseInt(sp.dataset.pdfSpan || "-1", 10);
     if(!page || spanIndex < 0 || sp.dataset.originalText == null) continue;
     const text = (sp.textContent || "").replace(/\u200B/g, "");
-    if(text !== sp.dataset.originalText) edits.push({ page:page, span:spanIndex, text:text });
+    const key = page + ":" + spanIndex;
+    if(text !== sp.dataset.originalText) edits.set(key, { page:page, span:spanIndex, text:text });
+    else edits.delete(key);
   }
-  item.pdfEdits = edits;
+  item.pdfEdits = Array.from(edits.values());
 }
 function _refreshPdfEditOverlays(item){
   const prText = document.getElementById("prText");
@@ -8274,36 +8115,38 @@ function redoLastAction(){
 
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 async function closePaperReader(){
-  if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
-  clearAiSelectionMark();  /* 移除AI解读临时高亮(非永久标注) */
-  _closePdfObjectEditor();
-  const translations = document.querySelectorAll(".pr-translation");
-  for(let i=0; i<translations.length; i++) translations[i].remove();
+  if(prState.saving) return;
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
     const choice = confirm(noun + "有未保存的更改(文字、标注、备注等)。\n\n【确定】保存更改后退出\n【取消】放弃更改");
     if(choice){
-      await savePaperHighlights();
+      if(!await savePaperHighlights()) return;
     } else {
-      /* 真实恢复快照: 回滚到打开阅读器时的原始数据 */
+      /* 放弃这一次的修改，恢复上次保存时的版本。 */
       const item = state.items.find(function(i){ return i.id === prState.itemId; });
       if(item && prState.snapshot){
-        item.fullText = prState.snapshot.fullText;
-        item.outline = prState.snapshot.outline;
-        item.analysis = prState.snapshot.analysis;
-        item.highlights = prState.snapshot.highlights;
-        item.description = prState.snapshot.description;
-        item.structured = prState.snapshot.structured || null;
-        item.layout = prState.snapshot.layout || null;
-        item.pdfEdits = Array.isArray(prState.snapshot.pdfEdits) ? prState.snapshot.pdfEdits : [];
-        saveState();
+        const revision = prState.revision;
+        const restored = Object.assign({}, item, prState.snapshot);
+        const items = state.items.map(function(entry){ return entry === item ? restored : entry; });
+        prState.saving = true;
+        updateSaveBtnState();
+        const ok = await saveState(items);
+        prState.saving = false;
+        updateSaveBtnState();
+        if(!ok || prState.revision !== revision) return;
+        Object.assign(item, restored);
         render();
       }
       prState.dirty = false;
       updateSaveBtnState();
     }
   }
+  if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
+  clearAiSelectionMark();
+  _closePdfObjectEditor();
+  const translations = document.querySelectorAll(".pr-translation");
+  for(let i=0; i<translations.length; i++) translations[i].remove();
   const modal = document.getElementById("paperReaderModal");
   if(modal) modal.classList.remove("show");
   document.body.style.overflow = "";
@@ -8321,20 +8164,13 @@ async function closePaperReader(){
   if(chat) chat.classList.remove("show");
 }
 
-/* ===== 刷新/关闭页面时保护阅读状态 =====
-   · 未保存的编辑/标注自动落盘(刷新不丢内容)
-   · 记住滚动位置,刷新后原位恢复
-   · _reading 键保留 → 重新加载后自动重开审阅界面 */
-window.addEventListener("beforeunload", function(){
+/* 离开标签页时提醒未保存改动。异步写入不能依赖页面卸载。 */
+window.addEventListener("beforeunload", function(event){
   try{
     if(prState && prState.itemId){
-      if(prState.dirty){
-        const it = state.items.find(function(x){ return x.id === prState.itemId; });
-        if(it){
-          if(_prEditSyncTimer){ clearTimeout(_prEditSyncTimer); _prEditSyncTimer = null; }
-          rebuildFromDom(it);
-          saveState();
-        }
+      if(prState.dirty || prState.saving){
+        event.preventDefault();
+        event.returnValue = "";
       }
       const wrap = document.getElementById("prTextWrap");
       if(wrap) localStorage.setItem(STORAGE_KEY + "_readpos", String(Math.round(wrap.scrollTop)));
@@ -8446,48 +8282,10 @@ function rebuildFromDom(item){
   const prText = document.getElementById("prText");
   if(!prText || !item) return;
   try{
-    /* PDF Canvas原生模式: 从textLayer span按阅读顺序(页→top→x)重建fullText */
+    /* 文字层按页加载，不能用当前可见的内容覆盖原始全文。 */
     if(prText.classList.contains("pr-pdf-native")){
       _syncPdfEditsFromDom(item);
-      const textLayers = prText.querySelectorAll(".pr-pdf-textLayer");
-      const allSpans = [];
-      for(let t=0; t<textLayers.length; t++){
-        const tl = textLayers[t];
-        const pageEl = tl.closest(".pr-pdf-page");
-        const page = pageEl ? parseInt(pageEl.getAttribute("data-page") || "1", 10) : (t+1);
-        const spans = tl.querySelectorAll("span");
-        for(let s=0; s<spans.length; s++){
-          const sp = spans[s];
-          const txt = (sp.textContent || "").replace(/\u00A0/g, " ").replace(/\u200B/g, "");
-          if(!txt.trim()) continue;
-          const x = parseFloat(sp.dataset.x || "0");
-          const top = parseFloat(sp.dataset.top || "0");
-          allSpans.push({ text: txt, page: page, x: x, top: top });
-        }
-      }
-      allSpans.sort(function(a, b){
-        if(a.page !== b.page) return a.page - b.page;
-        if(Math.abs(a.top - b.top) > 3) return a.top - b.top;
-        return a.x - b.x;
-      });
-      const lines = [];
-      let cur = null, curTop = null;
-      for(let i=0; i<allSpans.length; i++){
-        const s = allSpans[i];
-        if(cur === null || Math.abs(s.top - curTop) > 3){
-          if(cur !== null) lines.push(cur);
-          cur = s.text; curTop = s.top;
-        }else{
-          cur += s.text;
-        }
-      }
-      if(cur !== null) lines.push(cur);
-      item.fullText = lines.join("\n");
-      /* 原生 PDF 的高亮/备注存在 SVG 坐标数组中，不能按普通文字标签提取，否则保存会清空。 */
       if(!Array.isArray(item.highlights)) item.highlights = [];
-      item.outline = generateOutline(item.fullText);
-      item.analysis = analyzePaper(item.fullText);
-      item.description = "全文 " + item.fullText.length + " 字 · " + lines.length + " 行";
       return;
     }
     /* 版面保真模式: 从绝对定位块按阅读顺序(页→上→左)重建fullText,保留layout坐标不变 */
@@ -13208,9 +13006,8 @@ if(paperEntrySubmit){
 const paperPdfBtn = document.getElementById("paperPdfBtn");
 if(paperPdfBtn){
   paperPdfBtn.onclick = function(){
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".pdf,.docx,.caj";
+    const input = document.getElementById("paperPdfFile");
+    input.value = "";
     input.onchange = function(){
       const file = this.files[0];
       if(!file) return;
@@ -13766,7 +13563,6 @@ function toast(msg, duration){
     if(savedUser === GUEST_USER || users[savedUser]){
       // 会话有效,直接登录
       setSession(savedUser);
-      hideLoginScreen();
       afterLogin();
       return;
     }else{
