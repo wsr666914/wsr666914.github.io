@@ -1923,6 +1923,64 @@
     body.paper-focus .card-meta{ grid-column:1; }
   }
   @media(prefers-reduced-motion:reduce){ button:active:not(:disabled),.topnav a:active{ transform:none !important; } button.press-release,.topnav a.press-release{ animation:none !important; } }
+
+  /* ============ 论文阅读器：与工作台统一的柔和渐变界面 ============ */
+  .paper-reader{ background:linear-gradient(135deg,#F5F8FA 0%,#F3F1F7 52%,#F8F2F2 100%); }
+  .pr-header{
+    padding:17px 28px; border-bottom-color:rgba(103,123,145,.22);
+    background:linear-gradient(112deg,rgba(230,239,244,.96),rgba(237,233,245,.96) 55%,rgba(247,232,233,.96));
+  }
+  .pr-title,.pr-icon{ font-family:var(--ui-font); color:#293F54; }
+  .pr-title{ font-weight:750; letter-spacing:-.025em; }
+  .pr-sub,.pr-hl-label,.pr-zoom-pct,.pr-outline-section,.pa-label,.pa-metrics span,.rel-rank,.ref-idx{
+    font-family:var(--ui-font); font-size:12px; font-weight:650; letter-spacing:.045em; text-transform:none;
+  }
+  .pr-sub{ color:#637489; }
+  .pr-tools{ gap:8px; }
+  .pr-highlighter{ padding:6px 9px; border-color:#CBD8E1; border-radius:11px; background:rgba(255,255,255,.7); box-shadow:0 4px 14px -12px rgba(46,61,91,.45); }
+  .pr-hl-label{ margin-right:5px; color:#536C83; }
+  .pr-hl-color,.pr-hl-eraser,.pr-hl-undo{ width:25px; height:25px; border-color:#C7D2DD; background:#FAFCFD; }
+  .pr-hl-sep{ height:22px; background:#D4DEE5; }
+  .pr-hl-fmt,.pr-hl-save,.pr-reformat-btn,.pr-zoom-btn{
+    min-height:32px; border-color:#C5D3DE; background:rgba(252,253,254,.86); color:#405C74;
+    font-family:var(--ui-font); font-size:13px; font-weight:650; letter-spacing:0;
+  }
+  .pr-hl-fmt:hover,.pr-reformat-btn:hover,.pr-zoom-btn:hover{ border-color:#7694A8; background:#EEF4F7; color:#294F69; }
+  .pr-hl-fmt.active{ border-color:#7392A7; background:#E6EFF4; color:#294F69; }
+  .pr-hl-save{ border-color:#7893A6; background:linear-gradient(120deg,#EEF5F6,#EEEAF4); color:#345A71; }
+  .pr-hl-save:hover{ background:linear-gradient(120deg,#426980,#686486); color:#fff; }
+  .pr-reformat-btn{ padding:5px 13px; }
+  .pr-zoom-pct{ color:#536C83; min-width:46px; }
+  .pr-body{ background:rgba(255,255,255,.24); }
+  .pr-outline{
+    border-right-color:rgba(112,136,153,.18);
+    background:linear-gradient(180deg,rgba(232,240,244,.92),rgba(243,239,247,.9));
+  }
+  .pr-outline-section{ margin:16px 0 10px; padding-bottom:7px; border-bottom-color:rgba(108,131,149,.2); color:#536E85; }
+  .pr-ai-btn{ min-height:42px; border-color:#CCD7E0; border-radius:11px; background:rgba(255,255,255,.76); color:#3F5B72; font-family:var(--ui-font); font-size:14px; font-weight:650; }
+  .pr-ai-btn:hover,.pr-ai-btn.active{ border-color:#7D9AAF; color:#294F69; background:linear-gradient(115deg,#F2F7F8,#F1EDF7); }
+  .pr-ai-hint{ display:none; }
+  .pr-text-wrap{ border-left-color:rgba(112,136,153,.14); background:linear-gradient(120deg,rgba(248,250,251,.74),rgba(246,244,249,.64)); }
+  .pr-text .pr-layout-root::before,.pr-text .pr-pdf-root::before{
+    color:#45657C; background:linear-gradient(120deg,#EEF5F7,#F2EEF7); border-color:#CBD9E2;
+    font:600 12px/1.45 var(--ui-font); border-radius:9px;
+  }
+  .pr-text .pr-pdf-page,.pr-text .pr-layout-page{ border-color:#D9E0E5; box-shadow:0 12px 30px -21px rgba(46,58,86,.52); }
+  .pr-note-popup{ border-color:#C2D0DB; background:linear-gradient(145deg,#FEFFFF,#F4F1F8); box-shadow:0 14px 32px rgba(48,62,89,.2); font-family:var(--ui-font); }
+  .pr-note-popup::before{ font-family:var(--ui-font); font-size:11px; letter-spacing:.06em; color:#587087; }
+
+  /* 小型操作文字统一为清晰的中文界面字，论文正文仍保留阅读字体。 */
+  .topnav,.toolbar,.filters,.card-meta,.card-cat,.card-btns,.modal,.form-group,.btn-ghost,.modal-btn,.sync-modal,.trash-modal{
+    font-family:var(--ui-font);
+  }
+  .btn-ghost,.modal-btn{ font-size:13px; font-weight:650; letter-spacing:0; }
+  .trash-modal{ background:linear-gradient(145deg,#FDFEFC,#F4F2F8); border-color:#D7DFE7; }
+  .trash-modal .modal-row{ display:flex; justify-content:flex-end; gap:10px; }
+  .trash-modal .modal-row > button{ min-width:142px; min-height:42px; padding:9px 15px; border-radius:10px; font-family:var(--ui-font); font-size:13px; font-weight:650; letter-spacing:0; }
+  .trash-modal #trashEmptyBtn{ border-color:#D1B8C0; color:#875360; background:#FFF9FA; }
+  .trash-modal #trashCloseBtn{ border-color:#B9CBD7; color:#385A71; background:linear-gradient(120deg,#F2F7F8,#F1EDF7); }
+  .trash-modal #trashEmptyBtn:hover{ border-color:#A67581; color:#703A48; }
+  .trash-modal #trashCloseBtn:hover{ border-color:#7894A7; color:#294C64; }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
@@ -2308,9 +2366,7 @@
           <button class="pr-ai-btn" id="prRelated" title="联想知网内与该论文研究内容相似的论文五篇(真实学术数据源)">⇄ 联想论文</button>
           <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">❑ 参考文献</button>
         </div>
-        <div class="pr-ai-result" id="prAiResult">
-          <div class="pr-ai-hint">点击上方按钮开始<br>· 解读选中: 选中文字后AI上下文解读<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇<br>· 参考文献: 检索并跳转知网</div>
-        </div>
+        <div class="pr-ai-result" id="prAiResult"></div>
         <div class="pr-chat" id="prChat">
           <div class="pr-chat-log" id="prChatLog"></div>
           <div class="pr-chat-row">
@@ -5992,7 +6048,7 @@ function openPaperReader(itemId){
   prState.chat = [];
   const aiResult = document.getElementById("prAiResult");
   if(aiResult){
-    aiResult.innerHTML = '<div class="pr-ai-hint">点击上方按钮开始<br>· AI 解读: 快速提炼内容与核心<br>· AI 提问: 对话式讨论论文<br>· 联想论文: 知网相似文献五篇</div>';
+    aiResult.innerHTML = "";
   }
   const chatPanel = document.getElementById("prChat");
   if(chatPanel) chatPanel.classList.remove("show");
