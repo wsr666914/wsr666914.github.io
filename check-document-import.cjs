@@ -36,6 +36,19 @@ assert.equal(ctx.importedPaperTitle("从排日账看晚清徽州乡民的活动�
 assert.equal(ctx.importedPaperTitle("download (2).PDF", "从排日账看晚清徽州乡民的活动空间"), "从排日账看晚清徽州乡民的活动空间");
 assert.equal(ctx.importedPaperTitle("扫描件01.pdf", "摘要：文章主要内容"), "扫描件01");
 assert.equal(ctx.importedPaperTitle("论文定稿.DOCX"), "论文定稿");
+assert.ok(html.includes('textLayerEl.style.setProperty("--scale-factor", String(viewport.scale))'), "PDF 文字层必须跟随页面实际缩放");
+const geometryStart = html.indexOf("function pdfSelectionLinePaths(");
+const geometryEnd = html.indexOf("function mergePdfRects(", geometryStart);
+vm.runInContext(html.slice(geometryStart, geometryEnd), ctx);
+const selectionPath = ctx.pdfSelectionLinePaths([
+  { x:20, y:20, w:34, h:12, text:"正文" },
+  { x:54, y:16, w:6, h:7, text:"①" },
+  { x:61, y:20, w:30, h:12, text:"引文" },
+  { x:95, y:21, w:5, h:9, text:"。" },
+  { x:180, y:20, w:30, h:12, text:"另一栏" },
+  { x:28, y:37, w:68, h:12, text:"缩进的引文下一行" }
+], 200);
+assert.equal(selectionPath, "M20,20h80v12h-80ZM180,20h30v12h-30ZM28,37h68v12h-68Z");
 Promise.all([
   ctx.hasPdfHeader(new Blob(["%PDF-1.6\n"])),
   ctx.hasPdfHeader(new Blob(["not a PDF"]))

@@ -1160,6 +1160,7 @@
     text-align:left; user-select:text; cursor:text;
     color:transparent; caret-color:#0b57d0; caret-shape:bar;
     line-height:1; letter-spacing:0;
+    font-kerning:none; font-feature-settings:normal; text-size-adjust:none;
     /* 核心: 有实色背景容器才有hit box(0.0001不透明=视觉仍纯白,事件能被本层捕获不走canvas) */
     background-color: rgba(255,255,255,0.0001);
     pointer-events:auto;
@@ -6853,14 +6854,16 @@ function _renderPdfOcrWords(textLayerEl, pageNum, payload, cssPageW, cssPageH){
   if(!textLayerEl || !payload || !Array.isArray(payload.words)) return 0;
   textLayerEl.innerHTML = "";
   const words = payload.words;
+  const scaleX = payload.pageWidth ? cssPageW / payload.pageWidth : 1;
+  const scaleY = payload.pageHeight ? cssPageH / payload.pageHeight : 1;
   for(let i=0; i<words.length; i++){
     const word = words[i];
     const text = String(word.text || "").trim();
     if(!text) continue;
-    const x = Math.max(0, Number(word.x) || 0);
-    const y = Math.max(0, Number(word.y) || 0);
-    const w = Math.max(2, Number(word.w) || 2);
-    const h = Math.max(6, Number(word.h) || 6);
+    const x = Math.max(0, Number(word.x) || 0) * scaleX;
+    const y = Math.max(0, Number(word.y) || 0) * scaleY;
+    const w = Math.max(2, (Number(word.w) || 2) * scaleX);
+    const h = Math.max(3, (Number(word.h) || 6) * scaleY);
     const span = document.createElement("span");
     span.textContent = text;
     span.style.left = x + "px";
@@ -6918,7 +6921,7 @@ function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, render
           const x0 = Number(match[1]), y0 = Number(match[2]), x1 = Number(match[3]), y1 = Number(match[4]);
           words.push({ text:text, x:x0 * cssPageW / canvas.width, y:y0 * cssPageH / canvas.height, w:(x1-x0) * cssPageW / canvas.width, h:(y1-y0) * cssPageH / canvas.height });
         }
-        const payload = { words:words, text:words.map(function(w){ return w.text; }).join(" ") };
+        const payload = { words:words, pageWidth:cssPageW, pageHeight:cssPageH, text:words.map(function(w){ return w.text; }).join(" ") };
         cache.ocrPages[pageNum] = payload;
         _savePdfOcrPages(item, cache);
         _updateOcrOnlyPaperText(item, cache);
@@ -7002,6 +7005,7 @@ async function renderPdfNative(item, prText){
   }
   pagesHtml += '</div>';
   prText.innerHTML = pagesHtml;
+  const pdfRoot = prText.querySelector("#prPdfRoot");
 
   prState.pdfNativeCacheKey = String(item.id);
 
@@ -7009,11 +7013,17 @@ async function renderPdfNative(item, prText){
   const renderedPdfPages = {};
   function renderPdfPage(pageNum){
     if(renderedPdfPages[pageNum]) return;
+    const canvas = pdfRoot.querySelector("#prPdfCanvas_" + pageNum);
+    const textLayerEl = pdfRoot.querySelector("#prPdfText_" + pageNum);
+    if(!canvas?.isConnected || !textLayerEl) return;
     renderedPdfPages[pageNum] = true;
     pdf.getPage(pageNum).then(function(page){
+        if(!canvas.isConnected) return;
         const viewport = page.getViewport({ scale: renderScale });
-        const canvas = document.getElementById("prPdfCanvas_" + pageNum);
-        if(!canvas) return;
+        const pageBox = canvas.closest(".pr-pdf-page");
+        pageBox.style.width = viewport.width + "px";
+        pageBox.style.height = viewport.height + "px";
+        textLayerEl.style.setProperty("--scale-factor", String(viewport.scale));
         const ctx = canvas.getContext("2d");
         const dpr = window.devicePixelRatio || 1;
         canvas.width = Math.round(viewport.width * dpr);
@@ -7024,22 +7034,21 @@ async function renderPdfNative(item, prText){
         page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).catch(function(){
           return {items:[], styles:{}};
         }).then(function(tc){
-          const textLayerEl = document.getElementById("prPdfText_" + pageNum);
-          if(!textLayerEl || !canvas.isConnected) return;
+          if(!textLayerEl.isConnected) return;
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
           const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
           if(pdfTextNeedsOcr(nativeText, 1)){
             const savedOcr = cache.ocrPages && cache.ocrPages[pageNum];
             if(savedOcr && savedOcr.words && savedOcr.words.length){
-              _renderPdfOcrWords(textLayerEl, pageNum, savedOcr, cssPageW, cssPageH);
+              _renderPdfOcrWords(textLayerEl, pageNum, savedOcr, viewport.width, viewport.height);
               _setPdfOcrStatus("扫描文字层已恢复：可直接选中、标注、备注与翻译。", true);
               return;
             }
-            _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, renderScale).then(function(payload){
+            _queuePdfPageOcr(item, cache, page, pageNum, viewport.width, viewport.height, renderScale).then(function(payload){
               const currentLayer = document.getElementById("prPdfText_" + pageNum);
               if(currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
-              const count = _renderPdfOcrWords(currentLayer, pageNum, payload, cssPageW, cssPageH);
+              const count = _renderPdfOcrWords(currentLayer, pageNum, payload, viewport.width, viewport.height);
               if(count){
                 _setPdfOcrStatus("扫描文字层已识别：可直接选中、标注、备注与翻译。", true);
                 renderHighlightsAsSvg(item);
@@ -7513,7 +7522,7 @@ document.addEventListener("selectionchange", function(){
           const x = Math.max(0, rect.left - box.left), y = Math.max(0, rect.top - box.top);
           const w = Math.min(box.width - x, rect.right - box.left - x);
           const h = Math.min(box.height - y, rect.bottom - box.top - y);
-          if(w > 0 && h > 0) segments.push({x,y,w,h,punctuation:/^[\p{P}\p{S}\s]+$/u.test(node.data.slice(start,end))});
+          if(w > 0 && h > 0) segments.push({x,y,w,h,text:node.data.slice(start,end)});
         }
       }
     }
@@ -7541,11 +7550,21 @@ document.addEventListener("selectionchange", function(){
 });
 function pdfSelectionLinePaths(rects, pageHeight){
   if(!rects.length) return "";
-  const letters = rects.filter(rect => !rect.punctuation);
+  const letters = rects.filter(rect => !/^[\p{P}\p{S}\s]+$/u.test(rect.text));
   const heights = (letters.length ? letters : rects).map(rect => rect.h).sort((a,b) => a-b);
   const height = heights[Math.floor(heights.length/2)];
   const rows = [];
-  for(const rect of (letters.length ? letters : rects).sort((a,b) => a.y+a.h/2-b.y-b.h/2)){
+  const attached = new Set();
+  const body = letters.filter(rect => rect.h >= height*.8);
+  for(const rect of rects){
+    if(rect.h >= height*.8 && !/^[\p{P}\p{S}\s]+$/u.test(rect.text)) continue;
+    const neighbor = body.find(candidate => {
+      const gap = Math.max(candidate.x - rect.x - rect.w, rect.x - candidate.x - candidate.w, 0);
+      return gap <= height*.8 && Math.abs(candidate.y+candidate.h/2-rect.y-rect.h/2) <= height*.7;
+    });
+    if(neighbor){ rect.lineCenter = neighbor.y + neighbor.h/2; attached.add(rect); }
+  }
+  for(const rect of rects.filter(rect => !attached.has(rect)).sort((a,b) => a.y+a.h/2-b.y-b.h/2)){
     const center = rect.y + rect.h/2;
     let row = rows[rows.length-1];
     if(!row || center-row.center > height*.45){
@@ -7554,10 +7573,9 @@ function pdfSelectionLinePaths(rects, pageHeight){
     }
     row.rects.push(rect);
   }
-  if(letters.length){
-    for(const rect of rects){
-      if(!rect.punctuation) continue;
-      const center = rect.y + rect.h/2;
+  if(attached.size){
+    for(const rect of attached){
+      const center = rect.lineCenter;
       const row = rows.reduce((nearest, candidate) =>
         Math.abs(candidate.center-center) < Math.abs(nearest.center-center) ? candidate : nearest);
       row.rects.push(rect);
