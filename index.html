@@ -1981,6 +1981,12 @@
   .trash-modal #trashCloseBtn{ border-color:#B9CBD7; color:#385A71; background:linear-gradient(120deg,#F2F7F8,#F1EDF7); }
   .trash-modal #trashEmptyBtn:hover{ border-color:#A67581; color:#703A48; }
   .trash-modal #trashCloseBtn:hover{ border-color:#7894A7; color:#294C64; }
+  .pr-research-panel{ width:260px; flex:0 0 260px; overflow:auto; padding:14px; background:#F5F3FA; border-left:1px solid #D4DEE5; font:14px/1.5 var(--ui-font); }
+  .pr-research-panel button{ display:block; width:100%; margin:5px 0; text-align:left; overflow-wrap:anywhere; }
+  .pr-research-panel canvas{ display:block; max-width:100%; height:auto; margin:6px auto; }
+  .pr-find-bar{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; font:13px var(--ui-font); }
+  .pr-find-bar input{ width:130px; padding:6px; border:1px solid #C5D3DE; border-radius:7px; }
+  ::highlight(paper-find){ background:rgba(255,157,41,.55); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
@@ -2353,9 +2359,20 @@
           <button class="pr-zoom-btn" id="prZoomIn" title="放大 (Ctrl+=)">+</button>
         </div>
         <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
+        <button class="modal-btn" id="prFindOpen" aria-expanded="false">搜索</button>
+        <button class="modal-btn" id="prPagesOpen" aria-expanded="false">页面</button>
+        <button class="modal-btn" id="prMarksOpen" aria-expanded="false">标注与备注</button>
+        <button class="modal-btn" id="prPdfExport">导出 PDF</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
     </div>
+    <div id="prFindBar" hidden><form class="pr-find-bar" id="prFindForm">
+      <input type="search" id="prFindInput" aria-label="论文内搜索" placeholder="输入关键词">
+      <button class="modal-btn" type="submit">查找</button>
+      <button class="modal-btn" type="button" id="prFindPrev">上一处</button>
+      <button class="modal-btn" type="button" id="prFindNext">下一处</button>
+      <span id="prFindStatus" role="status"></span>
+    </form></div>
     <div class="pr-body">
       <aside class="pr-outline" id="prOutline">
         <div class="pr-outline-resizer" id="prOutlineResizer" title="拖动调整宽度"></div>
@@ -2379,6 +2396,7 @@
         <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
       </div>
+      <aside id="prResearchPanel" class="pr-research-panel" aria-label="论文导航和批注" hidden></aside>
     </div>
   </div>
 </div>
@@ -6021,6 +6039,7 @@ function snapshotPaper(item){
 function openPaperReader(itemId){
   const item = state.items.find(function(i){ return i.id === itemId; });
   if(!item || !item.fullText) return;
+  resetPaperResearch();
 
   prState.itemId = itemId;
   prState.activeColor = null;
@@ -9812,6 +9831,234 @@ function applyDeletionToStructured(item, removedTexts){
   if(st.references) st.references = st.references.map(cut).filter(function(r){ return r && r.length > 2; });
   if(st.sections) st.sections = st.sections.filter(function(sec){ return sec.heading || (sec.paras && sec.paras.length > 0); });
 }
+
+let paperFindJob = 0, paperFindHits = [], paperFindIndex = -1, paperPanel = "", paperThumbs;
+const researchEl = id => document.getElementById(id);
+const researchItem = () => state.items.find(i => i.id === prState.itemId);
+function resetPaperResearch(){
+  paperFindJob++;
+  paperFindHits = []; paperFindIndex = -1;
+  window.CSS?.highlights?.delete("paper-find");
+  researchEl("prFindBar").hidden = true;
+  researchEl("prFindInput").value = "";
+  researchEl("prFindStatus").textContent = "";
+  researchEl("prFindOpen").setAttribute("aria-expanded", "false");
+  showResearchPanel("");
+}
+function jumpResearchPage(page){
+  const el = researchEl("prPdfPage_" + page);
+  if(el) el.scrollIntoView({block:"start"});
+  else toast("当前文档没有可跳转的 PDF 页面");
+}
+function showResearchPanel(kind){
+  paperThumbs?.disconnect();
+  paperPanel = kind;
+  const panel = researchEl("prResearchPanel");
+  panel.replaceChildren();
+  panel.hidden = !kind;
+  researchEl("prPagesOpen").setAttribute("aria-expanded", String(kind === "pages"));
+  researchEl("prMarksOpen").setAttribute("aria-expanded", String(kind === "marks"));
+}
+function researchTextRange(root, offset, length){
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const range = document.createRange();
+  let pos = 0, start = false, node;
+  while((node = walk.nextNode())){
+    const end = pos + node.length;
+    if(!start && end > offset){ range.setStart(node, offset-pos); start = true; }
+    if(start && end >= offset+length){ range.setEnd(node, offset+length-pos); return range; }
+    pos = end;
+  }
+  return null;
+}
+function showPaperFindHit(step){
+  if(!paperFindHits.length) return;
+  paperFindIndex = (paperFindIndex + step + paperFindHits.length) % paperFindHits.length;
+  const hit = paperFindHits[paperFindIndex];
+  const page = hit.page && researchEl("prPdfText_" + hit.page);
+  const query = researchEl("prFindInput").value.trim();
+  let range = hit.range;
+  if(page && !range){
+    const value = page.textContent.toLowerCase();
+    let offset = -1;
+    for(let i=0; i<=hit.ordinal; i++){
+      offset = value.indexOf(query.toLowerCase(), offset+1);
+      if(offset < 0) break;
+    }
+    if(offset >= 0) range = researchTextRange(page, offset, query.length);
+  }
+  window.CSS?.highlights?.delete("paper-find");
+  if(hit.page) jumpResearchPage(hit.page);
+  if(range){
+    if(window.Highlight) window.CSS?.highlights?.set("paper-find", new Highlight(range));
+    const node = range.startContainer.parentElement;
+    node?.scrollIntoView({block:"center"});
+  }
+  researchEl("prFindStatus").textContent = (paperFindIndex+1) + " / " + paperFindHits.length + (hit.page ? " · 第 "+hit.page+" 页" : "");
+}
+researchEl("prFindOpen").onclick = function(){
+  const bar = researchEl("prFindBar");
+  bar.hidden = !bar.hidden;
+  this.setAttribute("aria-expanded", String(!bar.hidden));
+  if(!bar.hidden) researchEl("prFindInput").focus();
+  else window.CSS?.highlights?.delete("paper-find");
+};
+researchEl("prFindPrev").onclick = () => showPaperFindHit(-1);
+researchEl("prFindNext").onclick = () => showPaperFindHit(1);
+researchEl("prFindForm").onsubmit = async function(e){
+  e.preventDefault();
+  const query = researchEl("prFindInput").value.trim().toLowerCase();
+  const status = researchEl("prFindStatus");
+  const job = ++paperFindJob, item = researchItem(), hits = [];
+  paperFindHits = []; paperFindIndex = -1;
+  window.CSS?.highlights?.delete("paper-find");
+  if(!query || !item){ status.textContent = ""; return; }
+  const root = researchEl("prText");
+  function collect(value, page){
+    let offset = 0, index, ordinal = 0;
+    value = value.toLowerCase();
+    while((index = value.indexOf(query, offset)) >= 0){
+      hits.push({page, ordinal:ordinal++, range:page ? null : researchTextRange(root,index,query.length)});
+      offset = index + query.length;
+    }
+  }
+  let unread = 0;
+  status.textContent = "搜索中…";
+  try{
+    if(root.classList.contains("pr-pdf-native")){
+      const cache = await _getPdfNativeDoc(item);
+      if(!cache) throw new Error("原 PDF 无法读取");
+      for(let i=1; i<=cache.pdf.numPages && job === paperFindJob && researchItem() === item; i++){
+        const layer = researchEl("prPdfText_" + i);
+        const page = await cache.pdf.getPage(i);
+        const value = layer?.textContent || cache.ocrPages?.[i]?.text ||
+          (!item.ocrOnly ? (await page.getTextContent()).items.map(s => s.str || "").join("") : "");
+        if(value.trim()) collect(value, i); else unread++;
+      }
+    }else collect(root.textContent, 0);
+    if(job !== paperFindJob || researchItem() !== item) return;
+    paperFindHits = hits;
+    if(hits.length) showPaperFindHit(1);
+    else status.textContent = "未找到匹配";
+    if(unread) status.textContent += " · " + unread + " 页无可用文字";
+  }catch(_){ if(job === paperFindJob) status.textContent = "搜索失败，请重试"; }
+};
+researchEl("prMarksOpen").onclick = function(){
+  if(paperPanel === "marks"){ showResearchPanel(""); return; }
+  showResearchPanel("marks");
+  const panel = researchEl("prResearchPanel"), marks = researchItem()?.highlights || [];
+  if(!marks.length){ panel.textContent = "还没有标注或备注"; return; }
+  marks.forEach((mark, i) => {
+    const page = mark.pdfRects?.[0]?.page;
+    const btn = document.createElement("button");
+    btn.className = "modal-btn";
+    btn.textContent = (page ? "第 "+page+" 页 · " : "") + (mark.type === "note" ? "备注：" : "标注：") + (mark.text || "") + (mark.note ? " — "+mark.note : "");
+    btn.onclick = () => {
+      const target = researchEl("prText").querySelector('[data-hl-idx="'+i+'"]');
+      if(target) target.scrollIntoView({block:"center"});
+      else if(page) jumpResearchPage(page);
+      else {
+        const root = researchEl("prText"), offset = root.textContent.indexOf(mark.text);
+        const range = offset >= 0 && researchTextRange(root, offset, mark.text.length);
+        if(range) range.startContainer.parentElement.scrollIntoView({block:"center"});
+        else toast("这条旧标注没有可定位的位置");
+      }
+    };
+    panel.appendChild(btn);
+  });
+};
+researchEl("prPagesOpen").onclick = async function(){
+  if(paperPanel === "pages"){ showResearchPanel(""); return; }
+  showResearchPanel("pages");
+  const panel = researchEl("prResearchPanel"), item = researchItem();
+  panel.textContent = "读取页码…";
+  const cache = await _getPdfNativeDoc(item);
+  if(paperPanel !== "pages" || researchItem() !== item) return;
+  if(!cache){ panel.textContent = "当前文档没有可导航的原 PDF"; return; }
+  panel.replaceChildren();
+  const form = document.createElement("form"), input = document.createElement("input"), go = document.createElement("button");
+  input.type = "number"; input.min = "1"; input.max = String(cache.pdf.numPages); input.required = true;
+  input.placeholder = "1–" + cache.pdf.numPages; input.setAttribute("aria-label", "跳转页码");
+  go.textContent = "跳转"; go.className = "modal-btn";
+  form.append(input,go); panel.append(form);
+  form.onsubmit = e => { e.preventDefault(); jumpResearchPage(Number(input.value)); };
+  const observer = new IntersectionObserver(entries => entries.forEach(async entry => {
+    if(!entry.isIntersecting) return;
+    const btn = entry.target;
+    observer.unobserve(btn);
+    try{
+      const page = await cache.pdf.getPage(Number(btn.dataset.page));
+      const v = page.getViewport({scale:140/page.getViewport({scale:1}).width});
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.ceil(v.width); canvas.height = Math.ceil(v.height);
+      await page.render({canvasContext:canvas.getContext("2d"), viewport:v}).promise;
+      if(btn.isConnected) btn.append(canvas);
+    }catch(_){}
+  }), {root:panel});
+  paperThumbs = observer;
+  for(let p=1; p<=cache.pdf.numPages; p++){
+    const btn = document.createElement("button");
+    btn.className = "modal-btn"; btn.type = "button"; btn.dataset.page = p;
+    btn.textContent = "第 "+p+" 页"; btn.style.minHeight = "90px";
+    btn.onclick = () => jumpResearchPage(p);
+    panel.appendChild(btn); observer.observe(btn);
+  }
+};
+researchEl("prPdfExport").onclick = async function(){
+  const item = researchItem();
+  if(!item) return;
+  this.disabled = true;
+  const label = this.textContent;
+  this.textContent = "正在导出…";
+  try{
+    const cache = await _getPdfNativeDoc(item);
+    if(!cache){ toast("此文档在本机没有原始 PDF，无法导出带批注的副本"); return; }
+    if(!window.PDFLib) await new Promise((resolve,reject) => {
+      const script = document.createElement("script");
+      script.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+      script.onload = resolve; script.onerror = reject;
+      document.head.appendChild(script);
+    });
+    const {PDFDocument, PDFName, PDFHexString, rgb} = window.PDFLib;
+    const pdf = await PDFDocument.load(await cache.pdf.getData());
+    const views = new Map();
+    let skipped = 0;
+    for(const mark of item.highlights || []){
+      const rects = mark.pdfRects?.filter(r => Number.isInteger(r.page) && r.page >= 1 && r.page <= pdf.getPageCount() &&
+        [r.x,r.y,r.w,r.h].every(Number.isFinite) && r.w > 0 && r.h > 0) || [];
+      if(!rects.length){ skipped++; continue; }
+      const isNote = mark.type === "note";
+      let noteAdded = false;
+      const hex = /^#[0-9a-f]{6}$/i.test(mark.color || "") ? mark.color : "#FFE08A";
+      const color = rgb(...[1,3,5].map(i => parseInt(hex.slice(i,i+2),16)/255));
+      for(const r of mergePdfRects(rects)){
+        if(!views.has(r.page)) views.set(r.page,(await cache.pdf.getPage(r.page)).getViewport({scale:1}));
+        const v = views.get(r.page), page = pdf.getPage(r.page-1);
+        const a = v.convertToPdfPoint(r.x*v.width,r.y*v.height);
+        const b = v.convertToPdfPoint((r.x+r.w)*v.width,(r.y+r.h)*v.height);
+        const x = Math.min(a[0],b[0]), y = Math.min(a[1],b[1]);
+        if(!isNote){
+          page.drawRectangle({x,y,width:Math.abs(a[0]-b[0]),height:Math.abs(a[1]-b[1]),color,opacity:.22});
+        }else{
+          const start = v.convertToPdfPoint(r.x*v.width,(r.y+r.h)*v.height);
+          page.drawLine({start:{x:start[0],y:start[1]},end:{x:b[0],y:b[1]},thickness:.6,dashArray:[2,2],color:rgb(.25,.38,.56)});
+          if(!noteAdded){
+            const annot = pdf.context.obj({Type:"Annot",Subtype:"Text",Rect:[x,y,x+18,y+18],Name:"Comment",F:4,
+              Contents:PDFHexString.fromText(String(mark.note || "")),P:page.ref});
+            page.node.addAnnot(pdf.context.register(annot));
+            noteAdded = true;
+          }
+        }
+      }
+    }
+    const url = URL.createObjectURL(new Blob([await pdf.save()],{type:"application/pdf"}));
+    const link = document.createElement("a");
+    link.href = url; link.download = item.name + "（含批注）.pdf"; link.click();
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    toast(skipped ? "已导出 PDF；"+skipped+" 条旧批注缺少位置，未写入副本" : "已导出带批注的 PDF");
+  }catch(_){ toast("PDF 导出失败，请检查网络或原文件后重试"); }
+  finally{ this.disabled = false; this.textContent = label; }
+};
 
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
 /* AI解读选中文字后临时高亮(非永久).  _aiSelMark 在旧模式=mark DOM元素, 新模式=SVG rect元素数组
