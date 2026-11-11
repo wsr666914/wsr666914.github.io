@@ -5030,6 +5030,14 @@ function parseDocxToLayout(arrayBuffer){
 
 /* PDF文字层质量判断：有些扫描件/乱码PDF会提取出大量标点，但几乎没有真实文字。
    这种情况必须视为扫描件并启用OCR，不能只按“字符总数”判断。 */
+function loadLocalPdf(data){
+  return pdfjsLib.getDocument({
+    data,
+    cMapUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/",
+    cMapPacked:true,
+    isEvalSupported:false
+  }).promise;
+}
 function pdfTextNeedsOcr(text, pageCount){
   const compact = String(text || "").replace(/\s/g, "");
   if(!compact.length) return true;
@@ -6951,7 +6959,7 @@ async function _getPdfNativeDoc(item){
   if(!window.pdfjsLib) return null;
   try{
     const pdfData = bytes instanceof Blob ? new Uint8Array(await bytes.arrayBuffer()) : bytes.slice(0);
-    const pdf = await pdfjsLib.getDocument({ data: pdfData }).promise;
+    const pdf = await loadLocalPdf(pdfData);
     _pdfNativeCache[key] = { pdf: pdf, bytes: bytes, pages: [] };
     return _pdfNativeCache[key];
   }catch(_){ return null; }
@@ -7526,7 +7534,7 @@ document.addEventListener("selectionchange", function(){
           const x = Math.max(0, rect.left - box.left), y = Math.max(0, rect.top - box.top);
           const w = Math.min(box.width - x, rect.right - box.left - x);
           const h = Math.min(box.height - y, rect.bottom - box.top - y);
-          if(w > 0 && h > 0) segments.push({x,y,w,h});
+          if(w > 0 && h > 0) segments.push({x,y,w,h,punctuation:/^[\p{P}\p{S}\s]+$/u.test(node.data.slice(start,end))});
         }
       }
     }
@@ -7554,10 +7562,11 @@ document.addEventListener("selectionchange", function(){
 });
 function pdfSelectionLinePaths(rects, pageHeight){
   if(!rects.length) return "";
-  const heights = rects.map(rect => rect.h).sort((a,b) => a-b);
+  const letters = rects.filter(rect => !rect.punctuation);
+  const heights = (letters.length ? letters : rects).map(rect => rect.h).sort((a,b) => a-b);
   const height = heights[Math.floor(heights.length/2)];
   const rows = [];
-  for(const rect of rects.sort((a,b) => a.y+a.h/2-b.y-b.h/2)){
+  for(const rect of (letters.length ? letters : rects).sort((a,b) => a.y+a.h/2-b.y-b.h/2)){
     const center = rect.y + rect.h/2;
     let row = rows[rows.length-1];
     if(!row || center-row.center > height*.45){
@@ -7565,6 +7574,15 @@ function pdfSelectionLinePaths(rects, pageHeight){
       rows.push(row);
     }
     row.rects.push(rect);
+  }
+  if(letters.length){
+    for(const rect of rects){
+      if(!rect.punctuation) continue;
+      const center = rect.y + rect.h/2;
+      const row = rows.reduce((nearest, candidate) =>
+        Math.abs(candidate.center-center) < Math.abs(nearest.center-center) ? candidate : nearest);
+      row.rects.push(rect);
+    }
   }
   const paths = [];
   for(const row of rows){
@@ -12247,7 +12265,7 @@ function renderGallery(){
             reader.onload = function(){
               const pdfBytes = new Uint8Array(this.result);
               /* 原PDF以File/Blob直接存IDB，避免大文件重复复制。 */
-              pdfjsLib.getDocument({data: pdfBytes}).promise.then(function(pdf){
+              loadLocalPdf(pdfBytes).then(function(pdf){
                 ppProgressShow("正在并行解析 PDF(" + pdf.numPages + " 页)…");
                 return extractPdfTextEnhanced(pdf, function(d, t){
                   ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
@@ -13294,7 +13312,7 @@ const paperEntrySubmit = document.getElementById("paperEntrySubmit");
 const paperEntryCancel = document.getElementById("paperEntryCancel");
 
 let paperEntryCategory = "paper"; /* 当前录入目标分类: paper(论文) / essay(随笔) */
-function openPaperEntryModal(category){
+function openPaperEntryModal(category, showModal = true){
   paperEntryCategory = category || "paper";
   const isEssay = paperEntryCategory === "essay";
   paperEntryModal?.classList.toggle("paper-file-only", !isEssay);
@@ -13333,6 +13351,7 @@ function openPaperEntryModal(category){
     const fullTextLabel = paperFullTextInput ? paperFullTextInput.closest(".modal-field").querySelector("label") : null;
     if(fullTextLabel && fullTextLabel.firstChild) fullTextLabel.firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
   }
+  if(!showModal) return;
   if(paperEntryModal) paperEntryModal.classList.add("show");
   setTimeout(function(){ if(isEssay && paperFullTextInput) paperFullTextInput.focus(); else if(pdfBtn) pdfBtn.focus(); }, 60);
 }
@@ -13362,7 +13381,11 @@ function updatePaperEntryStats(){
 const paperWorkspaceEnter = document.getElementById("paperWorkspaceEnter");
 if(paperWorkspaceEnter) paperWorkspaceEnter.onclick = function(){ openPaperWorkspace(false); };
 const paperWorkspaceImport = document.getElementById("paperWorkspaceImport");
-if(paperWorkspaceImport) paperWorkspaceImport.onclick = function(){ openPaperWorkspace(true); };
+if(paperWorkspaceImport) paperWorkspaceImport.onclick = function(){
+  if(paperPdfBtn.disabled || paperPdfBtn.classList.contains("busy")) return;
+  openPaperEntryModal("paper", false);
+  paperPdfBtn.click();
+};
 const paperWorkspaceBack = document.getElementById("paperWorkspaceBack");
 if(paperWorkspaceBack) paperWorkspaceBack.onclick = closePaperWorkspace;
 const essayBtn = document.getElementById("essayBtn");
@@ -13550,7 +13573,7 @@ if(paperPdfBtn){
           /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
           paperEntryPdfBytes = new Blob([pdfBytes], { type:"application/pdf" });
           ppProgressShow("检测到内嵌 PDF · 正在本机解析…");
-          pdfjsLib.getDocument({data: pdfBytes}).promise.then(function(pdf){
+          loadLocalPdf(pdfBytes).then(function(pdf){
             return extractPdfTextEnhanced(pdf, function(d, t){
               ppProgressUpdate(70 * d / t, "解析CAJ · 第 " + d + "/" + t + " 页");
             }, { lowMemory: lowMemoryImport });
@@ -13604,7 +13627,7 @@ if(paperPdfBtn){
         const rawBytes = new Uint8Array(this.result);
         /* 把浏览器File/Blob直接存入IDB，避免为大PDF再复制一份巨大Uint8Array。 */
         /* 本地路: 大文件逐页低内存提取，不抓取额外图片/坐标副本。 */
-        pdfjsLib.getDocument({data: rawBytes}).promise.then(function(pdf){
+        loadLocalPdf(rawBytes).then(function(pdf){
           /* 读取PDF元数据标题(知网论文通常嵌入真实标题) */
           pdf.getMetadata().then(function(meta){
             const mt = (meta && meta.info && meta.info.Title) ? meta.info.Title.trim() : "";
