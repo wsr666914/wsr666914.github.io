@@ -1982,10 +1982,24 @@
   .trash-modal #trashEmptyBtn:hover{ border-color:#A67581; color:#703A48; }
   .trash-modal #trashCloseBtn:hover{ border-color:#7894A7; color:#294C64; }
   .pr-research-panel{ width:260px; flex:0 0 260px; overflow:auto; padding:14px; background:#F5F3FA; border-left:1px solid #D4DEE5; font:14px/1.5 var(--ui-font); }
-  .pr-research-panel button{ display:block; width:100%; margin:5px 0; text-align:left; overflow-wrap:anywhere; }
+  .pr-research-panel button{ overflow-wrap:anywhere; }
+  .pr-research-panel > button{ display:block; width:100%; margin:8px 0; text-align:left; background:#fff; }
   .pr-research-panel canvas{ display:block; max-width:100%; height:auto; margin:6px auto; }
-  .pr-find-bar{ display:flex; flex-wrap:wrap; gap:6px; align-items:center; font:13px var(--ui-font); }
-  .pr-find-bar input{ width:130px; padding:6px; border:1px solid #C5D3DE; border-radius:7px; }
+  #prFindBar{ align-self:flex-end; max-width:100%; padding:8px 20px; }
+  .pr-find-bar,.pr-page-jump{ display:flex; gap:8px; align-items:center; font:13px var(--ui-font); padding:8px; background:#fff; border:1px solid #DCE2ED; border-radius:14px; box-shadow:0 4px 14px #47557912; }
+  .pr-find-bar{ flex-wrap:wrap; justify-content:flex-end; }
+  .pr-find-bar input,.pr-page-jump input{ min-width:0; padding:8px 10px; border:1px solid #C5D3DE; border-radius:9px; font:inherit; color:#293F54; background:#F7F9FC; }
+  .pr-find-bar input{ width:160px; }
+  .pr-page-jump input{ flex:1; width:0; }
+  .pr-page-jump button{ flex:none; white-space:nowrap; }
+  .pr-page-number{ display:inline-flex; align-items:center; gap:7px; color:#4A557C; font-weight:650; }
+  .pr-page-number strong{ min-width:2.2em; padding:3px 8px; border-radius:9px; background:#E9EDF8; text-align:center; font-variant-numeric:tabular-nums; }
+  .pr-marks-empty{ margin:8px 0; padding:18px 12px; border:1px dashed #D2D9E7; border-radius:12px; background:#FCFCFF; color:#526275; font:500 14px/1.5 var(--ui-font); text-align:center; }
+  .pr-text .pr-pdf-page{ user-select:none; }
+  .pr-text .pr-pdf-page .pr-pdf-textLayer{ user-select:none; pointer-events:none; caret-color:transparent; }
+  .pr-text .pr-pdf-page .pr-pdf-textLayer span{ user-select:text; pointer-events:auto; }
+  .pr-text .pr-pdf-page .pr-pdf-textLayer span::selection{ background:transparent; color:transparent; }
+  .pr-selection-overlay{ position:absolute; inset:0; width:100%; height:100%; z-index:4; pointer-events:none; }
   ::highlight(paper-find){ background:rgba(255,157,41,.55); }
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
@@ -7432,6 +7446,61 @@ function capturePdfSelectionRects(range){
   }
   return mergePdfRects(out);
 }
+let pdfSelectionFrame = 0;
+const pdfSelectionOverlays = new Map();
+document.addEventListener("selectionchange", function(){
+  if(pdfSelectionFrame) return;
+  pdfSelectionFrame = requestAnimationFrame(function(){
+    pdfSelectionFrame = 0;
+    const selection = window.getSelection();
+    const range = selection && !selection.isCollapsed && selection.rangeCount ? selection.getRangeAt(0) : null;
+    const root = document.getElementById("prPdfRoot");
+    const paths = new Map();
+    if(root && range && root.contains(range.startContainer) && root.contains(range.endContainer)){
+      const ancestor = range.commonAncestorContainer;
+      const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_TEXT);
+      const slice = document.createRange();
+      for(let node = ancestor.nodeType === Node.TEXT_NODE ? ancestor : walker.nextNode(); node; node = walker.nextNode()){
+        const span = node.parentElement.closest(".pr-pdf-textLayer span");
+        if(!span || !range.intersectsNode(node)) continue;
+        const start = node === range.startContainer ? range.startOffset : 0;
+        const end = node === range.endContainer ? range.endOffset : node.length;
+        if(end <= start) continue;
+        const page = span.closest(".pr-pdf-page");
+        if(!paths.has(page)) paths.set(page, {box:page.getBoundingClientRect(), segments:[]});
+        const {box, segments} = paths.get(page);
+        slice.setStart(node, start);
+        slice.setEnd(node, end);
+        for(const rect of slice.getClientRects()){
+          const x = Math.max(0, rect.left - box.left), y = Math.max(0, rect.top - box.top);
+          const w = Math.min(box.width - x, rect.right - box.left - x);
+          const h = Math.min(box.height - y, rect.bottom - box.top - y);
+          if(w > 0 && h > 0) segments.push("M"+x+","+y+"h"+w+"v"+h+"h"+(-w)+"Z");
+        }
+      }
+    }
+    for(const [page, svg] of pdfSelectionOverlays){
+      if(!paths.has(page)){ svg.remove(); pdfSelectionOverlays.delete(page); }
+    }
+    for(const [page, {box, segments}] of paths){
+      let svg = pdfSelectionOverlays.get(page);
+      if(!svg){
+        const ns = "http://www.w3.org/2000/svg";
+        svg = document.createElementNS(ns, "svg");
+        svg.setAttribute("class", "pr-selection-overlay");
+        svg.setAttribute("aria-hidden", "true");
+        const path = document.createElementNS(ns, "path");
+        path.setAttribute("fill", "#528BE0");
+        path.setAttribute("fill-opacity", ".30");
+        svg.appendChild(path);
+        page.appendChild(svg);
+        pdfSelectionOverlays.set(page, svg);
+      }
+      svg.setAttribute("viewBox", "0 0 "+box.width+" "+box.height);
+      svg.firstChild.setAttribute("d", segments.join(""));
+    }
+  });
+});
 function mergePdfRects(rects){
   const merged = [];
   for(let i=0; i<(rects || []).length; i++){
@@ -9947,7 +10016,13 @@ researchEl("prMarksOpen").onclick = function(){
   if(paperPanel === "marks"){ showResearchPanel(""); return; }
   showResearchPanel("marks");
   const panel = researchEl("prResearchPanel"), marks = researchItem()?.highlights || [];
-  if(!marks.length){ panel.textContent = "还没有标注或备注"; return; }
+  if(!marks.length){
+    const empty = document.createElement("p");
+    empty.className = "pr-marks-empty";
+    empty.textContent = "还没有标注或备注";
+    panel.append(empty);
+    return;
+  }
   marks.forEach((mark, i) => {
     const page = mark.pdfRects?.[0]?.page;
     const btn = document.createElement("button");
@@ -9977,6 +10052,7 @@ researchEl("prPagesOpen").onclick = async function(){
   if(!cache){ panel.textContent = "当前文档没有可导航的原 PDF"; return; }
   panel.replaceChildren();
   const form = document.createElement("form"), input = document.createElement("input"), go = document.createElement("button");
+  form.className = "pr-page-jump";
   input.type = "number"; input.min = "1"; input.max = String(cache.pdf.numPages); input.required = true;
   input.placeholder = "1–" + cache.pdf.numPages; input.setAttribute("aria-label", "跳转页码");
   go.textContent = "跳转"; go.className = "modal-btn";
@@ -9999,7 +10075,12 @@ researchEl("prPagesOpen").onclick = async function(){
   for(let p=1; p<=cache.pdf.numPages; p++){
     const btn = document.createElement("button");
     btn.className = "modal-btn"; btn.type = "button"; btn.dataset.page = p;
-    btn.textContent = "第 "+p+" 页"; btn.style.minHeight = "90px";
+    const label = document.createElement("span"), number = document.createElement("strong");
+    label.className = "pr-page-number";
+    number.textContent = String(p).padStart(2, "0");
+    label.append(number, "页"); btn.append(label);
+    btn.setAttribute("aria-label", "跳转到第 "+p+" 页");
+    btn.style.minHeight = "90px";
     btn.onclick = () => jumpResearchPage(p);
     panel.appendChild(btn); observer.observe(btn);
   }
