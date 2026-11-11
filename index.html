@@ -2278,7 +2278,7 @@
 <div class="modal-bg" id="paperEntryModal">
   <div class="modal modal-lg">
     <h3>录入论文 <span class="sub">PAPER ENTRY</span></h3>
-    <p>粘贴一整篇论文 —— 系统将自动整理归册,生成解读分析,可随时点击查看全文并进行颜色标注。</p>
+    <p>上传 PDF、Word（.docx）或 CAJ 文件，整理入册后即可阅读和标注。</p>
     <div class="modal-field">
       <label>论文标题</label>
       <input type="text" id="paperTitle" autocomplete="off" placeholder="留空则自动从正文首行提取" />
@@ -2299,7 +2299,7 @@
       <input id="paperPdfFile" type="file" accept=".pdf,.docx,.caj" hidden />
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
       <div class="pp-convert-tip">
-        <div class="pp-convert-head">☁ PDF 排版不理想？先在成熟平台转为 Word(排版无损)再导入:</div>
+        <div class="pp-convert-head">☁ 需要转换为可编辑的 Word？可尝试以下工具（转换后排版可能变化）：</div>
         <div class="pp-convert-links">
           <a href="https://www.ilovepdf.com/zh-cn/pdf_to_word" target="_blank" rel="noopener">iLovePDF</a>
           <a href="https://smallpdf.com/cn/pdf-to-word" target="_blank" rel="noopener">Smallpdf</a>
@@ -2307,7 +2307,7 @@
           <a href="https://www.geekersoft.com/zh-cn/pdf-to-word.html" target="_blank" rel="noopener">奇客PDF</a>
           <a href="https://convertio.co/zh/pdf-doc/" target="_blank" rel="noopener">Convertio</a>
         </div>
-        <div class="pp-convert-note">流程:平台内上传 PDF → 转为 Word 下载 → 回到此窗点「⇪ 导入文档」选择该 Word 文件,标题层级原样保留</div>
+        <div class="pp-convert-note">可选步骤：转换并下载 .docx 文件，再返回此处导入。原 PDF 可直接导入。</div>
       </div>
     </div>
     <div class="paper-entry-stats" id="paperEntryStats"></div>
@@ -12962,9 +12962,10 @@ function openPaperEntryModal(category){
   if(paperTitleInput) paperTitleInput.value = "";
   if(paperFullTextInput){
     paperFullTextInput.value = "";
+    paperFullTextInput.readOnly = !isEssay;
     paperFullTextInput.placeholder = isEssay
       ? "粘贴随笔全文于此……\n\n支持任意文字: 散文、杂感、日记、笔记、札记, 可随时点击「查看全文」阅读并标注。"
-      : "粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……\n\n支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。";
+      : "点击上方「导入文档」选择 PDF、Word（.docx）或 CAJ 文件。";
   }
   paperEntryFromPdf = false;
   paperEntryImages = null;
@@ -12989,12 +12990,12 @@ function openPaperEntryModal(category){
     const intro = paperEntryModal.querySelector("p");
     if(intro) intro.textContent = isEssay
       ? "粘贴一篇随笔 —— 填写作时间,系统自动从首行提取标题归册,可随时点击「查看全文」阅读并标注。"
-      : "粘贴一整篇论文 —— 系统将自动整理归册,生成解读分析,可随时点击查看全文并进行颜色标注。";
+      : "上传 PDF、Word（.docx）或 CAJ 文件，整理入册后即可阅读和标注。";
     const fullTextLabel = paperFullTextInput ? paperFullTextInput.closest(".modal-field").querySelector("label") : null;
     if(fullTextLabel && fullTextLabel.firstChild) fullTextLabel.firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
   }
   if(paperEntryModal) paperEntryModal.classList.add("show");
-  setTimeout(function(){ if(paperFullTextInput) paperFullTextInput.focus(); }, 60);
+  setTimeout(function(){ if(isEssay && paperFullTextInput) paperFullTextInput.focus(); else if(pdfBtn) pdfBtn.focus(); }, 60);
 }
 function closePaperEntryModal(){
   if(paperEntryModal) paperEntryModal.classList.remove("show");
@@ -13057,7 +13058,7 @@ if(paperEntrySubmit){
       }
     }
     if(!fullText.trim()){
-      toast("请粘贴" + (isEssay ? "随笔" : "论文") + "全文");
+      toast(isEssay ? "请粘贴随笔全文" : "请先导入论文文件");
       return;
     }
     const noun = isEssay ? "随笔" : "论文";
