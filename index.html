@@ -671,6 +671,9 @@
   }
 
   /* ============ 论文查看器 ============ */
+  #prSelectionTools{ position:fixed; z-index:12; display:flex; gap:4px; padding:5px; background:linear-gradient(135deg,#FAFCFD,#EDE9F3); border:1px solid #C7D2DD; border-radius:12px; box-shadow:0 6px 20px #30405233; }
+  #prSelectionTools[hidden]{ display:none; }
+  #prSelectionTools button{ width:auto; min-height:32px; padding:4px 10px; white-space:nowrap; }
   .paper-reader-bg{ padding:0; }
   .paper-reader-bg.show{ align-items:stretch; }
   .paper-reader{
@@ -2070,6 +2073,7 @@
     <nav class="topnav">
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站</a>
+      <button class="modal-btn" type="button" id="siteCloudOpen">全站云同步</button>
       <a href="#" id="navSyncCode" class="nav-code-btn" title="查看跨设备登录所需的同步码">⌁ 跨设备</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
@@ -2374,6 +2378,7 @@
         <button class="modal-btn" id="prFindOpen" aria-expanded="false">搜索</button>
         <button class="modal-btn" id="prPagesOpen" aria-expanded="false">页面</button>
         <button class="modal-btn" id="prMarksOpen" aria-expanded="false">标注与备注</button>
+        <button class="modal-btn" type="button" id="prCloudOpen">云同步</button>
         <button class="modal-btn" id="prPdfExport">导出 PDF</button>
         <button class="modal-btn" id="prClose">关闭</button>
       </div>
@@ -2407,6 +2412,11 @@
       <div class="pr-text-wrap" id="prTextWrap">
         <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
+        <div id="prSelectionTools" role="group" aria-label="选中文字的操作" hidden>
+          <button class="modal-btn" type="button" data-action="highlight">高亮</button>
+          <button class="modal-btn" type="button" data-action="note">备注</button>
+          <button class="modal-btn" type="button" data-action="copy">复制</button>
+        </div>
       </div>
       <aside id="prResearchPanel" class="pr-research-panel" aria-label="论文导航和批注" hidden></aside>
     </div>
@@ -2585,6 +2595,7 @@
   </div>
 </div>
 
+<script src="paper-cloud.js" defer></script>
 <script>
 "use strict";
 /* ============================================================
@@ -3338,36 +3349,48 @@ function setBackupBusy(busy){
   });
 }
 
+async function buildSiteBackup(includeReadingPositions = false){
+  const payload = JSON.parse(JSON.stringify({
+    exporter:"shuyingshidan_v3", exportedAt:new Date().toISOString(),
+    items:state.items, pendingReview:state.pendingReview || [], trash:state.trash || [],
+    beverageBrands:beverageBrands, skincareFuncs:skincareFuncs
+  }));
+  const zip = new JSZip();
+  const papers = new Map();
+  for(const item of [...state.items, ...(state.trash || []), ...(state.pendingReview || [])]){
+    if(item.category === "paper") papers.set(String(item.id), item);
+  }
+  for(const item of [...payload.items, ...payload.trash, ...payload.pendingReview]){
+    delete item._pdfBytes;
+    delete item.pdfCopyId;
+  }
+  payload.pdfFiles = [];
+  if(includeReadingPositions){
+    payload.readingPositions = Object.fromEntries([...papers.keys()].map(id => [id, getPaperPosition(id)]).filter(([,position]) => position));
+  }
+  for(const [id, item] of papers){
+    const bytes = await getOriginalPdf(item);
+    if(!bytes || !(bytes.size || bytes.length)) continue;
+    const file = "pdf/" + payload.pdfFiles.length + ".pdf";
+    zip.file(file, Array.isArray(bytes) ? new Uint8Array(bytes) : bytes);
+    payload.pdfFiles.push({id:id, file:file});
+  }
+  zip.file("志录.json", JSON.stringify(payload));
+  const blob = await zip.generateAsync({
+    type:"blob",
+    compression:includeReadingPositions ? "DEFLATE" : "STORE",
+    compressionOptions:{level:9}
+  });
+  return {blob, pdfCount:payload.pdfFiles.length};
+}
+
 async function exportAllData(){
   if(!currentUser || backupBusy) return;
   if(!window.JSZip){ toast("备份组件未加载，请刷新后重试"); return; }
   setBackupBusy(true);
   toast("正在打包志录和原 PDF…");
   try{
-    const payload = JSON.parse(JSON.stringify({
-      exporter:"shuyingshidan_v3", exportedAt:new Date().toISOString(),
-      items:state.items, pendingReview:state.pendingReview || [], trash:state.trash || [],
-      beverageBrands:beverageBrands, skincareFuncs:skincareFuncs
-    }));
-    const zip = new JSZip();
-    const papers = new Map();
-    for(const item of [...state.items, ...(state.trash || []), ...(state.pendingReview || [])]){
-      if(item.category === "paper") papers.set(String(item.id), item);
-    }
-    for(const item of [...payload.items, ...payload.trash, ...payload.pendingReview]){
-      delete item._pdfBytes;
-      delete item.pdfCopyId;
-    }
-    payload.pdfFiles = [];
-    for(const [id, item] of papers){
-      const bytes = await getOriginalPdf(item);
-      if(!bytes || !(bytes.size || bytes.length)) continue;
-      const file = "pdf/" + payload.pdfFiles.length + ".pdf";
-      zip.file(file, Array.isArray(bytes) ? new Uint8Array(bytes) : bytes);
-      payload.pdfFiles.push({id:id, file:file});
-    }
-    zip.file("志录.json", JSON.stringify(payload));
-    const blob = await zip.generateAsync({type:"blob", compression:"STORE"});
+    const {blob, pdfCount} = await buildSiteBackup();
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -3375,7 +3398,7 @@ async function exportAllData(){
     document.body.appendChild(a);
     a.click();
     setTimeout(function(){ a.remove(); URL.revokeObjectURL(url); }, 1000);
-    toast("已生成备份，包含 " + payload.pdfFiles.length + " 份本机原 PDF");
+    toast("已生成备份，包含 " + pdfCount + " 份本机原 PDF");
   }catch(e){
     console.warn("backup export failed", e);
     toast("备份生成失败，请检查可用内存后重试", 5500);
@@ -3387,7 +3410,7 @@ function triggerImportData(){
   if(inp && !backupBusy) inp.click();
 }
 
-async function handleImportFile(f){
+async function handleImportFile(f, restoreReadingPositions = false){
   if(!f || !currentUser || backupBusy) return;
   const storageKey = STORAGE_KEY;
   const staged = [];
@@ -3469,6 +3492,13 @@ async function handleImportFile(f){
     state.items = nextItems;
     state.pendingReview = nextPending;
     state.trash = nextTrash;
+    if(restoreReadingPositions && obj.readingPositions){
+      for(const [id, position] of Object.entries(obj.readingPositions)){
+        if(papers.has(id) && Number.isFinite(position?.top)){
+          try{ localStorage.setItem(storageKey + "_readpos_" + id, JSON.stringify(position)); }catch(_){}
+        }
+      }
+    }
     if(!merge && Array.isArray(obj.beverageBrands)){ beverageBrands = obj.beverageBrands; saveBeverageBrands(); }
     if(!merge && Array.isArray(obj.skincareFuncs)){ skincareFuncs = obj.skincareFuncs; saveSkincareFuncs(); }
     render();
@@ -3477,6 +3507,7 @@ async function handleImportFile(f){
     updatePendingBtn();
     refreshStorageInfo();
     toast("备份已恢复，共 " + state.items.length + " 条志录" + (zip ? "，含 " + staged.length + " 份原 PDF" : ""));
+    return true;
   }catch(e){
     console.warn("backup import failed", e);
     toast("恢复失败。请检查备份文件是否完整，以及本机存储是否充足。", 5500);
@@ -5053,6 +5084,10 @@ function pdfTextNeedsOcr(text, pageCount){
   /* 文字层编码损坏时常被提取为 U+FFFD（�）；页面看起来正常，实际文本却不可用。 */
   const replacementChars = (compact.match(/\uFFFD/g) || []).length;
   if(replacementChars >= Math.max(3, compact.length * 0.02)) return true;
+  /* Broken legacy PDF fonts can map GBK bytes to Latin glyphs and typographic symbols. */
+  const latinFallback = (compact.match(/[\u00A1-\u00FF\u0152-\u0178\u0192\u02C6-\u02DC\u2013-\u2026\u2030\u2039\u203A\u2044\u2122]/g) || []).length;
+  const fallbackSymbols = (compact.match(/[\u02C6-\u02DC\u2013-\u2026\u2030\u2044]/g) || []).length;
+  if(latinFallback >= 16 && latinFallback >= compact.length * 0.8 && fallbackSymbols >= compact.length * 0.2) return true;
   const meaningful = (compact.match(/\p{L}/gu) || []).length;
   const minMeaningful = Math.max(16, Math.min(240, Math.max(1, pageCount || 1) * 6));
   if(meaningful < minMeaningful || meaningful / compact.length < 0.32) return true;
@@ -6054,6 +6089,8 @@ function openPaperReader(itemId){
   resetPaperResearch();
 
   prState.itemId = itemId;
+  prState.resume = getPaperPosition(itemId);
+  document.getElementById("prTextWrap").scrollTo({top:0, behavior:"instant"});
   prState.activeColor = null;
   prState.activeFmt = null;
   prState.dirty = false;
@@ -6115,12 +6152,7 @@ function openPaperReader(itemId){
 
   /* 记住正在阅读的论文(刷新页面后自动恢复审阅界面) */
   try{ localStorage.setItem(STORAGE_KEY + "_reading", itemId); }catch(e){}
-  /* 恢复上次阅读滚动位置 */
-  try{
-    const sp = parseInt(localStorage.getItem(STORAGE_KEY + "_readpos") || "0", 10);
-    const wrap = document.getElementById("prTextWrap");
-    if(wrap && sp > 0) setTimeout(function(){ wrap.scrollTop = sp; }, 80);
-  }catch(e){}
+  restorePaperPosition(itemId, !!item.html || item.category === "essay");
 
   /* 关闭 */
   const prClose = document.getElementById("prClose");
@@ -6441,6 +6473,8 @@ function openPaperReader(itemId){
   const prTextWrap = document.getElementById("prTextWrap");
   if(prTextWrap){
     prTextWrap.onmouseup = async function(e){
+      if(e.button !== 0 || e.target.closest("#prSelectionTools")) return;
+      if(!prState.translateMode && !prState.activeColor && !prState.activeFmt && showPaperSelectionTools(e)) return;
       /* 点击备注元素时显示/隐藏弹窗 */
       const noteEl = e.target.closest("u.pr-note");
       const popup = document.getElementById("prNotePopup");
@@ -7004,7 +7038,9 @@ async function renderPdfNative(item, prText){
       + '</div>';
   }
   pagesHtml += '</div>';
+  if(prState.itemId !== item.id) return false;
   prText.innerHTML = pagesHtml;
+  restorePaperPosition(item.id, true);
   const pdfRoot = prText.querySelector("#prPdfRoot");
 
   prState.pdfNativeCacheKey = String(item.id);
@@ -7870,7 +7906,7 @@ function renderPaperText(item){
   if(!item.html){
     /* 异步尝试; 若500ms内未渲染成功 → 回退旧renderLayoutPaper/fullText(老论文兜底) */
     let fallbackTimer = setTimeout(function(){
-      if(prState._pdfRendered) return;
+      if(prState._pdfRendered || prState.itemId !== item.id) return;
       prState._pdfRenderFallback = true;
       renderPaperTextLegacy(item, prText);
     }, 500);
@@ -7878,7 +7914,9 @@ function renderPaperText(item){
       if(ok){ clearTimeout(fallbackTimer); prState._pdfRendered = true; return; }
       /* 失败 → 立即回退 */
       clearTimeout(fallbackTimer);
+      if(prState.itemId !== item.id) return;
       if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
+      restorePaperPosition(item.id, true);
     });
     return;
   }
@@ -8393,6 +8431,7 @@ function redoLastAction(){
 /* 关闭论文查看器 —— 有未保存改动时提醒(取消则真实恢复打开时的数据) */
 async function closePaperReader(){
   if(prState.saving) return;
+  savePaperPosition();
   if(prState.dirty){
     const curItem = state.items.find(function(i){ return i.id === prState.itemId; });
     const noun = (curItem && curItem.category === "essay") ? "随笔" : "论文";
@@ -8429,9 +8468,11 @@ async function closePaperReader(){
   const translations = document.querySelectorAll(".pr-translation");
   for(let i=0; i<translations.length; i++) translations[i].remove();
   const modal = document.getElementById("paperReaderModal");
+  prState.resume = null;
+  document.getElementById("prSelectionTools").hidden = true;
   if(modal) modal.classList.remove("show");
   document.body.style.overflow = "";
-  /* 主动关闭 → 清除阅读记忆(刷新页面不再恢复) */
+  /* 主动关闭后不自动打开阅读器。每篇论文的位置单独保留。 */
   try{ localStorage.removeItem(STORAGE_KEY + "_reading"); localStorage.removeItem(STORAGE_KEY + "_readpos"); }catch(e){}
   prState.itemId = null;
   prState.activeColor = null;
@@ -8442,6 +8483,7 @@ async function closePaperReader(){
   if(popup) popup.classList.remove("show");
   const chat = document.getElementById("prChat");
   if(chat) chat.classList.remove("show");
+  if(paperWorkspaceActive) render();
 }
 
 /* 离开标签页时提醒未保存改动。异步写入不能依赖页面卸载。 */
@@ -8452,22 +8494,108 @@ window.addEventListener("beforeunload", function(event){
         event.preventDefault();
         event.returnValue = "";
       }
-      const wrap = document.getElementById("prTextWrap");
-      if(wrap) localStorage.setItem(STORAGE_KEY + "_readpos", String(Math.round(wrap.scrollTop)));
+      savePaperPosition();
     }
   }catch(e){ /* 静默 */ }
 });
-/* 滚动位置防抖记忆(会话中途意外退出也有记录) */
-(function(){
+function getPaperPosition(id){
+  try{
+    const position = localStorage.getItem(STORAGE_KEY + "_readpos_" + id);
+    if(position) return JSON.parse(position);
+    if(localStorage.getItem(STORAGE_KEY + "_reading") === id){
+      const top = Number(localStorage.getItem(STORAGE_KEY + "_readpos"));
+      if(top > 0) return {top};
+    }
+  }catch(e){}
+  return null;
+}
+
+function savePaperPosition(){
+  if(!prState.itemId || prState.resume) return;
   const wrap = document.getElementById("prTextWrap");
   if(!wrap) return;
-  let t = null;
+  const position = {top: Math.round(wrap.scrollTop)};
+  const top = wrap.getBoundingClientRect().top;
+  const pages = wrap.querySelectorAll(".pr-pdf-page[data-page]");
+  let low = 0, high = pages.length;
+  while(low < high){
+    const mid = Math.floor((low + high) / 2);
+    if(pages[mid].getBoundingClientRect().bottom <= top) low = mid + 1;
+    else high = mid;
+  }
+  if(pages[low]){
+    const box = pages[low].getBoundingClientRect();
+    position.page = Number(pages[low].dataset.page);
+    position.offset = box.height ? Math.max(0, (top - box.top) / box.height) : 0;
+  }
+  try{ localStorage.setItem(STORAGE_KEY + "_readpos_" + prState.itemId, JSON.stringify(position)); }catch(e){}
+}
+
+function restorePaperPosition(id, ready){
+  const position = prState.resume;
+  if(!ready || !position || prState.itemId !== id) return;
+  const wrap = document.getElementById("prTextWrap");
+  const page = position.page && document.getElementById("prPdfPage_" + position.page);
+  if(page){
+    const box = page.getBoundingClientRect();
+    wrap.scrollTo({top: wrap.scrollTop + box.top - wrap.getBoundingClientRect().top + box.height * position.offset, behavior:"instant"});
+  }else{
+    wrap.scrollTo({top:position.top, behavior:"instant"});
+  }
+  prState.resume = null;
+}
+
+function showPaperSelectionTools(event){
+  const root = document.getElementById("prText");
+  const selection = window.getSelection();
+  if(!selection || selection.isCollapsed || !selection.rangeCount ||
+     !root.contains(selection.anchorNode) || !root.contains(selection.focusNode) ||
+     selection.toString().trim().length < 2) return false;
+  const tools = document.getElementById("prSelectionTools");
+  tools.hidden = false;
+  tools.style.left = Math.max(8, Math.min(event.clientX + 8, innerWidth - tools.offsetWidth - 8)) + "px";
+  tools.style.top = (event.clientY + tools.offsetHeight + 16 < innerHeight
+    ? event.clientY + 12 : Math.max(8, event.clientY - tools.offsetHeight - 12)) + "px";
+  return true;
+}
+
+(function(){
+  const wrap = document.getElementById("prTextWrap");
+  const tools = document.getElementById("prSelectionTools");
+  let timer;
   wrap.addEventListener("scroll", function(){
-    if(!prState || !prState.itemId) return;
-    if(t) clearTimeout(t);
-    t = setTimeout(function(){
-      try{ localStorage.setItem(STORAGE_KEY + "_readpos", String(Math.round(wrap.scrollTop))); }catch(e){}
-    }, 400);
+    tools.hidden = true;
+    const id = prState.itemId;
+    clearTimeout(timer);
+    timer = setTimeout(function(){
+      if(prState.itemId === id) savePaperPosition();
+    }, 250);
+  }, {passive:true});
+  document.addEventListener("mousedown", function(event){
+    if(!tools.contains(event.target)) tools.hidden = true;
+  }, true);
+  document.addEventListener("selectionchange", function(){
+    if(window.getSelection()?.isCollapsed) tools.hidden = true;
+  });
+  document.addEventListener("keydown", function(event){
+    if(event.key === "Escape") tools.hidden = true;
+  });
+  tools.addEventListener("mousedown", function(event){ event.preventDefault(); });
+  tools.addEventListener("click", async function(event){
+    const action = event.target.closest("button")?.dataset.action;
+    const selection = window.getSelection();
+    if(!action || !selection || selection.isCollapsed) return;
+    tools.hidden = true;
+    if(action === "highlight") document.querySelector(".pr-hl-color[data-color]").click();
+    if(action === "note") document.querySelector('.pr-hl-fmt[data-fmt="note"]').click();
+    if(action === "copy"){
+      try{
+        await navigator.clipboard.writeText(selection.toString());
+        toast("已复制选中文字");
+      }catch(e){
+        toast("复制失败，请按 Ctrl+C 复制选中文字");
+      }
+    }
   });
 })();
 
@@ -11841,8 +11969,11 @@ function renderGallery(){
 
     // 论文/随笔专属:查看全文按钮 (随笔复用同一套阅读编辑器)
     const isPaper = (it.category === "paper" || it.category === "essay") && it.fullText;
+    const position = paperWorkspaceActive && it.category === "paper" ? getPaperPosition(it.id) : null;
+    const readLabel = position?.page > 1 ? "继续阅读 · 第 " + position.page + " 页"
+      : position?.top > 0 ? "继续阅读" : "查看全文";
     const paperBtnHtml = isPaper ?
-      '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">' + (it.category === "essay" ? "✎" : "§") + ' 查看全文</button>' : "";
+      '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">' + (it.category === "essay" ? "✎" : "§") + ' ' + readLabel + '</button>' : "";
     const isPaperCat = it.category === "paper";
     const cnkiBtnHtml = isPaperCat ?
       '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">⌕ 知网搜索</button>' : "";
@@ -13716,5 +13847,21 @@ document.addEventListener("animationend", function(e){ if(e.animationName === "b
   <div class="pp-prog-track"><div class="pp-prog-fill" id="ppProgFill"></div></div>
 </div>
 
+<dialog id="prCloudDialog" aria-labelledby="prCloudTitle" style="width:min(420px,calc(100vw - 32px));border:1px solid #C7D2DD;border-radius:14px;padding:20px;color:var(--ink);background:var(--paper-soft)">
+  <h2 id="prCloudTitle">论文云同步</h2>
+  <form id="prCloudAuth">
+    <p>在不同设备使用同一个云端邮箱账号。</p>
+    <p><label>邮箱 <input name="email" type="email" autocomplete="email" required></label></p>
+    <p><label>云端密码 <input name="password" type="password" autocomplete="current-password" minlength="6" required></label></p>
+    <button class="modal-btn primary" type="submit">登录</button>
+    <button class="modal-btn" type="submit" value="signup">注册云端账号</button>
+  </form>
+  <p id="prCloudStatus" role="status"></p>
+  <div id="prCloudActions" hidden>
+    <button class="modal-btn primary" type="button" id="prCloudSync">比较并同步本篇</button>
+    <button class="modal-btn" type="button" id="prCloudLogout">退出云端账号</button>
+  </div>
+  <form method="dialog"><button class="modal-btn">关闭</button></form>
+</dialog>
 </body>
 </html>
