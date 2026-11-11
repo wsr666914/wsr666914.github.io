@@ -1904,6 +1904,8 @@
   }
   .cloud-modal::backdrop{ background:rgba(36,48,61,.45); }
   .cloud-modal h2{ margin:0 0 10px; font:700 22px/1.3 var(--ui-font); }
+  .cloud-modal .cloud-guide{ margin:0 0 16px; padding:10px 12px; border-radius:9px; background:#EDF2F6; color:#435A6C; }
+  .cloud-modal .cloud-guide[hidden], .cloud-modal .cloud-mode-link[hidden]{ display:none; }
   .cloud-modal .cloud-intro{ margin:0 0 18px; color:#526275; }
   .cloud-modal .cloud-fields{ display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:12px 14px; margin-bottom:18px; }
   .cloud-modal .cloud-fields label{ margin:0; color:#435A6C; font:650 14px/1.4 var(--ui-font); letter-spacing:0; }
@@ -2043,42 +2045,35 @@
     <!-- 登录表单 -->
     <div class="login-form" id="loginForm">
       <div class="login-field">
-        <label>名号或同步码</label>
-        <input type="text" id="loginUser" autocomplete="off" placeholder="输入名号；换设备时输入同步码" />
+        <label for="loginUser">账号</label>
+        <input type="text" id="loginUser" autocomplete="username" placeholder="输入账号" />
       </div>
       <div class="login-field">
-        <label>暗语</label>
-        <input type="password" id="loginPass" placeholder="密语" />
+        <label for="loginPass">密码</label>
+        <input type="password" id="loginPass" autocomplete="current-password" placeholder="输入密码" />
       </div>
-      <button class="login-submit" id="loginSubmit">入册 · LOGIN</button>
-      <div class="login-sync-tip">
-        <span>换设备时，用同步码和暗语登录。</span>
-      </div>
-      <a href="#" class="login-forgot" id="forgotPassLink">忘记暗语？找回或重置</a>
+      <button class="login-submit" id="loginSubmit">登录</button>
+      <a href="#" class="login-forgot" id="forgotPassLink">忘记密码？</a>
     </div>
     <!-- 注册表单 -->
     <div class="login-form" id="registerForm" style="display:none;">
       <div class="login-field">
-        <label>名号</label>
-        <input type="text" id="regUser" autocomplete="off" placeholder="自取一名" />
+        <label for="regUser">账号</label>
+        <input type="text" id="regUser" autocomplete="username" placeholder="设置账号名称" />
       </div>
       <div class="login-field">
-        <label>暗语 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 须含大写字母+数字</span></label>
-        <input type="password" id="regPass" placeholder="如 Abc123" />
+        <label for="regPass">密码</label>
+        <input type="password" id="regPass" autocomplete="new-password" placeholder="至少 8 个字符" />
       </div>
       <div class="login-field">
-        <label>确认暗语</label>
-        <input type="password" id="regPass2" placeholder="再输一遍" />
+        <label for="regPass2">确认密码</label>
+        <input type="password" id="regPass2" autocomplete="new-password" placeholder="再输一遍" />
       </div>
-      <div class="login-field">
-        <label>同步码 <span style="font-weight:400;text-transform:none;color:var(--ink-mute);">· 自己设置，6–16位字母或数字</span></label>
-        <input type="text" id="regSyncCode" autocomplete="off" placeholder="例如 mylibrary88" />
-      </div>
-      <button class="login-submit" id="registerSubmit">立册 · REGISTER</button>
+      <button class="login-submit" id="registerSubmit">创建账号</button>
     </div>
     <button class="login-guest" id="guestEntry">游客进入 · 本机使用</button>
     <div class="login-hint" id="loginHint"></div>
-    <div class="login-note">注册账号可跨设备同步；游客模式无需注册，数据仅保存在当前设备。</div>
+    <div class="login-note">游客可直接使用。换设备时，可登录全站云同步取回备份。</div>
   </div>
 </div>
 
@@ -2092,7 +2087,7 @@
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站</a>
       <button class="cloud-nav-btn" type="button" id="siteCloudOpen">全站云同步</button>
-      <a href="#" id="navSyncCode" class="nav-code-btn" title="管理原站账号、同步码和本机备份">账号与备份</a>
+      <a href="#" id="navSyncCode" class="nav-code-btn" title="管理网站密码和本机备份">账号与备份</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -2458,28 +2453,11 @@
 <div class="modal-bg" id="syncCodeModal">
   <div class="modal sync-modal">
     <h3>账号与备份</h3>
-    <p class="sync-intro">在另一台设备登录时，输入同步码和暗语。</p>
-    <p class="sync-guest-tip">游客数据只保存在当前设备。注册账号后才可以跨设备使用。</p>
-    <div class="sync-signed-in">
-      <div class="sync-code-box">
-        <code id="syncCodeValue" class="sync-code-value">—</code>
-        <button class="sync-copy-btn" id="syncCopyBtn" type="button">复制同步码</button>
-      </div>
-      <p class="sync-help">同步码用于找到你的记录；登录时仍需输入暗语。</p>
-      <details class="sync-more" id="syncMore">
-        <summary>账号设置与数据备份</summary>
-        <div class="form-group">
-          <label>修改同步码 <span class="sync-field-hint">6–16位字母或数字</span></label>
-          <input type="text" id="syncCustomInput" autocomplete="off" placeholder="设置自己记得住的同步码">
-          <button class="modal-btn" id="syncCustomSave" type="button">保存同步码</button>
-        </div>
-        <div class="sync-code-box sync-recovery-box">
-          <span>恢复码</span>
-          <code id="recoveryCodeValue" class="sync-code-value">—</code>
-          <button class="sync-copy-btn" id="recoveryCopyBtn" type="button">复制</button>
-        </div>
-        <p class="sync-help">忘记暗语时用恢复码重置。请单独保存。</p>
-        <button class="btn-ghost" id="syncPasswordResetBtn" type="button">修改登录暗语</button>
+    <p class="sync-intro">管理网站密码和本机备份。换设备时可通过「全站云同步」恢复资料。</p>
+        <div class="sync-signed-in">
+      <details class="sync-more" id="syncMore" open>
+        <summary>密码与本机备份</summary>
+        <button class="btn-ghost" id="syncPasswordResetBtn" type="button">修改网站密码</button>
         <div class="storage-info-panel">
           <div class="storage-info-row" id="storageInfoRow">
             <span class="storage-info-label">本机存储：</span>
@@ -2493,6 +2471,11 @@
           </div>
           <div class="storage-info-tip">备份包含志录、批注和本机仍存有的原 PDF。</div>
         </div>
+      </details>
+      <details class="sync-more" id="legacyAccountCodes" hidden>
+        <summary>旧账号的同步码和恢复码</summary>
+        <div class="sync-code-box"><code id="syncCodeValue" class="sync-code-value"></code><button class="sync-copy-btn" id="syncCopyBtn" type="button">复制同步码</button></div>
+        <div class="sync-code-box sync-recovery-box"><span>恢复码</span><code id="recoveryCodeValue" class="sync-code-value">—</code><button class="sync-copy-btn" id="recoveryCopyBtn" type="button">复制恢复码</button></div>
       </details>
     </div>
     <div class="modal-row">
@@ -2524,8 +2507,8 @@
 <!-- 忘记暗语弹窗 -->
 <div class="modal-bg" id="forgotPassModal">
   <div class="modal forgot-modal">
-    <h3>找回 / 重置暗语</h3>
-    <div class="ai-cfg-tip">如果还在原来的浏览器中，可直接本机重置；如果要找回云端账号，需要输入此前保存的同步码和恢复码。</div>
+    <h3>重置网站密码</h3>
+    <div class="ai-cfg-tip">在原来的浏览器中，可以重置网站密码。</div>
     <div class="form-group">
       <label>本机账号名号</label>
       <input type="text" id="forgotLocalUser" autocomplete="off" placeholder="仅限当前浏览器已有账号">
@@ -2539,7 +2522,7 @@
       <input type="password" id="forgotNewPass2" autocomplete="new-password" placeholder="再输一遍">
     </div>
     <button class="modal-btn" id="forgotLocalSubmit" type="button">本机重置并登录</button>
-    <div class="forgot-divider">— 云端账号恢复 —</div>
+    <details class="sync-more"><summary>恢复旧同步码账号</summary>
     <div class="form-group">
       <label>同步码</label>
       <input type="text" id="forgotSyncCode" autocomplete="off" placeholder="SY-…">
@@ -2548,7 +2531,8 @@
       <label>恢复码</label>
       <input type="text" id="forgotRecoveryCode" autocomplete="off" placeholder="注册后生成并提示保存的 RC-…">
     </div>
-    <button class="modal-btn" id="forgotCloudSubmit" type="button">验证恢复码并更新云端暗语</button>
+    <button class="modal-btn" id="forgotCloudSubmit" type="button">验证恢复码并更新旧账号密码</button>
+    </details>
     <div class="login-hint" id="forgotHint"></div>
     <div class="modal-row"><button class="modal-btn" id="forgotCloseBtn" type="button">关闭</button></div>
   </div>
@@ -2867,31 +2851,15 @@ async function doRegister(){
   const u = (document.getElementById("regUser").value || "").trim();
   const p = document.getElementById("regPass").value || "";
   const p2 = document.getElementById("regPass2").value || "";
-  const rawCode = (document.getElementById("regSyncCode").value || "").trim().toLowerCase();
   const hint = document.getElementById("loginHint");
   if(!hint) return;
-  if(u.length < 1){ hint.textContent = "请取一名号"; return; }
-  if(u.length > 24){ hint.textContent = "名号过长(至多24字)"; return; }
-  if(p.length < 1){ hint.textContent = "请设一暗语"; return; }
-  /* 暗语须含大写字母+数字 */
-  if(!/[A-Z]/.test(p) || !/[0-9]/.test(p)){
-    hint.textContent = "暗语须含大写字母与数字(如 Abc123)"; return;
-  }
-  if(p !== p2){ hint.textContent = "两次暗语不一致"; return; }
-  if(!/^[a-z0-9]{6,16}$/.test(rawCode)){ hint.textContent = "同步码须为6–16位字母或数字"; return; }
+  if(!u || u.length > 24 || isSyncCode(u)){ hint.textContent = "请输入 1–24 字的账号名称，请避开旧同步码格式"; return; }
+  if(p.length < 8){ hint.textContent = "密码至少需要 8 个字符"; return; }
+  if(p !== p2){ hint.textContent = "两次密码不一致"; return; }
   const users = getUsers();
-  if(users[u]){ hint.textContent = "此名号已被取用,请换一名"; return; }
-  const isFirstUser = (Object.keys(users).length === 0);
-  const syncCode = "SY-" + rawCode;
-  hint.textContent = "正在检查同步码…";
-  const existing = await syncPull(syncCode);
-  if(existing.ok){ hint.textContent = "这个同步码已被占用，请换一个"; return; }
-  if(existing.reason !== "云端无此身份码的数据"){
-    hint.textContent = existing.reason || "同步码检查失败，请稍后再试";
-    return;
-  }
-  const recoveryCode = genRecoveryCode();
-  users[u] = { pass: hashPass(p), createdAt: Date.now(), code: syncCode, rh: hashPass(recoveryCode), recoveryCode: recoveryCode };
+  if(users[u]){ hint.textContent = "这个账号名称已被使用"; return; }
+  const isFirstUser = Object.keys(users).length === 0;
+  users[u] = {pass:hashPass(p), createdAt:Date.now()};
   saveUsers(users);
   hint.textContent = "";
   // 注册成功直接登录
@@ -2907,9 +2875,6 @@ async function doRegister(){
   }
   if(!await afterLogin()) return;
   toast("立册成功 · 欢迎," + u);
-  /* 异步首推云端 + 展示身份码弹窗 */
-  syncPushNow();
-  setTimeout(function(){ showSyncCodeModal(); }, 900);
 }
 
 async function doLogin(){
@@ -2917,7 +2882,7 @@ async function doLogin(){
   const p = document.getElementById("loginPass").value || "";
   const hint = document.getElementById("loginHint");
   if(!hint) return;
-  if(u.length < 1){ hint.textContent = "请输入名号或同步码"; return; }
+  if(u.length < 1){ hint.textContent = "请输入账号"; return; }
   if(p.length < 1){ hint.textContent = "请输入暗语"; return; }
   /* 身份码登录: 新设备凭身份码+暗语从云端拉取账号数据 */
   if(isSyncCode(u)){
@@ -2960,7 +2925,7 @@ async function doLogin(){
   }
   const users = getUsers();
   if(!users[u]){
-    hint.textContent = "没有找到这个账号。换设备时，请输入同步码和暗语。";
+    hint.textContent = "这台设备上没有这个账号。你可以创建本机账号，再通过全站云同步恢复备份。";
     return;
   }
   if(users[u].pass !== hashPass(p)){ hint.textContent = "暗语有误"; return; }
@@ -3252,54 +3217,18 @@ async function syncCheckOnLogin(){
   }
 }
 
-/* 身份码展示弹窗(查看/复制) */
 function showSyncCodeModal(){
-  const code = getMySyncCode();
   const modal = document.getElementById("syncCodeModal");
-  const codeEl = document.getElementById("syncCodeValue");
-  const recoveryEl = document.getElementById("recoveryCodeValue");
-  if(!modal || !codeEl) return;
-  modal.querySelector(".sync-modal").classList.toggle("is-guest", currentUser === GUEST_USER);
-  const more = document.getElementById("syncMore");
-  if(more) more.open = false;
-  if(!code){
-    codeEl.textContent = currentUser === GUEST_USER ? "游客模式没有同步码" : "当前账号尚未生成同步码";
-    if(recoveryEl) recoveryEl.textContent = currentUser === GUEST_USER ? "游客模式无需恢复码" : "—";
-    if(!currentUser) return;
-  }else{
-    codeEl.textContent = code;
-    if(recoveryEl) recoveryEl.textContent = ensureRecoveryForUser(currentUser) || "—";
-  }
+  if(!modal || !currentUser) return;
+  const code = getMySyncCode();
+  const legacy = document.getElementById("legacyAccountCodes");
+  legacy.hidden = !code;
+  legacy.open = false;
+  document.getElementById("syncCodeValue").textContent = code || "";
+  document.getElementById("recoveryCodeValue").textContent = getUsers()[currentUser]?.recoveryCode || "—";
+  document.getElementById("syncPasswordResetBtn").hidden = currentUser === GUEST_USER;
   modal.classList.add("show");
-}
-
-async function setCustomSyncCode(){
-  const input = document.getElementById("syncCustomInput");
-  const raw = (input && input.value || "").trim().toLowerCase();
-  if(!currentUser || currentUser === GUEST_USER){ toast("游客模式不能设置同步码"); return; }
-  if(!/^[a-z0-9]{6,16}$/.test(raw)){ toast("同步码须为6–16位字母或数字"); return; }
-  const newCode = "SY-" + raw;
-  const users = getUsers();
-  const acc = users[currentUser];
-  if(!acc) return;
-  const oldCode = acc.code || "";
-  if(newCode === oldCode){ toast("这就是当前同步码"); return; }
-  const existing = await syncPull(newCode);
-  if(existing.ok && existing.data && existing.data.u && existing.data.u !== currentUser){
-    toast("这个同步码已被占用，请换一个"); return;
-  }
-  const payload = {
-    v: 1, u: currentUser, ph: acc.pass, sec: acc.sec || null, rh: acc.rh || null,
-    ts: Date.now(), items: state.items, pendingReview: state.pendingReview || [], trash: state.trash || []
-  };
-  const ok = await syncWritePayload(newCode, payload);
-  if(!ok){ toast("同步码保存失败，请检查网络后重试"); return; }
-  acc.code = newCode;
-  users[currentUser] = acc;
-  saveUsers(users);
-  if(input) input.value = "";
-  showSyncCodeModal();
-  toast("同步码已更新，请保存新码");
+  refreshStorageInfo();
 }
 
 /* ===== 容量/导入导出 工具函数 ===== */
@@ -3593,31 +3522,6 @@ async function afterLogin(){
   loadFoodCities();
   loadTreatiseSubs();
   migrateItems();
-  /* 老账号回填身份码(注册于身份码功能之前) → 立即生成并推送云端 */
-  try{
-    const users = getUsers();
-    if(currentUser && users[currentUser] && !users[currentUser].code){
-      users[currentUser].code = genLegacySyncCode();
-      saveUsers(users);
-      setTimeout(function(){
-        syncPushNow();
-        showSyncCodeModal();
-        toast("已生成同步码，请保存", 5000);
-      }, 1200);
-    }
-  }catch(e){ /* 静默 */ }
-  /* 老账号补发恢复码: 登录后在身份码弹窗中保存,以后可在异地重置暗语。 */
-  try{
-    if(currentUser && currentUser !== GUEST_USER){
-      const before = getUsers()[currentUser];
-      const hadRecovery = !!(before && before.rh);
-      const recovery = ensureRecoveryForUser(currentUser);
-      if(recovery && !hadRecovery){
-        scheduleSyncPush();
-        setTimeout(function(){ showSyncCodeModal(); toast("已生成恢复码，请在「账号设置与数据备份」中保存", 5000); }, 1400);
-      }
-    }
-  }catch(e){ /* 静默 */ }
   updateTrashBtn();
   render();
   renderComposerCats();
@@ -13696,8 +13600,6 @@ function toast(msg, duration){
   };
   const syncMore = document.getElementById("syncMore");
   if(syncMore) syncMore.addEventListener("toggle", function(){ if(this.open) refreshStorageInfo(); });
-  const syncCustomSave = document.getElementById("syncCustomSave");
-  if(syncCustomSave) syncCustomSave.onclick = setCustomSyncCode;
   const syncPasswordResetBtn = document.getElementById("syncPasswordResetBtn");
   if(syncPasswordResetBtn) syncPasswordResetBtn.onclick = openPasswordResetForCurrentUser;
   /* 导出/导入数据(身份码弹窗内) */
@@ -13858,7 +13760,7 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   const fingerprints = new WeakMap();
-  let session, binding, comparison, busy = false, siteMode = false;
+  let session, binding, comparison, busy = false, siteMode = false, signupMode = false;
 
   async function request(path, method, body, accessToken, prefer){
     const headers = {apikey:publicKey};
@@ -13905,7 +13807,17 @@ document.addEventListener("DOMContentLoaded", function(){
     }
   }
 
+  const switchMode = document.getElementById("prCloudSwitch");
+  const submit = document.getElementById("prCloudSubmit");
+  const guide = document.getElementById("prCloudGuide");
+
   function updateDialog(){
+    guide.hidden = !signupMode;
+    document.getElementById("prCloudIntro").hidden = signupMode;
+    switchMode.textContent = signupMode ? "已有云端账号？去登录" : "首次使用？开通云同步";
+    submit.textContent = signupMode ? "发送确认邮件" : "登录云端";
+    form.elements.password.autocomplete = signupMode ? "new-password" : "current-password";
+    form.elements.password.placeholder = signupMode ? "设置至少 6 个字符的云端密码" : "输入云端密码";
     document.getElementById("prCloudTitle").textContent = siteMode ? "全站云同步" : "论文云同步";
     compare.textContent = siteMode ? "比较本机与云端备份" : "比较并同步本篇";
     form.hidden = Boolean(session);
@@ -13924,7 +13836,7 @@ document.addEventListener("DOMContentLoaded", function(){
       status.textContent = error.code === "email_not_confirmed" ? "请先点击注册邮件中的确认链接。"
         : error.code === "invalid_credentials" ? "邮箱或云端密码不正确。"
         : error.status === 409 ? "云端版本刚刚更新，请重新比较。"
-        : error.code === "email_address_not_authorized" ? "当前云项目只允许项目成员接收注册邮件。"
+        : error.code === "email_address_not_authorized" ? "这个邮箱暂时收不到确认邮件。网站尚未开放所有邮箱的云端注册。"
         : error.status === 429 ? "操作过于频繁，请稍后重试。"
         : error.name === "AbortError" || error.name === "TimeoutError" || error instanceof TypeError ? "无法连接云端，请检查网络后重试。"
         : error.message;
@@ -13998,6 +13910,7 @@ document.addEventListener("DOMContentLoaded", function(){
     }
     if(busy) return;
     binding = STORAGE_KEY;
+    signupMode = false;
     comparison = null;
     try{ session = JSON.parse(sessionStorage.getItem(sessionKey())); }catch(error){ session = null; }
     status.textContent = session?.user?.email ? "已登录 " + session.user.email : "";
@@ -14009,9 +13922,17 @@ document.addEventListener("DOMContentLoaded", function(){
 
   dialog.addEventListener("cancel", function(event){ if(busy) event.preventDefault(); });
 
+  switchMode.addEventListener("click", function(){
+    signupMode = !signupMode;
+    form.elements.password.value = "";
+    status.textContent = "";
+    updateDialog();
+    form.elements.email.focus();
+  });
+
   form.addEventListener("submit", function(event){
     event.preventDefault();
-    const signup = event.submitter?.value === "signup";
+    const signup = signupMode;
     const credentials = {email:form.elements.email.value.trim(), password:form.elements.password.value};
     form.elements.password.value = "";
     run(async function(){
@@ -14021,7 +13942,8 @@ document.addEventListener("DOMContentLoaded", function(){
         rememberSession(response);
         status.textContent = "已登录 " + response.user.email;
       }else{
-        status.textContent = "请打开注册邮件确认邮箱，然后返回这里登录。";
+        signupMode = false;
+        status.textContent = "请查收确认邮件（也可以看看垃圾邮件）。点邮件中的链接后，回来用刚设置的密码登录。";
       }
     });
   });
@@ -14191,7 +14113,8 @@ document.addEventListener("DOMContentLoaded", function(){
 <dialog id="prCloudDialog" class="modal choice-modal cloud-modal" aria-labelledby="prCloudTitle">
   <h2 id="prCloudTitle">论文云同步</h2>
   <form id="prCloudAuth">
-    <p class="cloud-intro">在不同设备使用同一个云端邮箱账号。</p>
+    <p class="cloud-intro" id="prCloudIntro">使用云端邮箱登录，上传本机备份或取回云端备份。</p>
+    <p class="cloud-guide" id="prCloudGuide" hidden>填邮箱（可以用 QQ 邮箱）并设置云端密码。收到确认邮件后，点邮件里的链接，再回来登录。</p>
     <div class="form-group cloud-fields">
       <label for="prCloudEmail">邮箱</label>
       <input id="prCloudEmail" name="email" type="email" autocomplete="email" required>
@@ -14199,8 +14122,8 @@ document.addEventListener("DOMContentLoaded", function(){
       <input id="prCloudPassword" name="password" type="password" autocomplete="current-password" minlength="6" required>
     </div>
     <div class="choice-actions">
-      <button class="modal-btn primary" type="submit">登录</button>
-      <button class="modal-btn" type="submit" value="signup">注册云端账号</button>
+      <button class="modal-btn cloud-mode-link" id="prCloudSwitch" type="button">首次使用？开通云同步</button>
+      <button class="modal-btn primary" id="prCloudSubmit" type="submit">登录云端</button>
     </div>
   </form>
   <p id="prCloudStatus" role="status"></p>
