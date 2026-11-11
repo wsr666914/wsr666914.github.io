@@ -1897,6 +1897,24 @@
   .sync-recovery-box>span{ font:600 12px/1.4 var(--ui-font); color:#59677A; }
   .sync-recovery-box code{ font-size:12px; }
   .sync-modal .modal-row{ margin-top:18px; }
+  .cloud-modal{
+    margin:auto; width:min(460px,calc(100% - 32px)); max-width:none;
+    max-height:calc(100vh - 32px); padding:24px; color:#293F54;
+    font:400 14px/1.55 var(--ui-font);
+  }
+  .cloud-modal::backdrop{ background:rgba(36,48,61,.45); }
+  .cloud-modal h2{ margin:0 0 10px; font:700 22px/1.3 var(--ui-font); }
+  .cloud-modal .cloud-intro{ margin:0 0 18px; color:#526275; }
+  .cloud-modal .cloud-fields{ display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:12px 14px; margin-bottom:18px; }
+  .cloud-modal .cloud-fields label{ margin:0; color:#435A6C; font:650 14px/1.4 var(--ui-font); letter-spacing:0; }
+  .cloud-modal .cloud-fields input{ min-width:0; min-height:42px; border-color:#C5D3DE; background:#FCFDFE; font:inherit; }
+  .cloud-modal .cloud-fields input:focus{ border-color:#7295AA; box-shadow:0 0 0 3px rgba(117,152,178,.16); }
+  .cloud-modal #prCloudStatus{ margin:14px 0; padding:10px 12px; border-radius:9px; background:#EDF2F6; }
+  .cloud-modal #prCloudStatus:empty{ display:none; }
+  .cloud-modal .choice-actions[hidden]{ display:none; }
+  .cloud-modal .cloud-footer{ display:flex; justify-content:flex-end; margin-top:14px; }
+  .topnav .cloud-nav-btn{ padding:7px 9px; color:#435F77; border:1px solid #D5DFE6; border-radius:8px; background:#F3F6F9; font:650 13px/1.4 var(--ui-font); white-space:nowrap; cursor:pointer; }
+  .topnav .cloud-nav-btn:hover{ background:#E8EFF5; border-color:#B5C7D5; }
   .choice-modal{ max-width:450px; background:linear-gradient(145deg,#FDFEFC,#F3F2F7); border-color:#D7DFE7; }
   .choice-modal h3{ color:#293F54; }
   .choice-modal p{ margin:10px 0 22px; white-space:pre-line; font:400 14px/1.65 var(--ui-font); color:#526275; }
@@ -2073,8 +2091,8 @@
     <nav class="topnav">
       <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
       <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站</a>
-      <button class="modal-btn" type="button" id="siteCloudOpen">全站云同步</button>
-      <a href="#" id="navSyncCode" class="nav-code-btn" title="查看跨设备登录所需的同步码">⌁ 跨设备</a>
+      <button class="cloud-nav-btn" type="button" id="siteCloudOpen">全站云同步</button>
+      <a href="#" id="navSyncCode" class="nav-code-btn" title="管理原站账号、同步码和本机备份">账号与备份</a>
       <span class="nav-user" id="navUser"></span>
       <a href="#" id="logoutBtn" style="display:none;">退出</a>
     </nav>
@@ -2439,7 +2457,7 @@
 <!-- 身份码弹窗(多设备同步凭证) -->
 <div class="modal-bg" id="syncCodeModal">
   <div class="modal sync-modal">
-    <h3>⌁ 跨设备使用</h3>
+    <h3>账号与备份</h3>
     <p class="sync-intro">在另一台设备登录时，输入同步码和暗语。</p>
     <p class="sync-guest-tip">游客数据只保存在当前设备。注册账号后才可以跨设备使用。</p>
     <div class="sync-signed-in">
@@ -14170,21 +14188,27 @@ document.addEventListener("DOMContentLoaded", function(){
   <div class="pp-prog-track"><div class="pp-prog-fill" id="ppProgFill"></div></div>
 </div>
 
-<dialog id="prCloudDialog" aria-labelledby="prCloudTitle" style="width:min(420px,calc(100vw - 32px));border:1px solid #C7D2DD;border-radius:14px;padding:20px;color:var(--ink);background:var(--paper-soft)">
+<dialog id="prCloudDialog" class="modal choice-modal cloud-modal" aria-labelledby="prCloudTitle">
   <h2 id="prCloudTitle">论文云同步</h2>
   <form id="prCloudAuth">
-    <p>在不同设备使用同一个云端邮箱账号。</p>
-    <p><label>邮箱 <input name="email" type="email" autocomplete="email" required></label></p>
-    <p><label>云端密码 <input name="password" type="password" autocomplete="current-password" minlength="6" required></label></p>
-    <button class="modal-btn primary" type="submit">登录</button>
-    <button class="modal-btn" type="submit" value="signup">注册云端账号</button>
+    <p class="cloud-intro">在不同设备使用同一个云端邮箱账号。</p>
+    <div class="form-group cloud-fields">
+      <label for="prCloudEmail">邮箱</label>
+      <input id="prCloudEmail" name="email" type="email" autocomplete="email" required>
+      <label for="prCloudPassword">云端密码</label>
+      <input id="prCloudPassword" name="password" type="password" autocomplete="current-password" minlength="6" required>
+    </div>
+    <div class="choice-actions">
+      <button class="modal-btn primary" type="submit">登录</button>
+      <button class="modal-btn" type="submit" value="signup">注册云端账号</button>
+    </div>
   </form>
   <p id="prCloudStatus" role="status"></p>
-  <div id="prCloudActions" hidden>
+  <div class="choice-actions" id="prCloudActions" hidden>
     <button class="modal-btn primary" type="button" id="prCloudSync">比较并同步本篇</button>
     <button class="modal-btn" type="button" id="prCloudLogout">退出云端账号</button>
   </div>
-  <form method="dialog"><button class="modal-btn">关闭</button></form>
+  <form class="cloud-footer" method="dialog"><button class="modal-btn">关闭</button></form>
 </dialog>
 </body>
 </html>
