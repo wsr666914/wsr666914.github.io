@@ -1,6 +1,8 @@
 @echo off
 chcp 936 >nul
 cd /d "%~dp0"
+node check-document-import.cjs
+if errorlevel 1 exit /b 1
 set HTTPS_PROXY=http://127.0.0.1:7897
 set HTTP_PROXY=http://127.0.0.1:7897
 set ALL_PROXY=http://127.0.0.1:7897

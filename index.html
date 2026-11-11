@@ -2009,7 +2009,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
 <!-- OCR 仅在扫描件没有可用文字层时按需加载，不影响普通电子 PDF 的打开速度。 -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
@@ -5035,8 +5035,13 @@ function loadLocalPdf(data){
     data,
     cMapUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/",
     cMapPacked:true,
+    standardFontDataUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/",
     isEvalSupported:false
   }).promise;
+}
+async function hasPdfHeader(file){
+  try{ return (await file.slice(0, 1024).text()).includes("%PDF-"); }
+  catch(_){ return false; }
 }
 function pdfTextNeedsOcr(text, pageCount){
   const compact = String(text || "").replace(/\s/g, "");
@@ -5044,13 +5049,9 @@ function pdfTextNeedsOcr(text, pageCount){
   /* 文字层编码损坏时常被提取为 U+FFFD（�）；页面看起来正常，实际文本却不可用。 */
   const replacementChars = (compact.match(/\uFFFD/g) || []).length;
   if(replacementChars >= Math.max(3, compact.length * 0.02)) return true;
-  const meaningful = (compact.match(/[A-Za-z0-9\u3400-\u9fff\u3040-\u30ff\uac00-\ud7af\u0400-\u04ff]/g) || []).length;
+  const meaningful = (compact.match(/\p{L}/gu) || []).length;
   const minMeaningful = Math.max(16, Math.min(240, Math.max(1, pageCount || 1) * 6));
   if(meaningful < minMeaningful || meaningful / compact.length < 0.32) return true;
-  /* 某些旧期刊PDF不会报错，却只映射出零散字符与标点。多页论文若每页有效文本
-     明显偏少，宁可转OCR文字层；底下的原PDF画面仍保持一字不动。 */
-  const pages = Math.max(1, pageCount || 1);
-  if(pages >= 3 && meaningful >= 1000 && compact.length / pages < 850) return true;
   return false;
 }
 
@@ -6842,6 +6843,7 @@ function _getPdfOcrWorker(){
   /* Tesseract.js v5 要求多语言以数组传入；字符串“chi_sim+eng”会导致中文训练数据
      在部分浏览器中没有正确加载，于是只剩数字和英文可识别。 */
   _pdfOcrWorkerPromise = window.Tesseract.createWorker(["chi_sim", "eng"], 1, {
+    workerPath:"https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js",
     logger:function(msg){
       if(msg && msg.status === "recognizing text" && typeof msg.progress === "number"){
         _setPdfOcrStatus("正在识别扫描文字… " + Math.round(msg.progress * 100) + "%", true);
@@ -7044,9 +7046,11 @@ async function renderPdfNative(item, prText){
         const transform = (dpr !== 1) ? [dpr, 0, 0, dpr, 0, 0] : null;
         page.render({ canvasContext: ctx, viewport: viewport, transform: transform });
         /* textLayer 用同一 renderScale viewport → span 的 transform 与 canvas 完全对齐 → 光标/选区与字形同坐标 */
-        page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).then(function(tc){
+        page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).catch(function(){
+          return {items:[], styles:{}};
+        }).then(function(tc){
           const textLayerEl = document.getElementById("prPdfText_" + pageNum);
-          if(!textLayerEl) return;
+          if(!textLayerEl || !canvas.isConnected) return;
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
           const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
@@ -7059,7 +7063,7 @@ async function renderPdfNative(item, prText){
             }
             _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, renderScale).then(function(payload){
               const currentLayer = document.getElementById("prPdfText_" + pageNum);
-              if(!currentLayer) return;
+              if(currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
               const count = _renderPdfOcrWords(currentLayer, pageNum, payload, cssPageW, cssPageH);
               if(count){
                 _setPdfOcrStatus("扫描文字层已识别：可直接选中、标注、备注与翻译。", true);
@@ -12243,6 +12247,7 @@ function renderGallery(){
           if(fname.endsWith(".pdf")){
             /* PDF 并行提取(双栏检测+页眉页脚过滤) → 原文直接写入 */
             if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
+            if(!await hasPdfHeader(file)){ toast("无法读取 PDF 文件头，请检查原文件"); return; }
             toast("正在并行解析PDF……", 2000);
             let originalStored = false;
             try{ originalStored = await idbSet(pdfStorageKey(target), file); }catch(_){}
@@ -13480,9 +13485,13 @@ if(paperPdfBtn){
   paperPdfBtn.onclick = function(){
     const input = document.getElementById("paperPdfFile");
     input.value = "";
-    input.onchange = function(){
+    input.onchange = async function(){
       const file = this.files[0];
       if(!file) return;
+      if(!file.size || !/\.(pdf|docx|caj)$/i.test(file.name)){
+        toast("请选择非空的 PDF、Word（.docx）或 CAJ 文件");
+        return;
+      }
       paperEntryPdfBytes = null;
       paperEntryOcrOnly = false;
       paperEntryHtml = null;
@@ -13492,12 +13501,21 @@ if(paperPdfBtn){
       const lowMemoryImport = file.size > 32*1024*1024;
       const deferPdfParsing = lowMemoryImport;
       const fname = file.name.toLowerCase();
+      if(fname.endsWith(".pdf") && !await hasPdfHeader(file)){
+        toast("无法读取 PDF 文件头，请检查原文件");
+        return;
+      }
       if(fname.endsWith(".docx")){
         /* ---- Word(.docx)导入: 优先JSZip版面保真还原(字号/缩进/双栏),失败回退mammoth纯文本 ---- */
         if(!window.JSZip && !window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
         paperPdfBtn.innerHTML = "⇪ 解析中…";
         const reader = new FileReader();
+        reader.onerror = function(){
+          paperPdfBtn.classList.remove("busy");
+          paperPdfBtn.textContent = "⇪ 导入文档";
+          toast("无法读取 Word 文件，请重新选择");
+        };
         reader.onload = function(){
           const ab = this.result;
           /* mammoth纯文本回退(JSZip解析失败/无字号信息时) */
@@ -13516,7 +13534,7 @@ if(paperPdfBtn){
                 lines.push(t);
               }
               const text = lines.join("\n");
-              if(text.trim().length < 50){ toast("Word文档文本过少,请检查文件"); return; }
+              if(!text.trim()){ toast("Word 文档没有可读正文"); return; }
               if(paperFullTextInput){ paperFullTextInput.value = text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null;
               if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
@@ -13531,7 +13549,7 @@ if(paperPdfBtn){
           parseDocxToLayout(ab).then(function(res){
             paperPdfBtn.classList.remove("busy");
             paperPdfBtn.innerHTML = "⇪ 导入文档";
-            if(res && res.html && res.text.trim().length >= 50){
+            if(res && res.html && res.text.trim()){
               if(paperFullTextInput){ paperFullTextInput.value = res.text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null;
               paperEntryHtml = res.html; paperEntryLayout = null;
@@ -13555,6 +13573,11 @@ if(paperPdfBtn){
         paperPdfBtn.classList.add("busy");
         paperPdfBtn.innerHTML = "⇪ 解析中…";
         const reader = new FileReader();
+        reader.onerror = function(){
+          paperPdfBtn.classList.remove("busy");
+          paperPdfBtn.textContent = "⇪ 导入文档";
+          toast("无法读取 CAJ 文件，请重新选择");
+        };
         reader.onload = function(){
           const buf = new Uint8Array(this.result);
           /* 在前512KB内搜索 %PDF 魔数 */
@@ -13637,7 +13660,7 @@ if(paperPdfBtn){
           }).catch(function(){});
           return extractPdfTextEnhanced(pdf, function(d, t){
             ppProgressUpdate(70 * d / t, "本地几何解析 · 第 " + d + "/" + t + " 页");
-          }, { lowMemory: lowMemoryImport });
+          }, { lowMemory: lowMemoryImport }).catch(function(){ return null; });
         }).then(function(res){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
@@ -13660,26 +13683,16 @@ if(paperPdfBtn){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.innerHTML = "⇪ 导入文档";
           ppProgressHide(0);
-          if(paperFullTextInput){ paperFullTextInput.value = "PDF文字层解析失败：原PDF已完整保留，入册后打开全文将逐页尝试OCR。"; updatePaperEntryStats(); }
-          paperEntryFromPdf = true;
-          paperEntryOcrOnly = true;
-          paperEntryImages = null;
-          paperEntryLayout = null;
-          if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
-          paperEntrySubmit.click();
+          paperEntryPdfBytes = null;
+          toast("PDF 解析失败，请确认文件能正常打开后重试");
         });
       };
       reader.onerror = function(){
         paperPdfBtn.classList.remove("busy");
         paperPdfBtn.innerHTML = "⇪ 导入文档";
         ppProgressHide(0);
-        if(paperFullTextInput){ paperFullTextInput.value = "大PDF已完整保留：入册后打开全文将逐页显示原页面并尝试OCR。"; updatePaperEntryStats(); }
-        paperEntryFromPdf = true;
-        paperEntryOcrOnly = true;
-        paperEntryImages = null;
-        paperEntryLayout = null;
-        if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
-        paperEntrySubmit.click();
+        paperEntryPdfBytes = null;
+        toast("无法读取 PDF 文件，请重新选择");
       };
       reader.readAsArrayBuffer(file);
     };
