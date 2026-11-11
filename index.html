@@ -7446,9 +7446,57 @@ function capturePdfSelectionRects(range){
   }
   return mergePdfRects(out);
 }
+let pdfTextDrag = null;
+function pdfTextSpanAtPointer(event){
+  const element = document.elementFromPoint(event.clientX, event.clientY);
+  return element?.closest(".pr-pdf-textLayer span") || null;
+}
+document.addEventListener("mousedown", function(event){
+  pdfTextDrag = null;
+  if(event.button !== 0 || !pdfTextSpanAtPointer(event)) return;
+  const root = event.target.closest("#prPdfRoot");
+  if(root) pdfTextDrag = {root, overText:true, last:null};
+}, true);
+document.addEventListener("mousemove", function(event){
+  if(!pdfTextDrag) return;
+  if(!(event.buttons & 1)){ pdfTextDrag = null; return; }
+  const span = pdfTextSpanAtPointer(event);
+  const overText = !!(span && pdfTextDrag.root.contains(span));
+  if(pdfTextDrag.overText && !overText) keepPdfDragSelection();
+  pdfTextDrag.overText = overText;
+}, true);
+function keepPdfDragSelection(){
+  const drag = pdfTextDrag;
+  if(!drag || !drag.root.isConnected) return;
+  const selection = window.getSelection();
+  if(!selection) return;
+  if(drag.overText){
+    if(!selection.isCollapsed && drag.root.contains(selection.anchorNode) && drag.root.contains(selection.focusNode)){
+      drag.last = [selection.anchorNode, selection.anchorOffset, selection.focusNode, selection.focusOffset];
+    }
+    return;
+  }
+  if(!drag.last) return;
+  const [anchor, anchorOffset, focus, focusOffset] = drag.last;
+  if(!anchor.isConnected || !focus.isConnected) return;
+  if(selection.anchorNode !== anchor || selection.anchorOffset !== anchorOffset ||
+      selection.focusNode !== focus || selection.focusOffset !== focusOffset){
+    selection.setBaseAndExtent(anchor, anchorOffset, focus, focusOffset);
+  }
+}
+document.addEventListener("mouseup", function(event){
+  if(event.button !== 0 || !pdfTextDrag) return;
+  const span = pdfTextSpanAtPointer(event);
+  pdfTextDrag.overText = !!(span && pdfTextDrag.root.contains(span));
+  keepPdfDragSelection();
+  pdfTextDrag = null;
+}, true);
+window.addEventListener("blur", function(){ pdfTextDrag = null; });
+
 let pdfSelectionFrame = 0;
 const pdfSelectionOverlays = new Map();
 document.addEventListener("selectionchange", function(){
+  keepPdfDragSelection();
   if(pdfSelectionFrame) return;
   pdfSelectionFrame = requestAnimationFrame(function(){
     pdfSelectionFrame = 0;
