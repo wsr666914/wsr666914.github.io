@@ -8722,6 +8722,7 @@ const KB_HIST_PAUSE = 800;
        一并纳入选区。方案: mouseup 时检查选区内所有命中的 layout-block,
        若 x 坐标跳变 > 栏间阈值(60px,双栏中分)或 block 不连续,则裁剪选区。 */
     prText.addEventListener("mouseup", function(){
+      return; /* 保留用户原始拖选范围，避免松开鼠标后选区跳动。 */
       try{
         if(!prState || !prState.itemId) return;
         if(!prText.classList.contains("pr-layout-mode")) return;
@@ -10034,21 +10035,18 @@ async function runAiRead(){
     toast("选中文字过短,请选择更完整的一段");
     return;
   }
-  /* 给选中文字加临时高亮标识(非永久,关闭/下次解读时自动移除) */
-  if(selRange){
-    markAiSelection(selRange);
-    sel.removeAllRanges();  /* 清除浏览器选区,让mark显示高亮 */
-  }
-  const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
-  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
-
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    /* 未配置: 自动弹出配置窗(已预填智谱免费模型) */
-    resultEl.innerHTML = '<div class="pa-mute">尚未接入 AI · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">接入免费 GLM-4-Flash</a> 后即可解读选中文字</div>';
+    clearAiSelectionMark();
+    resultEl.innerHTML = '<div class="pa-mute">尚未接入 AI · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">配置 AI</a> 后即可解读选中文字</div>';
     openAiCfgModal();
     return;
   }
+  /* 给选中文字加临时高亮标识(非永久,关闭/下次解读时自动移除) */
+  clearAiSelectionMark();
+  const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
+  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
+
   if(cfg && cfg.key){
     /* 定位选中文本的上下文(前500字+后500字) */
     const full = item.fullText || "";
