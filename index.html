@@ -2118,10 +2118,10 @@
       <button id="entrySubmit" class="composer-submit">添加条目</button>
     </div>
     <div class="composer-predict" id="predict"></div>
-    <div class="composer-cats">
-      <span class="cc-label">选择分类</span>
+    <details class="composer-cats">
+      <summary class="cc-label">选择分类（可展开）</summary>
       <div class="cc-chips" id="composerCats"></div>
-    </div>
+    </details>
     <div class="composer-brand" id="composerBeverageBrand" style="display:none">
       <span class="cb-label" id="cbLabelText">小门类 <span class="cb-sub">可自建</span></span>
       <div class="cb-row">
@@ -2145,6 +2145,7 @@
 </section>
 
 <section class="toolbar">
+  <span id="saveSyncStatus" role="status" aria-live="polite" style="font:600 12px/1.5 var(--ui-font);color:#536c83">保存状态将在修改后显示</span>
   <div class="search">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
     <input id="searchInput" type="text" aria-label="搜索志录" placeholder="搜索条目名称" />
@@ -2328,6 +2329,7 @@
         <span class="pr-sub" id="prMeta"></span>
       </div>
       <div class="pr-tools">
+        <span id="readerSaveSyncStatus" role="status" aria-live="polite" style="font:600 12px/1.4 var(--ui-font);color:#536c83"></span>
         <div class="pr-highlighter" id="prHighlighter">
           <span class="pr-hl-label">标注</span>
           <button class="pr-hl-color" data-color="#FFE08A" style="background:#FFE08A" title="淡黄"></button>
@@ -3043,9 +3045,21 @@ function ensureRecoveryForUser(username){
    传输方式: POST + key/value全在URL query(实测textdb仅query参数真实生效,body方式假成功)
    大数据分块: 每块2800字符写 key_pN,主key最后写 {chunked,n,ts} 原子标记 */
 let _syncPushTimer = null;
+let _syncStatusVersion = 0;
+function setSaveSyncStatus(message){
+  ["saveSyncStatus", "readerSaveSyncStatus"].forEach(function(id){
+    const el = document.getElementById(id);
+    if(el) el.textContent = message;
+  });
+}
 const SYNC_CHUNK = 2800;
 function scheduleSyncPush(){
-  if(!currentUser || !getMySyncCode()) return;
+  _syncStatusVersion++;
+  if(!currentUser || currentUser === GUEST_USER || !getMySyncCode()){
+    setSaveSyncStatus("已保存到本机 · 未开启云端同步");
+    return;
+  }
+  setSaveSyncStatus("已保存到本机 · 等待云端同步（PDF 原文件保存在本机）");
   if(_syncPushTimer) clearTimeout(_syncPushTimer);
   _syncPushTimer = setTimeout(syncPushNow, 10000);
 }
@@ -3083,6 +3097,8 @@ async function fetchWithTimeout(url, opts, ms){
 }
 async function syncPushNow(){
   if(!currentUser) return;
+  const statusVersion = _syncStatusVersion;
+  const statusUser = currentUser;
   const code = getMySyncCode();
   if(!code) return;
   const users = getUsers();
@@ -3106,14 +3122,17 @@ async function syncPushNow(){
     toast("数据量较大,同步中(~" + Math.ceil(bodyStr.length/2800) + "块分块上传),请勿关闭页面", 5000);
   }
   try{
+    setSaveSyncStatus("已保存到本机 · 云端同步中（PDF 原文件保存在本机）");
     const ok = await syncWritePayload(code, payload);
     if(ok){
       try{ localStorage.setItem(STORAGE_KEY + "_syncts", String(payload.ts)); }catch(e){}
+      if(statusVersion === _syncStatusVersion && statusUser === currentUser) setSaveSyncStatus("已保存到本机 · 记录已同步（PDF 原文件保存在本机）");
     }else{
-      toast("云端同步失败(服务波动),稍后自动重试", 4000);
+      if(statusVersion === _syncStatusVersion && statusUser === currentUser) setSaveSyncStatus("已保存到本机 · 云端同步失败，请检查网络");
+      toast("云端同步失败，请检查网络；下次保存时会再次尝试", 4000);
     }
   }catch(e){
-    /* 网络失败静默,下次操作再推 */
+    if(statusVersion === _syncStatusVersion && statusUser === currentUser) setSaveSyncStatus("已保存到本机 · 云端同步失败，请检查网络");
   }
 }
 
@@ -3698,7 +3717,7 @@ function saveState(items = state.items, pendingReview = state.pendingReview, tra
     console.warn("save failed", e);
     return false;
   }).then(function(ok){
-    if(!ok) toast("保存失败，当前改动仍在页面中。请保留页面，检查浏览器存储后重试。", 5500);
+    if(!ok){ if(typeof setSaveSyncStatus === "function") setSaveSyncStatus("本机保存失败，请保留页面并重试"); toast("保存失败，当前改动仍在页面中。请保留页面，检查浏览器存储后重试。", 5500); }
     else if(STORAGE_KEY === key) scheduleSyncPush();
     return ok;
   });
