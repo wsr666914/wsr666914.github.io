@@ -9,7 +9,7 @@ for (const [, attrs, source] of scripts) {
   if (!/\bsrc=/.test(attrs)) new vm.Script(source);
 }
 
-const start = html.indexOf("function loadLocalPdf(data)");
+const start = html.indexOf("function importedPaperTitle(filename, metadataTitle)");
 const end = html.indexOf("function extractPdfTextEnhanced(", start);
 assert.ok(start >= 0 && end > start, "找不到共享 PDF 读取函数");
 let options;
@@ -32,6 +32,10 @@ assert.equal(ctx.pdfTextNeedsOcr("，。：……１２３".repeat(30), 1), true
 assert.equal(ctx.pdfTextNeedsOcr("2026111120261111".repeat(8), 1), true);
 assert.equal(ctx.pdfTextNeedsOcr("这是一份可直接读取的旧版中文论文测试文字。".repeat(70), 4), false);
 assert.equal(ctx.pdfTextNeedsOcr("正常文字夹杂损坏字符".repeat(15) + "�".repeat(20), 1), true);
+assert.equal(ctx.importedPaperTitle("从排日账看晚清徽州乡民的活动空间.pdf", "摘要：文章主要内容"), "从排日账看晚清徽州乡民的活动空间");
+assert.equal(ctx.importedPaperTitle("download (2).PDF", "从排日账看晚清徽州乡民的活动空间"), "从排日账看晚清徽州乡民的活动空间");
+assert.equal(ctx.importedPaperTitle("扫描件01.pdf", "摘要：文章主要内容"), "扫描件01");
+assert.equal(ctx.importedPaperTitle("论文定稿.DOCX"), "论文定稿");
 Promise.all([
   ctx.hasPdfHeader(new Blob(["%PDF-1.6\n"])),
   ctx.hasPdfHeader(new Blob(["not a PDF"]))

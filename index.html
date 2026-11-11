@@ -922,7 +922,6 @@
   .pr-chat-row button:hover{ filter:brightness(1.15); }
 
   /* ===== 删除模式按钮 + 检查标红 ===== */
-  .pr-del-btn.on{ border-color:#B0432C; background:rgba(176,67,44,.1); color:#B0432C; }
   #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
 
   /* ===== 译文行内展示 ===== */
@@ -1225,7 +1224,6 @@
   }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer rect{ pointer-events:none; }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer .pdf-note-badge{ cursor:pointer; pointer-events:auto; }
-  .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-ai{ fill:rgba(100,150,255,.22); stroke:rgba(80,120,200,.6); stroke-width:1px; }
   .pr-text .pr-pdf-page .pr-pdf-svgLayer .hl-box:hover{ filter:brightness(.92); }
   .pr-text > p, .pr-text > div{
     margin:0 0 14px; text-indent:0;
@@ -1418,13 +1416,6 @@
     cursor:pointer; transition:filter .15s;
   }
   mark.hl:hover{ filter:brightness(.92); }
-  /* AI解读选中的临时高亮(非永久标注,关闭/下次解读时自动移除) */
-  mark.pr-ai-selection{
-    background:linear-gradient(180deg, rgba(100,150,255,.22), rgba(100,150,255,.32));
-    border-bottom:2px solid rgba(80,120,200,.6);
-    border-radius:2px; padding:1px 2px; color:inherit;
-    cursor:default; pointer-events:none;
-  }
 
   /* ===== 格式按钮 + 备注样式 ===== */
   .pr-hl-sep{ width:1px; height:20px; background:var(--line); margin:0 3px; flex-shrink:0; }
@@ -5030,6 +5021,18 @@ function parseDocxToLayout(arrayBuffer){
 
 /* PDF文字层质量判断：有些扫描件/乱码PDF会提取出大量标点，但几乎没有真实文字。
    这种情况必须视为扫描件并启用OCR，不能只按“字符总数”判断。 */
+function importedPaperTitle(filename, metadataTitle){
+  const name = String(filename || "").replace(/\.(pdf|docx|caj)$/i, "").trim();
+  const generic = !name || /^(?:[\d\s._-]+|(?:untitled|document|download|full[ _-]?text|paper|scan|未命名|下载|扫描件|全文)[\s._()（）-]*\d*[)）]?)$/i.test(name);
+  if(!generic) return name;
+  const metadata = String(metadataTitle || "").trim();
+  if(metadata.length <= 160 && !/[\r\n�]/.test(metadata) &&
+     !/^(摘要|关键词|引言|作者|参考文献|目录|Abstract\b|Introduction\b|References\b|Microsoft Word\b)/i.test(metadata) &&
+     (metadata.match(/\p{L}/gu) || []).length >= 6){
+    return metadata;
+  }
+  return name || "未命名论文";
+}
 function loadLocalPdf(data){
   return pdfjsLib.getDocument({
     data,
@@ -5908,9 +5911,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
   const isEssay = category === "essay";
   const trimmedText = fullText.trim();
   if(!trimmedText) return { error:"empty" };
-  /* 提取标题:用户指定 > 首个"真实标题行"(跳过作者名/学校/文献编号等噪声行) > 前40字
-     ppLooksLikeTitle: 排除元信息行(文章编号/DOI/分类号/基金/收稿)、纯作者行、单位行 */
-  let paperTitle = (title || "").trim();
+  let paperTitle = (title || "").trim() || "未命名论文";
   if(isEssay){
     /* 随笔: 以写作日期作为标题显示, 不从正文自行提取文字作标题 */
     if(writtenAt){
@@ -5920,23 +5921,6 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
       }
     }
     if(!paperTitle) paperTitle = "无期随笔";
-  }
-  if(!isEssay && !paperTitle){
-    const lines = trimmedText.split(/\r?\n/);
-    for(let i=0; i<lines.length && i<8; i++){
-      const lt = lines[i].trim();
-      if(lt && lt.length <= 120 && lt.length >= 3 && ppLooksLikeTitle(lt)){
-        paperTitle = lt;
-        break;
-      }
-    }
-    if(!paperTitle){
-      const lt = lines[0] ? lines[0].trim() : "";
-      paperTitle = (lt && lt.length >= 3 && lt.length <= 120) ? lt : trimmedText.slice(0, 40).replace(/\s+/g," ");
-    }
-    /* 标题内的作者名/单位/上标序号/文献编号剥离 */
-    const cleanedTitle = ppCleanTitle(paperTitle, trimmedText);
-    if(cleanedTitle && cleanedTitle.length >= 3) paperTitle = cleanedTitle;
   }
   /* 去重: 论文按同名; 随笔按正文内容(允许同一天录入多篇不同随笔) */
   const low = paperTitle.toLowerCase();
@@ -5976,7 +5960,7 @@ function addPaper(title, fullText, analysis, structured, category, writtenAt, la
 
 
 /* 论文查看器状态 */
-let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, revision:0, saving:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, delMode:false, pdfEditMode:false, pdfPageObserver:null, translateMode:false, translateRequestId:0, chat:[] };
+let prState = { itemId:null, activeColor:null, activeFmt:null, dirty:false, revision:0, saving:false, snapshot:null, history:[], redoHistory:[], kbHistPushed:false, zoom:1, pdfEditMode:false, pdfPageObserver:null, translateMode:false, translateRequestId:0, chat:[] };
 
 /* 推入操作历史(撤销用): 记录全文+结构化排版+版面保真块变更前的快照。
    注意: 键盘编辑不再调用此函数(改用浏览器原生undo)。
@@ -6107,7 +6091,6 @@ function openPaperReader(itemId){
   }
 
   /* 左侧栏已是静态AI工具面板:重置结果区/聊天区状态 */
-  prState.delMode = false;
   prState.chat = [];
   const aiResult = document.getElementById("prAiResult");
   if(aiResult){
@@ -6117,8 +6100,6 @@ function openPaperReader(itemId){
   if(chatPanel) chatPanel.classList.remove("show");
   const chatLog = document.getElementById("prChatLog");
   if(chatLog) chatLog.innerHTML = "";
-  const delModeBtn = document.getElementById("prDelMode");
-  if(delModeBtn) delModeBtn.classList.remove("on");
   const translateBtn = document.getElementById("prTranslate");
   if(translateBtn) translateBtn.classList.remove("on");
 
@@ -6161,9 +6142,6 @@ function openPaperReader(itemId){
       this.classList.toggle("on", prState.pdfEditMode);
       this.textContent = prState.pdfEditMode ? "✓ 退出编辑" : "✎ 编辑文字";
       if(prState.pdfEditMode){
-        prState.delMode = false;
-        const delBtn = document.getElementById("prDelMode");
-        if(delBtn) delBtn.classList.remove("on");
         toast("编辑模式已开启:蓝框是可编辑文字块,点击任一文字即可修改");
       }else{
         _closePdfObjectEditor();
@@ -6286,7 +6264,7 @@ function openPaperReader(itemId){
    /* 格式按钮: 备注 (排除删除和翻译按钮)
      Word式交互: 有选区→直接应用/取消;无选区→进模式(再点退出) */
   for(let i=0; i<fmtBtns.length; i++){
-    if(fmtBtns[i].id === "prDelMode" || fmtBtns[i].id === "prTranslate") continue;
+    if(fmtBtns[i].id === "prTranslate") continue;
     fmtBtns[i].addEventListener("mousedown", function(e){ e.preventDefault(); });
     fmtBtns[i].onclick = async function(){
       const fmt = this.dataset.fmt;
@@ -6981,9 +6959,6 @@ async function renderPdfNative(item, prText){
   prText.contentEditable = "false";
   prText.classList.remove("pdf-edit-mode");
   prState.pdfEditMode = false;
-  prState.delMode = false;
-  const pdfDeleteBtn = document.getElementById("prDelMode");
-  if(pdfDeleteBtn){ pdfDeleteBtn.hidden = true; pdfDeleteBtn.classList.remove("on"); }
 
   /* ===== 与PDF.js官方demo 100%对齐的坐标系方案: 只用CSS像素, 不混用pt + transform scale =====
      - 页面容器的宽高 = CSS px = pageW/pt * CSS_PT_TO_PX(=96/72=1.333...) * renderScale
@@ -7855,9 +7830,6 @@ function renderLayoutPaper(item, prText){
   }
   prText.innerHTML = html;
   prText.contentEditable = "false";
-  prState.delMode = false;
-  const pdfDeleteBtn = document.getElementById("prDelMode");
-  if(pdfDeleteBtn){ pdfDeleteBtn.hidden = true; pdfDeleteBtn.classList.remove("on"); }
   /* 标记版面保真模式: CSS取消单栏740px限宽,让PDF页自由展开居中,左右留白对称 */
   prText.classList.add("pr-layout-mode");
   return true;
@@ -7870,8 +7842,6 @@ function renderPaperText(item){
   prText.classList.remove("pr-pdf-native");
   prText.classList.remove("pdf-edit-mode");
   prText.contentEditable = "true";
-  const pdfDeleteBtn = document.getElementById("prDelMode");
-  if(pdfDeleteBtn) pdfDeleteBtn.hidden = false;
   /* 随笔: 纯文章展示 —— 无标题层级/无结构化/无参考文献, 仅按段落渲染正文 */
   if(item.category === "essay"){
     renderEssayText(item, prText);
@@ -8437,7 +8407,6 @@ async function closePaperReader(){
     }
   }
   if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
-  clearAiSelectionMark();
   _closePdfObjectEditor();
   const translations = document.querySelectorAll(".pr-translation");
   for(let i=0; i<translations.length; i++) translations[i].remove();
@@ -8449,7 +8418,6 @@ async function closePaperReader(){
   prState.itemId = null;
   prState.activeColor = null;
   prState.activeFmt = null;
-  prState.delMode = false;
   prState.snapshot = null;
   prState.chat = [];
   const popup = document.getElementById("prNotePopup");
@@ -8837,95 +8805,6 @@ const KB_HIST_PAUSE = 800;
       e.preventDefault();
       const t = (e.clipboardData || window.clipboardData).getData("text/plain");
       if(t) document.execCommand("insertText", false, t);
-    });
-    /* ====== 版面保真模式选区校正 ======
-       layout 模式下所有 block 都在同一父容器下绝对定位,
-       浏览器默认视为同一文本流 → 拖选时会把相邻 x/y 的块(左侧栏/前一行末尾/不相邻块)
-       一并纳入选区。方案: mouseup 时检查选区内所有命中的 layout-block,
-       若 x 坐标跳变 > 栏间阈值(60px,双栏中分)或 block 不连续,则裁剪选区。 */
-    prText.addEventListener("mouseup", function(){
-      return; /* 保留用户原始拖选范围，避免松开鼠标后选区跳动。 */
-      try{
-        if(!prState || !prState.itemId) return;
-        if(!prText.classList.contains("pr-layout-mode")) return;
-        const sel = window.getSelection();
-        if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
-        const range = sel.getRangeAt(0);
-        /* 取选区覆盖的所有 layout-block 元素 */
-        const blocks = [];
-        const walker = document.createTreeWalker(prText, NodeFilter.SHOW_ELEMENT, {
-          acceptNode: function(n){
-            if(n.nodeType !== 1) return NodeFilter.FILTER_REJECT;
-            if(!n.classList || !n.classList.contains("pr-layout-block")) return NodeFilter.FILTER_REJECT;
-            return range.intersectsNode(n) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
-          }
-        }, false);
-        let bn;
-        while((bn = walker.nextNode())){
-          /* 直接读 dataset.x/data-top(渲染时写入,单位pt),避免style.left带单位解析错 */
-          const x = parseFloat(bn.getAttribute("data-x") || "");
-          const y = parseFloat(bn.getAttribute("data-top") || "");
-          blocks.push({ el: bn, x: isNaN(x) ? -1 : x, y: isNaN(y) ? -1 : y });
-        }
-        if(blocks.length <= 1) return;
-        /* 按 y 降序(上→下)再按 x 排序,得到视觉顺序(坐标单位统一为pt) */
-        blocks.sort(function(a,b){
-          if(Math.abs(a.y - b.y) > 3) return b.y - a.y;
-          return a.x - b.x;
-        });
-        /* 相邻块的 x/ y 跳变阈值(单位pt, 60px ≈ 45pt 为双栏栏间距典型值) */
-        const COL_GAP_PT = 45;
-        const PAGE_Y_JUMP_PT = 30;
-        /* 计算相邻块间的 x/y 跳跃: >阈值 = 跨栏或不连续,裁剪到跳跃之前 */
-        let splitIdx = -1;
-        for(let i=1; i<blocks.length; i++){
-          const prev = blocks[i-1], cur = blocks[i];
-          /* y 在同一行(<=3pt差)的前提下 x 跳变>COL_GAP = 中间有大间距(双栏中分/断行留白) */
-          if(Math.abs(prev.y - cur.y) <= 3 && (cur.x - prev.x) > COL_GAP_PT){
-            splitIdx = i; break;
-          }
-          /* 翻页/跳段检测: prev在页尾右栏,cur在下一页/下段左栏(x突然从大→小,y反向跳变大) */
-          if(prev.x > 150 && cur.x < 100 && (cur.y - prev.y) > PAGE_Y_JUMP_PT){
-            splitIdx = i; break;
-          }
-        }
-        if(splitIdx < 0) return;
-        /* 判断拖选方向: anchor 在视觉顺序中的位置 < focus 的位置 → 正向选,裁剪focus;否则裁剪anchor */
-        const startEl = range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement;
-        const endEl = range.endContainer.nodeType === 1 ? range.endContainer : range.endContainer.parentElement;
-        const startBlock = blocks.find(function(b){ return b.el === startEl || b.el.contains(startEl); });
-        const endBlock = blocks.find(function(b){ return b.el === endEl || b.el.contains(endEl); });
-        const startIdx = startBlock ? blocks.indexOf(startBlock) : -1;
-        const endIdx = endBlock ? blocks.indexOf(endBlock) : -1;
-        /* splitIdx 是第一个非法块,用户若正向选(选到split之后)→ 裁到 splitIdx-1 末尾;反向选则裁到 splitIdx 开头 */
-        const forward = endIdx >= splitIdx;
-        if(forward){
-          const lastOk = blocks[splitIdx - 1];
-          if(lastOk && lastOk.el && lastOk.el.lastChild){
-            const endNode = lastOk.el.lastChild;
-            const endLen = endNode.nodeValue ? endNode.nodeValue.length : 0;
-            try{
-              const newRange = document.createRange();
-              newRange.setStart(range.startContainer, range.startOffset);
-              newRange.setEnd(endNode, endLen);
-              sel.removeAllRanges();
-              sel.addRange(newRange);
-            }catch(_){}
-          }
-        }else{
-          const firstBad = blocks[splitIdx];
-          if(firstBad && firstBad.el && firstBad.el.firstChild){
-            const startNode = firstBad.el.firstChild;
-            try{
-              const newRange = document.createRange();
-              newRange.setStart(startNode, 0);
-              newRange.setEnd(range.endContainer, range.endOffset);
-              sel.removeAllRanges();
-              sel.addRange(newRange);
-            }catch(_){}
-          }
-        }
-      }catch(_){ /* 选区校正失败不报错,静默放弃裁剪 */ }
     });
   }
   if(document.readyState === "complete") hook();
@@ -9710,26 +9589,6 @@ function ppSrcHasAuthorLine(src, name){
   return false;
 }
 
-/* ---- 7b5. 标题行判定: 排除元信息行/纯作者行/单位行,返回true表示可能是论文标题 ---- */
-function ppLooksLikeTitle(line){
-  if(!line) return false;
-  const t = line.trim();
-  if(!t || t.length < 3 || t.length > 120) return false;
-  /* 元信息行: 文章编号/DOI/中图分类号/文献标识码/基金/收稿/网络首发/作者简介等 */
-  if(/^(文章编号|收稿日期|修回日期|网络首发|基金项目|基金资助|作者简介|作者贡献|通信作者|通讯作者|中图分类号|文献标识码|分类号|标识码|DOI|doi|引用本文|版权|数据可用性)/.test(t)) return false;
-  if(/^(Vol\.|Volume\s+\d+|No\.?\s*\d+|\d{4}\s*,?\s*(Vol|No)|ISSN|ISBN)\b/i.test(t)) return false;
-  if(/^\d{4}[-年]\d{2}[-月]\d{2}日?/.test(t)) return false;
-  /* 纯作者行: 整行仅由逗号/顿号分隔的2-8个中文短名组成(如"张三,李四,王五")
-     注意: 若行内含标题文字(如"张三,李四,王五 基于...研究")则不是纯作者行,不拒绝 */
-  if(/^[\u4e00-\u9fa5]{2,4}(?:[,，、;；]\s*[\u4e00-\u9fa5]{2,4}){1,7}$/.test(t) && t.length <= 40) return false;
-  /* 纯作者行: 整行仅由空格分隔的2-6个中文短名组成(如"王小明 李小红 张伟") */
-  if(/^[\u4e00-\u9fa5]{2,4}(?:\s+[\u4e00-\u9fa5]{2,4}){1,5}$/.test(t) && t.length <= 26) return false;
-  if(/^[A-Z][a-zA-Z.\-']{2,20}([,，]\s*[A-Z][a-zA-Z.\-']{2,20}){1,4}$/.test(t) && t.length <= 50) return false;
-  /* 单位行: (xx大学 xx学院,城市 邮编) 或 xx大学 xx学院 */
-  if(/^[（(][^()（）]{4,70}(大学|学院|研究所|研究院|医院|实验室|公司|学报)[^()（）]*[)）]\s*$/.test(t)) return false;
-  if(/^[\u4e00-\u9fa5]{2,30}(大学|学院|研究所|研究院|医院|实验室|公司)\s*[，,]?\s*(计算机|信息|电子|机械|经济|管理|数学|物理|化学|生物|材料|自动化|软件|网络|数据|人工智能)[\u4e00-\u9fa5]{0,20}$/.test(t) && t.length <= 50) return false;
-  return true;
-}
 
 /* ---- 7b6. 标题清洗(模块级): 剥离混入标题的作者名/单位/学校/上标序号/文献编号
    · 行首: 元信息号(文章编号/DOI/中图分类号/文献标识码)、作者名前缀"张三,李四 标题"
@@ -9980,28 +9839,6 @@ async function aiStructuredReformat(fullText, onProgress, onStage, opts){
 
 /* ---- 7e. (已按用户要求移除AI后台精读:导入即保真排版,后续不再AI重排) ---- */
 
-/* ---- 8. 删除同步: 把删除的文本从structured各字段移除 ---- */
-function applyDeletionToStructured(item, removedTexts){
-  const st = item && item.structured;
-  if(!st) return;
-  const rms = Array.isArray(removedTexts) ? removedTexts : [removedTexts];
-  if(rms.length === 0) return;
-  function cut(s){
-    if(!s) return s;
-    for(let i=0; i<rms.length; i++){ s = s.split(rms[i]).join(""); }
-    return s.replace(/\s{2,}/g, " ").trim();
-  }
-  st.title = cut(st.title);
-  st.abstract = cut(st.abstract);
-  if(st.keywords) st.keywords = st.keywords.map(cut).filter(Boolean);
-  if(st.sections) for(let i=0; i<st.sections.length; i++){
-    const sec = st.sections[i];
-    sec.heading = cut(sec.heading);
-    sec.paras = (sec.paras || []).map(cut).filter(function(p){ return p && p.length > 1; });
-  }
-  if(st.references) st.references = st.references.map(cut).filter(function(r){ return r && r.length > 2; });
-  if(st.sections) st.sections = st.sections.filter(function(sec){ return sec.heading || (sec.paras && sec.paras.length > 0); });
-}
 
 let paperFindJob = 0, paperFindHits = [], paperFindIndex = -1, paperPanel = "", paperThumbs;
 const researchEl = id => document.getElementById(id);
@@ -10244,136 +10081,6 @@ researchEl("prPdfExport").onclick = async function(){
 };
 
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
-/* AI解读选中文字后临时高亮(非永久).  _aiSelMark 在旧模式=mark DOM元素, 新模式=SVG rect元素数组
-   兼容两种渲染模式: pr-layout-mode / fullText 走 DOM mark; pr-pdf-native 走 SVG 矩形 */
-let _aiSelMark = null;  /* 可能是 DOM mark 元素 或 SVG rect 的数组 */
-function clearAiSelectionMark(){
-  if(!_aiSelMark) return;
-  if(Array.isArray(_aiSelMark)){
-    /* pr-pdf-native 模式: SVG rect数组,逐个移除 */
-    for(let i=0; i<_aiSelMark.length; i++){
-      const r = _aiSelMark[i];
-      if(r && r.parentNode) r.parentNode.removeChild(r);
-    }
-  }else if(_aiSelMark.parentNode){
-    /* 旧模式: mark元素 */
-    const parent = _aiSelMark.parentNode;
-    while(_aiSelMark.firstChild) parent.insertBefore(_aiSelMark.firstChild, _aiSelMark);
-    parent.removeChild(_aiSelMark);
-    parent.normalize && parent.normalize();
-  }
-  _aiSelMark = null;
-}
-/* 根据range在textLayer中命中的span,并在svgLayer画蓝色临时标识(pr-pdf-native模式) */
-function _markAiSelNative(range, searchText){
-  if(!range || !searchText) return null;
-  /* 收集 range 内的 span, 并定位页码 + 矩形坐标(pt) */
-  const startEl = (range.startContainer.nodeType === 1 ? range.startContainer : range.startContainer.parentElement).closest(".pr-pdf-textLayer > span");
-  const endEl   = (range.endContainer.nodeType   === 1 ? range.endContainer   : range.endContainer.parentElement  ).closest(".pr-pdf-textLayer > span");
-  if(!startEl || !endEl) return null;
-  const p1 = parseInt((startEl.closest(".pr-pdf-page").dataset.page) || "1");
-  const p2 = parseInt((endEl.closest(".pr-pdf-page").dataset.page) || "1");
-  const rows = [];  /* {page, x1, x2, y, h} */
-  const pushSpan = function(sp, pg){
-    const x = parseFloat(sp.dataset.x || "0");
-    const y = parseFloat(sp.dataset.top || "0");
-    const w = parseFloat(sp.dataset.w || "8");
-    const h = parseFloat(sp.dataset.h || "12");
-    let row = null;
-    for(let ri=rows.length-1; ri>=0; ri--){
-      if(rows[ri].page === pg && Math.abs(rows[ri].y - y) <= 3){ row = rows[ri]; break; }
-    }
-    if(!row){ row = { page:pg, y:y, x1:x, x2:x+w, h:h }; rows.push(row); }
-    else{ row.x1 = Math.min(row.x1, x); row.x2 = Math.max(row.x2, x+w); row.h = Math.max(row.h, h); }
-  };
-  /* 遍历 startEl → endEl 之间所有 span(含) */
-  if(p1 === p2){
-    const tLayer = startEl.parentElement;
-    const spans = tLayer.querySelectorAll("span");
-    let inR = false;
-    for(let i=0; i<spans.length; i++){
-      const sp = spans[i];
-      if(sp === startEl) inR = true;
-      if(inR) pushSpan(sp, p1);
-      if(sp === endEl) break;
-    }
-  }else{
-    for(let p=p1; p<=p2; p++){
-      const tLayer = document.getElementById("prPdfText_" + p);
-      if(!tLayer) continue;
-      const spans = tLayer.querySelectorAll("span");
-      for(let i=0; i<spans.length; i++){
-        const sp = spans[i];
-        if(p === p1 && sp === startEl.previousSibling) continue; /* 从startEl开始 */
-        if(p === p1){
-          if(!containsInOrder(sp, startEl)) continue;
-          pushSpan(sp, p);
-          if(sp === endEl && p === p2) break;
-        }else if(p === p2){
-          pushSpan(sp, p);
-          if(sp === endEl) break;
-        }else{
-          pushSpan(sp, p);
-        }
-      }
-    }
-  }
-  if(!rows.length) return null;
-  /* 逐页画 SVG rect(蓝色渐变+边框), 保存到数组供clearAiSel移除 */
-  const rects = [];
-  for(let ri=0; ri<rows.length; ri++){
-    const row = rows[ri];
-    const svg = document.getElementById("prPdfSvg_" + row.page);
-    if(!svg) continue;
-    const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("x", String(Math.max(0, row.x1 - 1)));
-    rect.setAttribute("y", String(Math.max(0, row.y - 1)));
-    rect.setAttribute("width", String(Math.max(4, row.x2 - row.x1 + 2)));
-    rect.setAttribute("height", String(Math.max(8, row.h + 2)));
-    rect.setAttribute("class", "hl-ai");
-    rect.setAttribute("rx", "2");
-    svg.appendChild(rect);
-    rects.push(rect);
-  }
-  return rects;
-}
-/* 判断a在DOM顺序中是否等于b或在b之后 (辅助函数) */
-function containsInOrder(a, b){
-  if(a === b) return true;
-  return (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_PRECEDING) !== 0;
-}
-function markAiSelection(range){
-  clearAiSelectionMark();
-  if(!range || range.collapsed) return null;
-  const prTextEl = document.getElementById("prText");
-  const isPdfNativeMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
-  if(isPdfNativeMode){
-    const rects = _markAiSelNative(range, range.toString().trim());
-    if(rects && rects.length){ _aiSelMark = rects; return rects; }
-    return null;
-  }
-  try{
-    /* 尝试surroundContents(选区在同一文本节点内时可用) */
-    const mark = document.createElement("mark");
-    mark.className = "pr-ai-selection";
-    mark.setAttribute("contenteditable", "false");
-    range.surroundContents(mark);
-    _aiSelMark = mark;
-    return mark;
-  }catch(_){
-    /* surroundContents失败(选区跨多节点) → 用extractContents+insertNode */
-    try{
-      const mark = document.createElement("mark");
-      mark.className = "pr-ai-selection";
-      mark.setAttribute("contenteditable", "false");
-      const frag = range.extractContents();
-      mark.appendChild(frag);
-      range.insertNode(mark);
-      _aiSelMark = mark;
-      return mark;
-    }catch(_2){ return null; }
-  }
-}
 async function runAiRead(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item || !item.fullText){ toast("当前无全文"); return; }
@@ -10383,9 +10090,7 @@ async function runAiRead(){
   /* 获取当前选中的文字 */
   const sel = window.getSelection();
   let selectedText = "";
-  let selRange = null;
   if(sel && !sel.isCollapsed && sel.rangeCount > 0){
-    selRange = sel.getRangeAt(0).cloneRange();
     selectedText = sel.toString().replace(/\u00A0/g, "\n").trim();
   }
   if(!selectedText){
@@ -10399,13 +10104,10 @@ async function runAiRead(){
   }
   const cfg = getAiConfig();
   if(!cfg || !cfg.key){
-    clearAiSelectionMark();
     resultEl.innerHTML = '<div class="pa-mute">尚未接入 AI · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">配置 AI</a> 后即可解读选中文字</div>';
     openAiCfgModal();
     return;
   }
-  /* 给选中文字加临时高亮标识(非永久,关闭/下次解读时自动移除) */
-  clearAiSelectionMark();
   const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
   resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
 
@@ -11621,7 +11323,7 @@ function refreshPaperWorkspace(){
   document.body.classList.toggle("paper-focus", paperWorkspaceActive);
 }
 
-function openPaperWorkspace(openImport){
+function openPaperWorkspace(){
   paperWorkspaceActive = true;
   state.filter = "paper";
   state.search = "";
@@ -11632,13 +11334,9 @@ function openPaperWorkspace(openImport){
   const search = document.getElementById("searchInput");
   if(search) search.value = "";
   exitBulkMode();
-  if(openImport){
-    openPaperEntryModal("paper");
-  }else{
-    const workspace = document.getElementById("paperWorkspace");
-    if(workspace) workspace.scrollIntoView({ behavior:"smooth", block:"start" });
-    document.getElementById("paperWorkspaceImport").focus({preventScroll:true});
-  }
+  const workspace = document.getElementById("paperWorkspace");
+  if(workspace) workspace.scrollIntoView({ behavior:"smooth", block:"start" });
+  document.getElementById("paperWorkspaceImport").focus({preventScroll:true});
 }
 
 function closePaperWorkspace(){
@@ -13384,7 +13082,7 @@ function updatePaperEntryStats(){
     '<span><b>' + sections + '</b> 节</span>';
 }
 const paperWorkspaceEnter = document.getElementById("paperWorkspaceEnter");
-if(paperWorkspaceEnter) paperWorkspaceEnter.onclick = function(){ openPaperWorkspace(false); };
+if(paperWorkspaceEnter) paperWorkspaceEnter.onclick = openPaperWorkspace;
 const paperWorkspaceImport = document.getElementById("paperWorkspaceImport");
 if(paperWorkspaceImport) paperWorkspaceImport.onclick = function(){
   if(paperPdfBtn.disabled || paperPdfBtn.classList.contains("busy")) return;
@@ -13497,7 +13195,7 @@ if(paperPdfBtn){
       paperEntryHtml = null;
       paperEntryLayout = null;
       paperEntryImages = null;
-      paperTitleInput.value = "";
+      paperTitleInput.value = importedPaperTitle(file.name);
       const lowMemoryImport = file.size > 32*1024*1024;
       const deferPdfParsing = lowMemoryImport;
       const fname = file.name.toLowerCase();
@@ -13537,7 +13235,6 @@ if(paperPdfBtn){
               if(!text.trim()){ toast("Word 文档没有可读正文"); return; }
               if(paperFullTextInput){ paperFullTextInput.value = text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null;
-              if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
               paperEntrySubmit.click();
             }).catch(function(e){
               paperPdfBtn.classList.remove("busy");
@@ -13553,7 +13250,6 @@ if(paperPdfBtn){
               if(paperFullTextInput){ paperFullTextInput.value = res.text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null;
               paperEntryHtml = res.html; paperEntryLayout = null;
-              if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.docx$/i, "");
               paperEntrySubmit.click();
             }else{
               mammothFallback();
@@ -13613,9 +13309,6 @@ if(paperPdfBtn){
             paperEntryOcrOnly = isScannedCaj;
             paperEntryImages = (!isScannedCaj && res.images && res.images.length) ? res.images : null;
             paperEntryLayout = (!isScannedCaj && res.blocks && res.blocks.length) ? res.blocks : null;
-            if(paperTitleInput && !paperTitleInput.value.trim()){
-              paperTitleInput.value = file.name.replace(/\.caj$/i, "");
-            }
             paperEntrySubmit.click();
           }).catch(function(e){
             paperPdfBtn.classList.remove("busy");
@@ -13641,7 +13334,6 @@ if(paperPdfBtn){
         paperEntryOcrOnly = false;
         paperEntryImages = null;
         paperEntryLayout = null;
-        if(paperTitleInput && !paperTitleInput.value.trim()) paperTitleInput.value = file.name.replace(/\.pdf$/i, "");
         paperEntrySubmit.click();
         return;
       }
@@ -13650,14 +13342,9 @@ if(paperPdfBtn){
         const rawBytes = new Uint8Array(this.result);
         /* 把浏览器File/Blob直接存入IDB，避免为大PDF再复制一份巨大Uint8Array。 */
         /* 本地路: 大文件逐页低内存提取，不抓取额外图片/坐标副本。 */
-        loadLocalPdf(rawBytes).then(function(pdf){
-          /* 读取PDF元数据标题(知网论文通常嵌入真实标题) */
-          pdf.getMetadata().then(function(meta){
-            const mt = (meta && meta.info && meta.info.Title) ? meta.info.Title.trim() : "";
-            if(mt && mt.length >= 3 && paperTitleInput && !paperTitleInput.value.trim()){
-              paperTitleInput.value = mt;
-            }
-          }).catch(function(){});
+        loadLocalPdf(rawBytes).then(async function(pdf){
+          const metadata = await pdf.getMetadata().catch(function(){ return null; });
+          paperTitleInput.value = importedPaperTitle(file.name, metadata?.info?.Title);
           return extractPdfTextEnhanced(pdf, function(d, t){
             ppProgressUpdate(70 * d / t, "本地几何解析 · 第 " + d + "/" + t + " 页");
           }, { lowMemory: lowMemoryImport }).catch(function(){ return null; });
@@ -13674,10 +13361,6 @@ if(paperPdfBtn){
           paperEntryOcrOnly = isScannedPdf;
           paperEntryImages = (!isScannedPdf && res.images && res.images.length) ? res.images : null;
           paperEntryLayout = (!isScannedPdf && res.blocks && res.blocks.length) ? res.blocks : null;
-          /* 标题仍留空 → 取文件名 */
-          if(paperTitleInput && !paperTitleInput.value.trim()){
-            paperTitleInput.value = file.name.replace(/\.(pdf|docx|caj)$/i, "");
-          }
           paperEntrySubmit.click();
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
