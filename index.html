@@ -2118,10 +2118,10 @@
       <button id="entrySubmit" class="composer-submit">添加条目</button>
     </div>
     <div class="composer-predict" id="predict"></div>
-    <details class="composer-cats">
-      <summary class="cc-label">选择分类（可展开）</summary>
+    <div class="composer-cats">
+      <span class="cc-label">选择分类</span>
       <div class="cc-chips" id="composerCats"></div>
-    </details>
+    </div>
     <div class="composer-brand" id="composerBeverageBrand" style="display:none">
       <span class="cb-label" id="cbLabelText">小门类 <span class="cb-sub">可自建</span></span>
       <div class="cb-row">
@@ -2135,10 +2135,9 @@
 </section>
 
 <div class="archive-heading"><h2>我的志录</h2><span id="archiveTotal"></span></div>
-<details class="archive-overview">
-  <summary>查看分类统计</summary>
+<div class="archive-overview">
   <section class="stats" id="stats"></section>
-</details>
+</div>
 
 <section class="filters" id="filters">
   <span class="label">分类</span>
@@ -2344,7 +2343,6 @@
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标记（可逐步撤回）">×</button>
           <button class="pr-hl-save" id="prHlSave" title="立即保存文字修改、标注和备注,下次进入仍可见">✓ 保存修改</button>
           <span class="pr-hl-sep"></span>
-          <button class="pr-hl-fmt pr-del-btn" data-fmt="delete" id="prDelMode" title="删除模式:选中文字后确认删除(或直接按 Delete/Backspace)">✂ 删除</button>
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">✕ 取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="开启后，选中任意文字会自动翻译；再次点击关闭">文 翻译</button>
           <span class="pr-hl-sep"></span>
@@ -6430,15 +6428,6 @@ function openPaperReader(itemId){
       /* 点击其他地方关闭弹窗 */
       if(popup && !noteEl) popup.classList.remove("show");
 
-      /* 删除模式: 选中文字后确认删除 */
-      if(prState.delMode){
-        const selD = window.getSelection();
-        if(selD && !selD.isCollapsed && selD.rangeCount > 0){
-          deleteSelectedText(selD);
-        }
-        return;
-      }
-
       if(prState.translateMode){
         translateCurrentSelection();
         return;
@@ -6522,22 +6511,6 @@ function openPaperReader(itemId){
       }
       sel.removeAllRanges();
       applyHighlightsToDom(item2);
-    };
-  }
-
-  /* ===== 删除模式按钮 ===== */
-  const prDelModeBtn = document.getElementById("prDelMode");
-  if(prDelModeBtn){
-    prDelModeBtn.onclick = function(){
-      prState.delMode = !prState.delMode;
-      this.classList.toggle("on", prState.delMode);
-      if(prState.delMode){
-        deactivateAllColor();
-        deactivateAllFmt();
-        toast("删除模式:选中文字后确认删除(平时可直接用 编辑 面板删除)");
-      }else{
-        toast("已退出删除模式");
-      }
     };
   }
 
@@ -8321,66 +8294,6 @@ window.addEventListener("beforeunload", function(event){
     }, 400);
   });
 })();
-
-/* ============================================================
-   删除选中文字 —— 从 fullText 中定位并删除(需确认)
-   ============================================================ */
-async function deleteSelectedText(sel){
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item) return;
-  const prTextEl = document.getElementById("prText");
-  const nativePdfMode = !!(prTextEl && prTextEl.classList.contains("pr-pdf-native"));
-  const txt = sel.toString();
-  if(!txt.trim()){ toast("选中的是空白"); return; }
-
-  /* 原生 PDF 选区必须按文字对象删除，不能再用 fullText 的字符串位置重绘整页。 */
-  if(nativePdfMode){
-    if(!sel.rangeCount){ toast("请重新选择要删除的文字"); return; }
-    const range = sel.getRangeAt(0).cloneRange();
-    const n = txt.trim().length;
-    if(!await confirmInApp("删除选中文字？", "共 " + n + " 字，删除后可点「撤销」恢复。", "删除文字")) return;
-    prClearPendingSync();
-    rebuildFromDom(item);
-    pushTextHistory(item);
-    _deleteRange(range, item);
-    rebuildFromDom(item);
-    saveState();
-    markDirty();
-    sel.removeAllRanges();
-    toast("已删除 " + n + " 字");
-    return;
-  }
-
-  if(!item.fullText) return;
-  /* Word式编辑可能有未同步内容 → 先同步DOM到数据,保证fullText定位准确 */
-  prClearPendingSync();
-  rebuildFromDom(item);
-  /* 渲染时空行显示为 &nbsp;(\u00A0),选区文本需映射回换行 */
-  const mapped = txt.replace(/\u00A0/g, "\n");
-  let idx = item.fullText.indexOf(mapped);
-  let target = mapped;
-  if(idx < 0){ idx = item.fullText.indexOf(txt); target = txt; }
-  if(idx < 0){
-    /* 兜底: 压缩空白逐段匹配 */
-    toast("无法精确定位选中文字,请重新选择");
-    return;
-  }
-  const n = txt.trim().length;
-  if(!await confirmInApp("删除选中文字？", "共 " + n + " 字，删除后可点「撤销」恢复。", "删除文字")) return;
-  pushTextHistory(item);
-  /* 同步删除结构化排版中的对应文本 */
-  applyDeletionToStructured(item, target);
-  item.fullText = item.fullText.slice(0, idx) + item.fullText.slice(idx + target.length);
-  item.fullText = item.fullText.replace(/\n{3,}/g, "\n\n");
-  item.outline = generateOutline(item.fullText);
-  item.analysis = analyzePaper(item.fullText);
-  item.description = "全文 " + item.fullText.length + " 字 · " + item.fullText.split(/\r?\n\s*\r?\n/).filter(function(p){ return p.trim(); }).length + " 段";
-  saveState();
-  markDirty();
-  sel.removeAllRanges();
-  applyHighlightsToDom(item);
-  toast("已删除 " + n + " 字");
-}
 
 /* ============================================================
    Word 式编辑(contenteditable) —— DOM → 数据 同步
