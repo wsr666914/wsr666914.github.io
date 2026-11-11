@@ -11787,7 +11787,7 @@ function renderGallery(){
     }
     html += '<div class="card-head">';
     html += '<div class="card-cat">' + catIcon(it.category, 16) + ' ' + c.name + '</div>';
-    html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
+    if(!paperWorkspaceActive) html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="移入回收站" aria-label="删除' + escapeHtml(it.name) + '">' + (paperWorkspaceActive ? '移入回收站' : '×') + '</button>';
     html += '</div>';
     /* 饮品(品牌)/护肤(功效)/美食(城市): 小门类标签 */
