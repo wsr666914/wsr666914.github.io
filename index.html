@@ -485,7 +485,7 @@
     outline:none; transition:border-color .2s, background .2s;
   }
   .form-group input:focus, .form-group select:focus{ border-color:var(--accent); background:#fff; }
-  #aiCfgModal .modal{ max-width:460px; }
+
   .modal h3{ font-size:22px; font-weight:600; margin-bottom:6px; }
   .modal p{ margin:0 0 16px; font-size:13px; color:var(--ink-mute); font-style:italic; }
   .modal-cats{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; margin-bottom:16px; }
@@ -2024,7 +2024,7 @@
       <span class="name">书影食单</span>
     </div>
     <nav class="topnav">
-      <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">AI</a>
+
       <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">回收站</a>
       <button class="cloud-nav-btn" type="button" id="siteCloudOpen">全站云同步</button>
       <a href="#" id="navAccount" class="nav-code-btn" title="管理网站密码和本机备份">账号与密码</a>
@@ -2327,7 +2327,7 @@
           <button class="pr-zoom-btn" id="prZoomIn" title="放大 (Ctrl+=)">+</button>
           <button class="pr-zoom-btn" id="prZoomLock" type="button" aria-label="锁定缩放" aria-pressed="false" title="锁定缩放" style="padding-inline:6px">🔓</button>
         </div>
-        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">AI</button>
+
         <button class="modal-btn" id="prFindOpen" aria-expanded="false">搜索</button>
         <button class="modal-btn" id="prPagesOpen" aria-expanded="false">页面</button>
         <button class="modal-btn" id="prMarksOpen" aria-expanded="false">标注与备注</button>
@@ -2461,52 +2461,6 @@
     <button class="modal-btn" id="forgotLocalSubmit" type="button">本机重置并登录</button>
     <div class="login-hint" id="forgotHint"></div>
     <div class="modal-row"><button class="modal-btn" id="forgotCloseBtn" type="button">关闭</button></div>
-  </div>
-</div>
-
-<!-- AI 接口配置模态框 -->
-<div class="modal-bg" id="aiCfgModal">
-  <div class="modal">
-    <h3>AI 接口配置 <span class="sub">免费模型直连</span></h3>
-    <div class="ai-cfg-tip">
-      推荐 <b>智谱 GLM-4-Flash</b> — 完全免费、不限量、国内直连:<br>
-      ① 打开 <a href="https://open.bigmodel.cn/usercenter/apikeys" target="_blank" rel="noopener">open.bigmodel.cn</a>(手机号注册)<br>
-      ② 「API 密钥」→ 新建,复制整串密钥(形如 <span style="font-family:monospace;">id.secret</span>)<br>
-      ③ 粘贴到下方 API Key,保存即接入<br>
-      <span style="color:var(--ink-mute);">备选免费: 硅基流动 siliconflow.cn(注册送额度,含免费开源模型)</span>
-    </div>
-    <div class="form-group">
-      <label>服务商预设</label>
-      <select id="aiPreset">
-        <option value="zhipu">智谱 GLM-4.7-Flash (完全免费 · 更强 · 推荐)</option>
-        <option value="zhipuflash">智谱 GLM-4-Flash (完全免费 · 稳定兜底)</option>
-        <option value="siliconflow">硅基流动 Qwen3-8B (免费 · 最新代更强)</option>
-        <option value="aliyun">阿里云百炼 Qwen-Turbo (新用户免费额度)</option>
-        <option value="qwenflash">阿里云百炼 Qwen-Flash (免费模型)</option>
-        <option value="deepseek">DeepSeek (deepseek-chat · 付费但便宜)</option>
-        <option value="kimi">Kimi (moonshot-v1-32k · 付费)</option>
-        <option value="qwen">通义千问 (qwen-plus · 付费)</option>
-        <option value="custom">自定义</option>
-      </select>
-    </div>
-    <div class="form-group">
-      <label>API 端点</label>
-      <input type="text" id="aiEndpoint" placeholder="https://open.bigmodel.cn/api/paas/v4">
-    </div>
-    <div class="form-group">
-      <label>API Key</label>
-      <input type="password" id="aiKey" placeholder="粘贴智谱 API 密钥 (id.secret)" autocomplete="off">
-    </div>
-    <div class="form-group">
-      <label>模型名称</label>
-      <input type="text" id="aiModel" placeholder="glm-4-flash">
-    </div>
-    <div class="modal-actions">
-      <button class="modal-btn primary" id="aiCfgSave">保存配置</button>
-      <button class="modal-btn" id="aiCfgTest">测试连接</button>
-      <button class="modal-btn" id="aiCfgClose">关闭</button>
-    </div>
-    <div class="ai-cfg-tip" id="aiCfgTestResult" style="display:none;margin-top:10px;text-align:center;font-size:13px;"></div>
   </div>
 </div>
 
@@ -6167,8 +6121,8 @@ function openPaperReader(itemId){
     prTranslateBtn.addEventListener("mousedown", function(e){ e.preventDefault(); });
     prTranslateBtn.onclick = function(){ toggleTranslate(); };
   }
-  const prAiCfgBtn = document.getElementById("prAiCfg");
-  if(prAiCfgBtn) prAiCfgBtn.onclick = openAiCfgModal;
+
+
 
   /* ===== 左栏拖拽调整宽度 ===== */
   const resizer = document.getElementById("prOutlineResizer");
@@ -8518,191 +8472,11 @@ const KB_HIST_PAUSE = 800;
 /* ============================================================
    AI 接口 —— OpenAI 兼容协议 (智谱GLM免费/硅基流动免费/DeepSeek/Kimi/通义)
    ============================================================ */
-const AI_CFG_KEY = "shuyingshidan_ai_cfg";
-const AI_PRESETS = {
-  zhipu:       { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4.7-flash" },          /* 完全免费·更强(200K上下文,SWE-Bench 59.2%) */
-  zhipuflash:  { endpoint: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4-flash" },            /* 完全免费·稳定兜底 */
-  siliconflow: { endpoint: "https://api.siliconflow.cn/v1", model: "Qwen/Qwen3-8B" },                /* 免费模型(9B以下永久免费,Qwen3-8B为最新代更强) */
-  aliyun:      { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-turbo" },/* 免费额度(新用户1000万Token) */
-  qwenflash:   { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-flash" },/* 阿里云免费模型(Qwen3-Flash,每月免费额度) */
-  deepseek:    { endpoint: "https://api.deepseek.com", model: "deepseek-chat" },                     /* 付费 */
-  kimi:        { endpoint: "https://api.moonshot.cn/v1", model: "moonshot-v1-32k" },                /* 付费 */
-  qwen:        { endpoint: "https://dashscope.aliyuncs.com/compatible-mode/v1", model: "qwen-plus" } /* 付费 */
-};
-function getAiConfig(){
-  try{
-    const cfg = JSON.parse(localStorage.getItem(AI_CFG_KEY) || "null");
-    if(cfg) return cfg;
-    /* 默认智谱 GLM-4.7-Flash: 完全免费且更强,仅需补 key */
-    return { endpoint: AI_PRESETS.zhipu.endpoint, model: AI_PRESETS.zhipu.model, key: "" };
-  }catch(e){ return { endpoint: AI_PRESETS.zhipu.endpoint, model: AI_PRESETS.zhipu.model, key: "" }; }
-}
-function openAiCfgModal(){
-  const modal = document.getElementById("aiCfgModal");
-  if(!modal) return;
-  const cfg = getAiConfig() || {};
-  const ep = document.getElementById("aiEndpoint");
-  const key = document.getElementById("aiKey");
-  const model = document.getElementById("aiModel");
-  const preset = document.getElementById("aiPreset");
-  if(ep) ep.value = cfg.endpoint || AI_PRESETS.zhipu.endpoint;
-  if(key) key.value = cfg.key || "";
-  if(model) model.value = cfg.model || AI_PRESETS.zhipu.model;
-  if(preset){
-    /* 匹配预设 */
-    let matched = "zhipu";
-    for(const p in AI_PRESETS){
-      if(cfg.endpoint === AI_PRESETS[p].endpoint && cfg.model === AI_PRESETS[p].model){ matched = p; break; }
-    }
-    preset.value = matched;
-  }
-  modal.classList.add("show");
-  /* 无 key 时自动聚焦 Key 输入框 */
-  if(key && !key.value){
-    setTimeout(function(){ key.focus(); }, 60);
-  }
-  /* 预设切换 */
-  preset.onchange = function(){
-    const p = AI_PRESETS[this.value];
-    if(p){
-      if(ep) ep.value = p.endpoint;
-      if(model) model.value = p.model;
-    }
-  };
-  const saveBtn = document.getElementById("aiCfgSave");
-  if(saveBtn){
-    saveBtn.onclick = function(){
-      const cfg2 = {
-        endpoint: (ep ? ep.value : "").trim().replace(/\/+$/, ""),
-        key: (key ? key.value : "").trim(),
-        model: (model ? model.value : "").trim() || "glm-4.7-flash"
-      };
-      if(cfg2.endpoint && cfg2.key){
-        localStorage.setItem(AI_CFG_KEY, JSON.stringify(cfg2));
-        toast("AI 接口已配置");
-        modal.classList.remove("show");
-        updateNavAiState();
-      }else{
-        toast("请填写完整的端点与 API Key");
-      }
-    };
-  }
-  const closeBtn = document.getElementById("aiCfgClose");
-  if(closeBtn){
-    closeBtn.onclick = function(){ modal.classList.remove("show"); };
-  }
-  /* 测试连接: 用当前表单值直连一次,立刻给出成功/失败原因(未保存也可测) */
-  const testBtn = document.getElementById("aiCfgTest");
-  const testRes = document.getElementById("aiCfgTestResult");
-  if(testBtn){
-    testBtn.onclick = async function(){
-      const endpoint = (ep ? ep.value : "").trim().replace(/\/+$/, "");
-      const apikey = (key ? key.value : "").trim();
-      const mname = (model ? model.value : "").trim() || "glm-4.7-flash";
-      if(!endpoint || !apikey){
-        if(testRes){ testRes.style.display = ""; testRes.style.background = "#fef2f2"; testRes.style.padding = "10px 14px"; testRes.style.borderRadius = "8px"; testRes.innerHTML = '<b style="color:#c0392b;">⚠ 请先填写</b> API 端点与 API Key'; }
-        toast("请先填写 API 端点与 API Key");
-        return;
-      }
-      testBtn.disabled = true;
-      const oldText = testBtn.textContent;
-      /* 测试中: 按钮变成旋转图标 + 计时器,结果区显示醒目"正在连接" */
-      testBtn.innerHTML = '<span style="display:inline-block;animation:aiSpin 0.8s linear infinite;">◌</span> 测试中…';
-      if(testRes){
-        testRes.style.display = "";
-        testRes.style.background = "#f0f7ff";
-        testRes.style.padding = "10px 14px";
-        testRes.style.borderRadius = "8px";
-        testRes.innerHTML = '<b style="color:#1976d2;">正在连接…</b><br><span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(endpoint) + ' / ' + escapeHtml(mname) + '</span>';
-        testRes.scrollIntoView({ behavior:"smooth", block:"center" });
-      }
-      const t0 = Date.now();
-      try{
-        const resp = await fetch(endpoint + "/chat/completions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "Authorization": "Bearer " + apikey },
-          body: JSON.stringify({
-            model: mname,
-            messages: [{ role:"user", content:"请只回复两个字: 成功" }],
-            temperature: 0.1,
-            max_tokens: 20
-          })
-        });
-        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-        if(resp.ok){
-          const data = await resp.json().catch(function(){ return null; });
-          const content = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
-          if(testRes){
-            testRes.style.background = "#e8f5e9";
-            testRes.innerHTML = '<b style="color:#2e7d32;font-size:15px;">连接成功</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">模型回复: ' + escapeHtml(content || "(无内容)") + '</span>';
-          }
-          toast("连接成功 · " + elapsed + "s");
-        }else{
-          const errText = await resp.text().catch(function(){ return ""; });
-          let hint = "";
-          if(resp.status === 401) hint = " <b>密钥无效</b> — 请到 open.bigmodel.cn 重新复制整串密钥(格式 id.secret)";
-          else if(resp.status === 404) hint = " <b>模型名/地址不对</b> — 智谱模型名填 glm-4.7-flash,端点 https://open.bigmodel.cn/api/paas/v4";
-          else if(resp.status === 429) hint = " <b>限流</b> — 免费版同一时间仅1个并发,稍后重试";
-          if(testRes){
-            testRes.style.background = "#fef2f2";
-            testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">连接失败</b> <span style="color:var(--ink-mute);font-size:12px;">HTTP ' + resp.status + ' (' + elapsed + 's)</span><br>' + hint + (errText ? ' <span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(errText.substring(0, 120)) + '</span>' : '');
-          }
-          toast("连接失败 HTTP " + resp.status);
-        }
-      }catch(e){
-        const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-        if(testRes){
-          testRes.style.background = "#fef2f2";
-          testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">网络错误</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">' + escapeHtml(e.message || "未知") + ' — 请检查网络/端点地址</span>';
-        }
-        toast("网络错误: " + (e.message || "未知"));
-      }
-      testBtn.disabled = false;
-      testBtn.textContent = oldText;
-    };
-  }
-}
-/* 导航栏 AI 按钮状态: 显示配置状态 */
-function updateNavAiState(){
-  const btn = document.getElementById("navAiCfg");
-  if(!btn) return;
-  const cfg = getAiConfig();
-  if(cfg && cfg.key){
-    btn.textContent = "AI 已配置";
-    btn.title = "AI 已接入: " + (cfg.model || "glm-4-flash");
-  }else{
-    btn.textContent = "AI";
-    btn.title = "配置 AI 接口(智谱 GLM-4-Flash 免费直连)";
-  }
-}
-/* aiClassify 已移除: 录入改为纯手动选择,AI自动分类入口已废弃 */
+let cloudAI;
+const aiLoginMessage = "请先通过「全站云同步」登录云端账号。";
 
 async function callAI(messages, maxTokens, temperature){
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.endpoint || !cfg.key) return { error: "nokey" };
-  try{
-    const resp = await fetch(cfg.endpoint + "/chat/completions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.key },
-      body: JSON.stringify({
-        model: cfg.model || "glm-4.7-flash",
-        messages: messages,
-        temperature: (typeof temperature === "number") ? temperature : 0.6,
-        max_tokens: maxTokens || 2000
-      })
-    });
-    if(!resp.ok){
-      const errText = await resp.text().catch(function(){ return ""; });
-      return { error: "HTTP " + resp.status + (errText ? " · " + errText.substring(0, 120) : "") };
-    }
-    const data = await resp.json();
-    if(data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content){
-      return { content: data.choices[0].message.content };
-    }
-    return { error: "响应解析失败" };
-  }catch(e){
-    return { error: "网络错误: " + (e.message || "未知") };
-  }
+  return cloudAI ? cloudAI.call({messages, max_tokens:maxTokens, temperature}) : {error:aiLoginMessage};
 }
 
 /* ============================================================
@@ -9422,7 +9196,6 @@ function ppParallelMap(items, worker, concurrency){
 async function aiStructuredReformat(fullText, onProgress, onStage, opts){
   const o = opts || {};
   const clean = compactReformatText(fullText || "");
-  const cfg = getAiConfig();
   if(!clean) return { st: { title:"", abstract:"", keywords:[], sections:[], references:[] }, usedAI:false };
   let st;
   let usedAI = false;
@@ -9433,7 +9206,7 @@ async function aiStructuredReformat(fullText, onProgress, onStage, opts){
        粗体行+字号标题传入:PDF字体的无编号小标题也能识别层级
        双栏阅读顺序由本机栏检测处理。 */
     st = parsePaperStructure(fullText, true, o.boldLines, o.sizeHeads);
-  }else if(!cfg || !cfg.key){
+  }else if(!cloudAI?.signedIn()){
     st = parsePaperStructure(clean);
     noKey = true;
   }else{
@@ -9806,16 +9579,14 @@ async function runAiRead(){
     toast("选中文字过短,请选择更完整的一段");
     return;
   }
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.key){
-    resultEl.innerHTML = '<div class="pa-mute">尚未接入 AI · <a href="#" onclick="openAiCfgModal();return false;" style="color:var(--accent);text-decoration:underline;">配置 AI</a> 后即可解读选中文字</div>';
-    openAiCfgModal();
+  if(!cloudAI?.signedIn()){
+    resultEl.textContent = aiLoginMessage;
     return;
   }
   const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
   resultEl.innerHTML = '<div class="pr-ai-loading">AI 正在结合上下文解读选中内容,请稍候…</div>';
 
-  if(cfg && cfg.key){
+  {
     /* 定位选中文本的上下文(前500字+后500字) */
     const full = item.fullText || "";
     const sIdx = full.indexOf(selText.substring(0, 40));
@@ -9837,7 +9608,7 @@ async function runAiRead(){
       let ah = '<div class="pa-block"><div class="pa-block-h">解读选中</div>';
       ah += '<div class="pa-text" style="border-left:2px solid var(--teal);padding-left:8px;margin-bottom:8px;color:var(--ink-mute);font-size:12px;">' + escapeHtml(selText.length > 80 ? selText.substring(0, 80) + "…" : selText) + '</div>';
       ah += '<div class="pa-text">' + escapeHtml(r.content) + '</div></div>';
-      ah += '<div class="pa-metrics" style="margin-top:10px;"><span>选中 ' + selText.length + ' 字</span><span>AI 模型: ' + escapeHtml(cfg.model) + '</span></div>';
+      ah += '<div class="pa-metrics" style="margin-top:10px;"><span>选中 ' + selText.length + ' 字</span><span>AI 模型: ' + escapeHtml(r.model || "网站 AI") + '</span></div>';
       resultEl.innerHTML = ah;
       return;
     }
@@ -9885,10 +9656,8 @@ async function translateCurrentSelection(){
   const prTextRoot = document.getElementById("prText");
   const isPdfNativeMode = !!(prTextRoot && prTextRoot.classList.contains("pr-pdf-native"));
 
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.key){
-    toast("请先接入AI再使用翻译");
-    openAiCfgModal();
+  if(!cloudAI?.signedIn()){
+    toast(aiLoginMessage);
     return;
   }
 
@@ -10020,16 +9789,14 @@ async function fetchReferences(){
       }
     }
     if(refs.length > 0){
-      renderRefs(refs.slice(0, 40), "本地提取(未接入AI) · 点击条目智能检索原文");
+      renderRefs(refs.slice(0, 40), "本地提取 · 点击条目智能检索原文");
     }else{
       resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">未检测到参考文献章节</div>';
     }
   }
 
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.key){
+  if(!cloudAI?.signedIn()){
     localExtract();
-    openAiCfgModal();
     return;
   }
   try{
@@ -10087,10 +9854,8 @@ async function sendChatMessage(){
   prState.chat.push({ role: "user", content: q });
   appendChatMsg("user", q);
 
-  const cfg = getAiConfig();
-  if(!cfg || !cfg.key){
-    appendChatMsg("err", "尚未接入 AI。配置窗已为你打开 — 智谱 GLM-4-Flash 免费模型已预填,仅需到 open.bigmodel.cn 免费注册,复制 API 密钥粘贴并保存,即可开始对话。");
-    openAiCfgModal();
+  if(!cloudAI?.signedIn()){
+    appendChatMsg("err", aiLoginMessage);
     return;
   }
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
@@ -10107,7 +9872,7 @@ async function sendChatMessage(){
     prState.chat.push({ role: "assistant", content: r.content });
     appendChatMsg("ai", r.content);
   }else{
-    appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请检查 AI 配置(端点/密钥/模型)或稍后重试。");
+    appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请稍后重试。");
   }
 }
 
@@ -10482,8 +10247,7 @@ async function fetchItemMeta(item){
   const cat = item.category || "";
   /* 文学/影视不再生成概要 */
   if(cat === "literature" || cat === "movie") return { error:"disabled" };
-  const aiCfg = getAiConfig();
-  if(!aiCfg || !aiCfg.key){
+  if(!cloudAI?.signedIn()){
     return { error:"noai" }; /* 未配置AI → 不获取概要,避免网络抓取占用存储 */
   }
   try{
@@ -13195,9 +12959,9 @@ function toast(msg, duration){
   // 退出按钮
   const logoutBtn = document.getElementById("logoutBtn");
   if(logoutBtn) logoutBtn.onclick = function(e){ e.preventDefault(); doLogout(); };
-  // 导航栏 AI 配置入口 (免费模型直连)
-  const navAiCfgBtn = document.getElementById("navAiCfg");
-  if(navAiCfgBtn) navAiCfgBtn.onclick = function(e){ e.preventDefault(); openAiCfgModal(); };
+
+
+
   // 导航栏回收站入口
   const navTrashBtn = document.getElementById("navTrash");
   if(navTrashBtn) navTrashBtn.onclick = function(e){ e.preventDefault(); openTrashModal(); };
@@ -13285,8 +13049,7 @@ function toast(msg, duration){
   const regenMetaBtn = document.getElementById("regenMetaBtn");
   if(regenMetaBtn){
     regenMetaBtn.onclick = async function(){
-      const cfg = getAiConfig();
-      if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 AI)"); openAiCfgModal(); return; }
+
       /* 找出所有文学/小说/电影条目 */
       const targets = state.items.filter(function(it){
         return it.category === "literature" || it.category === "movie" || it.category === "novel";
@@ -13314,7 +13077,7 @@ function toast(msg, duration){
       if(typeof refreshStorageInfo === "function") refreshStorageInfo();
     };
   }
-  updateNavAiState();
+
 })();
 
 /* 按下缩至 96%，松开后统一回弹；动态生成的按钮同样适用。 */
@@ -13402,6 +13165,41 @@ document.addEventListener("DOMContentLoaded", function(){
       throw error;
     }
   }
+
+  cloudAI = {
+    signedIn(){
+      if(!STORAGE_KEY) return false;
+      try{ return !!JSON.parse(sessionStorage.getItem(sessionKey()))?.user?.id; }
+      catch(error){ return false; }
+    },
+    async call(body){
+      if(!this.signedIn()) return {error:aiLoginMessage};
+      if(binding !== STORAGE_KEY){
+        if(busy) return {error:"云同步正在进行，请稍后重试。"};
+        binding = STORAGE_KEY;
+        comparison = null;
+        session = JSON.parse(sessionStorage.getItem(sessionKey()));
+      }
+      const account = STORAGE_KEY;
+      try{
+        const token = await accessToken();
+        if(account !== STORAGE_KEY) return {error:aiLoginMessage};
+        const resp = await fetch(project + "/functions/v1/site-ai", {
+          method:"POST",
+          headers:{apikey:publicKey, Authorization:"Bearer " + token, "Content-Type":"application/json"},
+          body:JSON.stringify(body),
+          signal:AbortSignal.timeout(65000)
+        });
+        if(account !== STORAGE_KEY) return {error:aiLoginMessage};
+        const data = await resp.json().catch(function(){ return null; });
+        if(resp.status === 401) return {error:"云端登录已失效，请重新登录。"};
+        if(!resp.ok || typeof data?.content !== "string") return {error:data?.error || "网站 AI 暂不可用，请稍后重试。"};
+        return data;
+      }catch(error){
+        return {error:"AI 连接暂时不可用，请稍后重试。"};
+      }
+    }
+  };
 
   const switchMode = document.getElementById("prCloudSwitch");
   const submit = document.getElementById("prCloudSubmit");
