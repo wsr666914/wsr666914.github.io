@@ -901,7 +901,26 @@
     background:linear-gradient(135deg,#41647F,#4A5C80); color:white; font:600 14px var(--ui-font); cursor:pointer;
   }
   .pr-literature-search{ margin:8px 0; }
-  .pr-literature-links{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px; }
+  .pr-literature-panel{
+    padding:12px; border-radius:14px; border:1px solid #D5DFEA;
+    background:linear-gradient(155deg,#F8FBFF,#F0EEF8); font:14px/1.55 var(--ui-font); color:#30475E;
+  }
+  .pr-literature-panel h3{ margin:0 0 8px; font-size:15px; color:#294560; }
+  .pr-literature-panel .rel-item, .pr-literature-panel .ref-item{
+    margin-top:8px; padding:9px; border:1px solid #DCE5F0; border-radius:10px;
+    background:#FFFFFFD9; color:#30475E; cursor:default;
+  }
+  .pr-literature-panel .rel-title, .pr-literature-panel .ref-title{
+    font:600 14px/1.55 var(--ui-font); color:#30475E; overflow-wrap:anywhere;
+  }
+  .pr-literature-links{ display:flex; flex-wrap:wrap; gap:6px; margin:8px 0 2px; }
+  .pr-literature-links a, .pr-literature-panel > button{
+    display:inline-flex; align-items:center; padding:5px 8px; border:1px solid #C9D5E2;
+    border-radius:8px; background:#F4F8FF; color:#345674; font:600 13px var(--ui-font);
+    text-decoration:none; cursor:pointer;
+  }
+  .pr-literature-links a:hover, .pr-literature-panel > button:hover{ background:#E2ECF8; }
+  .pr-chat-log:empty::before{ content:"可以询问论文的论点、方法或结论。"; color:#536E85; font:14px/1.6 var(--ui-font); }
   /* ===== 删除模式按钮 + 检查标红 ===== */
   #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
 
@@ -5632,6 +5651,9 @@ function openPaperReader(itemId){
 
   /* 左侧栏已是静态AI工具面板:重置结果区/聊天区状态 */
   prState.chat = [];
+  for(const id of ["prAiRead", "prAiAsk", "prRelated", "prReferences"]){
+    document.getElementById(id).setAttribute("aria-expanded", "false");
+  }
   const aiResult = document.getElementById("prAiResult");
   if(aiResult){
     aiResult.innerHTML = "";
@@ -7990,6 +8012,7 @@ async function closePaperReader(){
   prState.activeFmt = null;
   prState.snapshot = null;
   prState.chat = [];
+  document.getElementById("prAiResult").replaceChildren();
   const popup = document.getElementById("prNotePopup");
   if(popup) popup.classList.remove("show");
   const chat = document.getElementById("prChat");
@@ -9562,13 +9585,27 @@ researchEl("prPdfExport").onclick = async function(){
   finally{ this.disabled = false; this.textContent = label; }
 };
 
+function openReaderTool(buttonId){
+  const host = document.getElementById("prAiResult");
+  const chat = document.getElementById("prChat");
+  const wasOpen = chat.classList.contains("show");
+  host.replaceChildren();
+  chat.classList.toggle("show", buttonId === "prAiAsk" && !wasOpen);
+  for(const id of ["prAiRead", "prAiAsk", "prRelated", "prReferences"]){
+    document.getElementById(id).setAttribute("aria-expanded", String(id === buttonId && (id !== "prAiAsk" || !wasOpen)));
+  }
+  if(buttonId === "prAiAsk") return null;
+  const panel = document.createElement("div");
+  host.append(panel);
+  return panel;
+}
+
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
 async function runAiRead(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item) return;
+  const resultEl = openReaderTool("prAiRead");
   if(!requireAiLogin()) return;
-  const resultEl = document.getElementById("prAiResult");
-  if(!resultEl) return;
 
   /* 获取当前选中的文字 */
   const sel = window.getSelection();
@@ -9720,50 +9757,77 @@ function literatureLinks(query, doi){
   if(doi && /^10\.\d{4,9}\/\S+$/i.test(doi)){
     links.push('<a href="https://doi.org/' + encodeURI(doi).replace(/["<>#?]/g, encodeURIComponent) + '" target="_blank" rel="noopener noreferrer">DOI</a>');
   }
-  links.push('<a href="https://kns.cnki.net/kns8s/defaultresult/index?kw=' + q + '" target="_blank" rel="noopener noreferrer">知网检索</a>');
+  links.push('<a href="https://kns.cnki.net/kns8s/defaultresult/index?kw=' + q + '" target="_blank" rel="noopener noreferrer">知网智能检索</a>');
   links.push('<a href="https://scholar.google.com/scholar?q=' + q + '" target="_blank" rel="noopener noreferrer">Google 学术</a>');
   return '<div class="pr-literature-links">' + links.join("") + '</div>';
 }
 
-function fetchReferences(){
-  const item = state.items.find(i => i.id === prState.itemId);
-  const panel = document.getElementById("prAiResult");
-  if(!item || !panel) return;
-  const lines = (item.fullText || "").split(/\r?\n/);
-  const heading = /^\s*(?:\d+[.、]?\s*)?[【\[（(]?\s*(?:参\s*考\s*文\s*献|参考书目|引用文献|references|bibliography|works cited)\s*[】\]）)]?\s*[:：]?\s*$/i;
-  const start = lines.findLastIndex(line => heading.test(line));
-  const end = lines.findIndex((line, index) => index > start && /^\s*(?:附录|致谢|作者简介|appendix|acknowledg(?:e)?ments?)\s*[:：]?\s*$/i.test(line));
-  const section = start < 0 ? [] : lines.slice(start + 1, end < 0 ? undefined : end);
-  const entries = [];
-  const numbered = section.some(line => /^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/.test(line));
-  for(const line of section){
-    const value = line.trim();
-    if(!value) continue;
-    if(!numbered || /^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/.test(value) || !entries.length) entries.push(value);
-    else entries[entries.length - 1] += " " + value;
-  }
-  panel.innerHTML = entries.length
-    ? '<div class="pa-block"><div class="pa-block-h">原文参考文献 · ' + entries.length + ' 条</div>' + entries.map(entry => {
-        const doi = entry.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i)?.[0].replace(/[.,;]+$/, "");
-        const query = entry.match(/《([^》]+)》/)?.[1] || entry.replace(/^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/, "").slice(0, 160);
-        return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
-      }).join("") + '</div>'
-    : '<div class="pa-mute">正文里没有识别到独立的参考文献章节。采用页脚注释的论文，请在原页查看引用。</div>';
+function paperSections(text){
+  const sections = [];
+  for(let start = 0; start < text.length; start += 19000) sections.push(text.slice(Math.max(0, start - 300), start + 19000));
+  return sections;
 }
 
-/* AI 对话面板 */
-function toggleChatPanel(){
+function aiList(content){
+  const match = (content || "").match(/\[[\s\S]*\]/);
+  if(!match) return null;
+  try{
+    const list = JSON.parse(match[0]);
+    return Array.isArray(list) ? list.filter(value => typeof value === "string") : null;
+  }catch(error){ return null; }
+}
+
+async function fetchReferences(){
+  const item = state.items.find(i => i.id === prState.itemId);
+  if(!item) return;
+  const panel = openReaderTool("prReferences");
+  panel.className = "pr-literature-panel";
+  panel.innerHTML = '<h3>参考文献</h3><div role="status"></div><div class="ref-list"></div>';
   if(!requireAiLogin()) return;
-  const chat = document.getElementById("prChat");
-  if(!chat) return;
-  chat.classList.toggle("show");
-  if(chat.classList.contains("show")){
-    prState.chat = prState.chat || [];
-    if(prState.chat.length === 0){
-      appendChatMsg("ai", "你好,我是论文研讨助手。你可以问我这篇论文的任何问题,例如:\n· 这篇论文的核心贡献是什么?\n· 研究方法有什么局限?\n· 结论如何延伸应用?");
+  const status = panel.querySelector('[role="status"]');
+  const list = panel.querySelector(".ref-list");
+  const full = (item.fullText || "").trim();
+  const sections = paperSections(full);
+  if(!sections.length){ status.textContent = "这篇论文暂无可识别的文字。"; return; }
+  const normalize = value => value.normalize("NFKC").replace(/\s+/g, "");
+  const entries = new Map();
+  for(const [index, section] of sections.entries()){
+    if(!panel.isConnected) return;
+    status.textContent = "AI 正在核对原文引用 " + (index + 1) + " / " + sections.length;
+    const result = await callAI([
+      {role:"system",content:"从论文原文提取正式的参考文献和脚注中的完整来源。排除正文引用编号、章节标题、页眉页脚、作者简介、项目说明和非书目性注释。每项逐字引用原文中连续的一段完整书目信息，保留作者、题名和已写出的出版信息。禁止改写、补全或猜测。返回 JSON 字符串数组，找不到返回 []。"},
+      {role:"user",content:section}
+    ], 5000, 0.1);
+    if(!panel.isConnected) return;
+    const matches = aiList(result.content);
+    if(!matches){
+      status.textContent = "只完成了 " + index + " / " + sections.length + " 段。请重试。" + (result.error ? " " + result.error : "");
+      return;
     }
-    const input = document.getElementById("prChatInput");
-    if(input) input.focus();
+    const source = normalize(section);
+    for(const candidate of matches){
+      const entry = candidate.replace(/\s+/g, " ").trim();
+      const key = normalize(entry);
+      if(key.length < 12 || key.length > 900 || !source.includes(key)) continue;
+      if(!/(?:\b(?:18|19|20)\d{2}\b|[《》]|\[[JMDCRNA]\]|\b10\.\d{4,9}\/|出版社|卷|期)/i.test(entry)) continue;
+      if(!entries.has(key)) entries.set(key, entry);
+    }
+    list.innerHTML = [...entries.values()].map(entry => {
+      const doi = entry.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i)?.[0].replace(/[.,;]+$/, "");
+      const query = entry.match(/《([^》]+)》/)?.[1] || entry.replace(/^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/, "").slice(0, 160);
+      return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
+    }).join("");
+  }
+  status.textContent = entries.size ? "原文核对通过 " + entries.size + " 条" : "没有找到可与原文核对的完整书目。";
+}
+
+function toggleChatPanel(){
+  openReaderTool("prAiAsk");
+  if(!document.getElementById("prChat").classList.contains("show")) return;
+  if(requireAiLogin()) document.getElementById("prChatInput").focus();
+  else{
+    document.getElementById("prChat").classList.remove("show");
+    document.getElementById("prAiAsk").setAttribute("aria-expanded", "false");
   }
 }
 function appendChatMsg(role, text){
@@ -9793,7 +9857,8 @@ async function sendChatMessage(){
   const sys = "你是论文研讨助手,擅长深度解析学术论文。以下是论文全文(可能截断)。请基于论文内容回答用户问题:准确、专业、有条理;若问题超出论文范围,结合领域知识回答并注明「论文外补充」。回答控制在500字内。\n\n论文标题:" + item.name + "\n\n论文全文:\n" + (item.fullText || "").substring(0, 12000);
   const messages = [{ role: "system", content: sys }].concat(prState.chat.slice(-10));
   const r = await callAI(messages, 1600);
-  if(thinking && thinking.textContent === "…思考中") thinking.remove();
+  if(!thinking?.isConnected || prState.itemId !== item.id) return;
+  thinking.remove();
   if(r.content){
     prState.chat.push({ role: "assistant", content: r.content });
     appendChatMsg("ai", r.content);
@@ -9808,22 +9873,21 @@ async function sendChatMessage(){
    ============================================================ */
 function fetchRelatedPapers(){
   const item = state.items.find(i => i.id === prState.itemId);
-  const panel = document.getElementById("prAiResult");
-  if(!item || !panel) return;
+  if(!item) return;
+  const panel = openReaderTool("prRelated");
+  panel.className = "pr-literature-panel";
   const title = item.name || "";
   const keywords = Array.isArray(item.analysis?.keywords) ? item.analysis.keywords.filter(word => typeof word === "string").slice(0, 3) : [];
   const initial = keywords.length ? keywords.join(" ") : title;
-  panel.innerHTML = '<div class="pa-block"><div class="pa-block-h">相关论文</div>' +
-    '<form class="pr-literature-search"><input type="search" aria-label="论文检索词" maxlength="160" required><button>检索</button></form>' +
-    '<div class="pa-mute" role="status"></div><div class="rel-list"></div></div>';
+  panel.innerHTML = '<h3>相关论文</h3><button type="button" data-auto>AI 自动检索</button>' +
+    '<form class="pr-literature-search"><input type="search" aria-label="论文检索词" maxlength="160" required><button>手动检索</button></form>' +
+    '<div class="pa-mute" role="status"></div><div class="rel-list"></div>';
   const form = panel.querySelector("form");
   const input = form.querySelector("input");
   const status = panel.querySelector('[role="status"]');
   const list = panel.querySelector(".rel-list");
   input.value = initial.slice(0, 160);
-  form.onsubmit = async function(event){
-    event?.preventDefault();
-    const query = input.value.trim();
+  async function search(query){
     if(!query || form.querySelector("button").disabled) return;
     form.querySelector("button").disabled = true;
     status.textContent = "正在查询 Crossref…";
@@ -9857,8 +9921,52 @@ function fetchRelatedPapers(){
     }finally{
       form.querySelector("button").disabled = false;
     }
+  }
+  const automatic = panel.querySelector("[data-auto]");
+  let autoRun = 0;
+  form.onsubmit = function(event){
+    event.preventDefault();
+    autoRun++;
+    search(input.value.trim());
   };
-  form.onsubmit();
+  automatic.onclick = async function(){
+    if(!cloudAI?.signedIn()){
+      status.textContent = "登录云端账号后可以用 AI 自动检索，也可以直接手动检索。";
+      list.innerHTML = literatureLinks(input.value.trim());
+      return;
+    }
+    const run = ++autoRun;
+    automatic.disabled = true;
+    try{
+      const sections = paperSections((item.fullText || "").trim());
+      if(!sections.length){ status.textContent = "当前论文暂无可供 AI 阅读的正文，可以手动检索。"; return; }
+      const topics = [];
+      for(const [index, section] of sections.entries()){
+        if(!panel.isConnected || run !== autoRun) return;
+        status.textContent = "AI 正在阅读论文 " + (index + 1) + " / " + sections.length;
+        const result = await callAI([
+          {role:"system",content:"阅读论文片段，提取能用于查找同一研究主题的具体人物、地名、事件或方法。返回 2 至 4 个简短检索词的 JSON 字符串数组。避免泛词，禁止提供虚构的论文标题。"},
+          {role:"user",content:title.slice(0, 200) + "\n\n" + section}
+        ], 350, 0.1);
+        if(!panel.isConnected || run !== autoRun) return;
+        const terms = aiList(result.content);
+        if(!terms?.length){
+          status.textContent = "AI 未能完成阅读。可以重试，或手动检索。" + (result.error ? " " + result.error : "");
+          list.innerHTML = literatureLinks(input.value.trim());
+          return;
+        }
+        topics.push(...new Set(terms.map(term => term.trim()).filter(Boolean)));
+      }
+      const frequency = new Map();
+      for(const term of topics) frequency.set(term, (frequency.get(term) || 0) + 1);
+      const query = [...frequency.keys()].sort((a,b) => frequency.get(b) - frequency.get(a)).slice(0, 4).join(" ").slice(0, 160);
+      input.value = query;
+      await search(query);
+    }finally{
+      automatic.disabled = false;
+    }
+  };
+  automatic.onclick();
 }
 
 /* ============================================================
