@@ -920,6 +920,12 @@
     text-decoration:none; cursor:pointer;
   }
   .pr-literature-links a:hover, .pr-literature-panel > button:hover{ background:#E2ECF8; }
+  .pr-chat-prompts{ display:flex; flex-wrap:wrap; gap:6px; }
+  .pr-chat-prompts button{
+    padding:5px 8px; border:1px solid #C9D5E2; border-radius:8px; background:#F4F8FF;
+    color:#345674; font:600 13px var(--ui-font); cursor:pointer;
+  }
+  .pr-chat-prompts button:hover{ background:#E2ECF8; }
   .pr-chat-log:empty::before{ content:"可以询问论文的论点、方法或结论。"; color:#536E85; font:14px/1.6 var(--ui-font); }
   /* ===== 删除模式按钮 + 检查标红 ===== */
   #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
@@ -2362,6 +2368,13 @@
         </div>
         <div class="pr-ai-result" id="prAiResult"></div>
         <div class="pr-chat" id="prChat">
+          <div class="pr-chat-prompts" id="prChatPrompts" aria-label="常用问题">
+            <button type="button" data-question="请概述论文的研究问题、材料和主要结论。">内容概要</button>
+            <button type="button" data-question="请用通俗的话概括论文的核心观点，并说明作者如何展开论证。">核心观点</button>
+            <button type="button" data-question="作者用了哪些研究方法和史料或数据？它们分别支持什么结论？">研究方法</button>
+            <button type="button" data-question="论文的主要贡献是什么？有哪些证据、范围或方法上的局限？">贡献与局限</button>
+            <button type="button" data-question="请解释论文中的关键概念，并举出文中支持解释的例子。">关键概念</button>
+          </div>
           <div class="pr-chat-log" id="prChatLog"></div>
           <div class="pr-chat-row">
             <input type="text" id="prChatInput" placeholder="向 AI 提问…" maxlength="500">
@@ -6183,6 +6196,10 @@ function openPaperReader(itemId){
   const prChatInput = document.getElementById("prChatInput");
   if(prChatSend && prChatInput){
     prChatSend.onclick = function(){ sendChatMessage(); };
+    document.getElementById("prChatPrompts").onclick = function(event){
+      const question = event.target.closest("button[data-question]")?.dataset.question;
+      if(question) sendChatMessage(question);
+    };
     prChatInput.onkeydown = function(e){
       if(e.key === "Enter"){ e.preventDefault(); sendChatMessage(); }
     };
@@ -9646,7 +9663,7 @@ async function runAiRead(){
     if(r.content){
       let ah = '<div class="pa-block"><div class="pa-block-h">解读选中</div>';
       ah += '<div class="pa-text" style="border-left:2px solid var(--teal);padding-left:8px;margin-bottom:8px;color:var(--ink-mute);font-size:12px;">' + escapeHtml(selText.length > 80 ? selText.substring(0, 80) + "…" : selText) + '</div>';
-      ah += '<div class="pa-text">' + escapeHtml(r.content) + '</div></div>';
+      ah += '<div class="pa-text">' + escapeHtml(cleanReaderAnswer(r.content)) + '</div></div>';
       ah += '<div class="pa-metrics" style="margin-top:10px;"><span>选中 ' + selText.length + ' 字</span><span>AI 模型: ' + escapeHtml(r.model || "网站 AI") + '</span></div>';
       resultEl.innerHTML = ah;
       return;
@@ -9759,6 +9776,7 @@ function literatureLinks(query, doi){
   }
   links.push('<a href="https://kns.cnki.net/kns8s/defaultresult/index?kw=' + q + '" target="_blank" rel="noopener noreferrer">知网智能检索</a>');
   links.push('<a href="https://scholar.google.com/scholar?q=' + q + '" target="_blank" rel="noopener noreferrer">Google 学术</a>');
+  links.push('<a href="https://openalex.org/works?search=' + q + '" target="_blank" rel="noopener noreferrer">OpenAlex</a>');
   return '<div class="pr-literature-links">' + links.join("") + '</div>';
 }
 
@@ -9777,13 +9795,43 @@ function aiList(content){
   }catch(error){ return null; }
 }
 
+function referenceTitle(entry){
+  const text = entry.normalize("NFKC").replace(/^\s*(?:\[\d+\]|\d{1,3}[.、)]\s+|[①-⑳])\s*/, "");
+  const book = text.match(/《([^》]+)》/);
+  if(book) return book[1].trim();
+  const typed = text.match(/^(.+?)\[(?:J|M|D|C|R|N|A|Z|EB)(?:\/OL)?\]/i);
+  if(typed) return typed[1].replace(/^[^。．.:：]{1,80}[。．.:：]\s*/, "").trim();
+  const quoted = text.match(/[“"]([^”"]{3,150})[”"]/);
+  if(quoted) return quoted[1].trim();
+  const doi = text.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i);
+  if(doi) return doi[0].replace(/[.,;]+$/, "");
+  const afterYear = text.match(/(?:^|[.。)]\s*)(?:\(?[12]\d{3}\)?[.。]\s+)([^.。]{6,160})/);
+  if(afterYear) return afterYear[1].trim();
+  return text.split(/\s*(?:https?:\/\/|doi\s*:|[。.]\s+|[，,]\s*(?:18|19|20)\d{2})/i).slice(0, 2).join(" ").slice(0, 120);
+}
+
+function localBibliography(full){
+  const lines = full.split(/\r?\n/);
+  const heading = /^\s*(?:[【\[])?\s*(?:参考文献|参考书目|引用文献|references|bibliography|works cited)\s*(?:[】\]])?\s*[:：]?\s*$/i;
+  const boundary = lines.findLastIndex(line => heading.test(line));
+  if(boundary < 0) return [];
+  const entries = [];
+  const numbered = /^\s*(?:[［\[]\d+[］\]]|\d{1,3}[.、)]\s+)/;
+  for(const line of lines.slice(boundary + 1)){
+    const value = line.trim();
+    if(/^(?:附录|致谢|作者简介|appendix|acknowledg(?:e)?ments?)(?:$|[：:\s])/i.test(value)) break;
+    if(numbered.test(value)) entries.push(value);
+    else if(entries.length && value && !/^\d+$/.test(value)) entries[entries.length-1] += " " + value;
+  }
+  return entries.filter(entry => /(?:《.+》|\[(?:J|M|D|C|R|N|A|Z|EB)(?:\/OL)?\]|出版社|\b10\.\d{4,9}\/|\b(?:18|19|20)\d{2}\b)/i.test(entry));
+}
+
 async function fetchReferences(){
   const item = state.items.find(i => i.id === prState.itemId);
   if(!item) return;
   const panel = openReaderTool("prReferences");
   panel.className = "pr-literature-panel";
   panel.innerHTML = '<h3>参考文献</h3><div role="status"></div><div class="ref-list"></div>';
-  if(!requireAiLogin()) return;
   const status = panel.querySelector('[role="status"]');
   const list = panel.querySelector(".ref-list");
   const full = (item.fullText || "").trim();
@@ -9791,6 +9839,24 @@ async function fetchReferences(){
   if(!sections.length){ status.textContent = "这篇论文暂无可识别的文字。"; return; }
   const normalize = value => value.normalize("NFKC").replace(/\s+/g, "");
   const entries = new Map();
+  function addEntry(entry){
+    const query = referenceTitle(entry);
+    if(query.length < 3) return;
+    const key = normalize(query).toLowerCase();
+    if(!entries.has(key)) entries.set(key, {entry, query});
+  }
+  function render(){
+    list.innerHTML = [...entries.values()].map(({entry,query}) => {
+      const doi = entry.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i)?.[0].replace(/[.,;]+$/, "");
+      return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
+    }).join("");
+  }
+  localBibliography(full).forEach(addEntry);
+  render();
+  if(!cloudAI?.signedIn()){
+    status.textContent = (entries.size ? "已列出文末书目。 " : "") + "登录云端账号后可补查正文及脚注引用。";
+    return;
+  }
   for(const [index, section] of sections.entries()){
     if(!panel.isConnected) return;
     status.textContent = "AI 正在核对原文引用 " + (index + 1) + " / " + sections.length;
@@ -9810,15 +9876,11 @@ async function fetchReferences(){
       const key = normalize(entry);
       if(key.length < 12 || key.length > 900 || !source.includes(key)) continue;
       if(!/(?:\b(?:18|19|20)\d{2}\b|[《》]|\[[JMDCRNA]\]|\b10\.\d{4,9}\/|出版社|卷|期)/i.test(entry)) continue;
-      if(!entries.has(key)) entries.set(key, entry);
+      addEntry(entry);
     }
-    list.innerHTML = [...entries.values()].map(entry => {
-      const doi = entry.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i)?.[0].replace(/[.,;]+$/, "");
-      const query = entry.match(/《([^》]+)》/)?.[1] || entry.replace(/^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/, "").slice(0, 160);
-      return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
-    }).join("");
+    render();
   }
-  status.textContent = entries.size ? "原文核对通过 " + entries.size + " 条" : "没有找到可与原文核对的完整书目。";
+  status.textContent = entries.size ? "从原文找到 " + entries.size + " 条" : "没有找到可与原文核对的完整书目。";
 }
 
 function toggleChatPanel(){
@@ -9830,6 +9892,8 @@ function toggleChatPanel(){
     document.getElementById("prAiAsk").setAttribute("aria-expanded", "false");
   }
 }
+function cleanReaderAnswer(text){ return text.replace(/[＊*★☆]/g, ""); }
+
 function appendChatMsg(role, text){
   const log = document.getElementById("prChatLog");
   if(!log) return;
@@ -9839,11 +9903,11 @@ function appendChatMsg(role, text){
   log.appendChild(div);
   log.scrollTop = log.scrollHeight;
 }
-async function sendChatMessage(){
+async function sendChatMessage(question){
   const input = document.getElementById("prChatInput");
-  const q = input ? input.value.trim() : "";
+  const q = question || input?.value.trim();
   if(!q || !requireAiLogin()) return;
-  input.value = "";
+  if(!question) input.value = "";
   prState.chat = prState.chat || [];
   prState.chat.push({ role: "user", content: q });
   appendChatMsg("user", q);
@@ -9860,8 +9924,9 @@ async function sendChatMessage(){
   if(!thinking?.isConnected || prState.itemId !== item.id) return;
   thinking.remove();
   if(r.content){
-    prState.chat.push({ role: "assistant", content: r.content });
-    appendChatMsg("ai", r.content);
+    const answer = cleanReaderAnswer(r.content);
+    prState.chat.push({ role: "assistant", content: answer });
+    appendChatMsg("ai", answer);
   }else{
     appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请稍后重试。");
   }
@@ -9887,39 +9952,70 @@ function fetchRelatedPapers(){
   const status = panel.querySelector('[role="status"]');
   const list = panel.querySelector(".rel-list");
   input.value = initial.slice(0, 160);
-  async function search(query){
+  async function search(query, variants = []){
     if(!query || form.querySelector("button").disabled) return;
-    form.querySelector("button").disabled = true;
-    status.textContent = "正在查询 Crossref…";
+    const button = form.querySelector("button");
+    button.disabled = true;
+    status.textContent = "正在查询 OpenAlex 和 Crossref…";
     list.innerHTML = literatureLinks(query);
+    const queries = [...new Set([query, ...variants].map(value => value.trim()).filter(Boolean))].slice(0, 4);
+    const readIndex = async (source, value) => {
+      const open = source === "OpenAlex";
+      const params = open
+        ? new URLSearchParams({search:value, per_page:"6", select:"id,display_name,doi,publication_year,primary_location"})
+        : new URLSearchParams({"query.bibliographic":value, rows:"8", select:"DOI,title,container-title,issued"});
+      const endpoint = open ? "https://api.openalex.org/works?" : "https://api.crossref.org/works?";
+      const response = await fetch(endpoint + params, {signal:AbortSignal.timeout(8500)});
+      if(!response.ok) throw new Error(source + " HTTP " + response.status);
+      const json = await response.json();
+      return (open ? json.results : json.message?.items || []).map((entry, rank) => ({
+        name:open ? entry.display_name : entry.title?.[0],
+        doi:open ? entry.doi?.replace(/^https:\/\/doi\.org\//i, "") : entry.DOI,
+        id:open ? entry.id : "",
+        year:open ? entry.publication_year : entry.issued?.["date-parts"]?.[0]?.[0],
+        venue:open ? entry.primary_location?.source?.display_name : entry["container-title"]?.[0],
+        source, rank
+      }));
+    };
     try{
-      const params = new URLSearchParams({query, rows:"16", select:"DOI,title,container-title,issued"});
-      const response = await fetch("https://api.crossref.org/works?" + params, {signal:AbortSignal.timeout(8000)});
-      if(!response.ok) throw new Error("Crossref HTTP " + response.status);
-      const result = await response.json();
-      const normalizedTitle = ppNormTitle(title);
-      const terms = (query.match(/[一-龥]{2,}|[a-z]{4,}/gi) || []).flatMap(term =>
-        /[一-龥]/.test(term) && term.length > 2 ? Array.from({length:term.length - 2}, (_, i) => term.slice(i, i + 3)) : [term.toLowerCase()]
-      );
-      const seen = new Set();
-      const papers = (result.message?.items || []).flatMap(paper => {
-        const name = paper.title?.[0];
-        const key = name ? ppNormTitle(name) : "";
-        if(!key || key === normalizedTitle || seen.has(key)) return [];
-        const overlap = new Set(terms.filter(term => key.includes(term))).size;
-        if(overlap < Math.min(2, new Set(terms).size || 1)) return [];
-        seen.add(key);
-        return [{paper, name, overlap}];
-      }).sort((a,b) => b.overlap - a.overlap).slice(0, 6);
-      status.textContent = papers.length ? "Crossref 结果，按标题与检索词的匹配程度排序。" : "Crossref 暂未找到匹配结果。可改用更短的主题词，或试试下方的检索入口。";
-      list.insertAdjacentHTML("beforeend", papers.map(({paper,name}) => {
-        const meta = [paper["container-title"]?.[0], paper.issued?.["date-parts"]?.[0]?.[0]].filter(Boolean).join(" · ");
-        return '<div class="rel-item"><div class="rel-title">' + escapeHtml(name) + '</div><div class="rel-meta">' + escapeHtml(meta) + '</div>' + literatureLinks(name, paper.DOI) + '</div>';
+      const responses = await Promise.allSettled([
+        ...queries.map(value => readIndex("OpenAlex", value)),
+        ...queries.slice(0, 2).map(value => readIndex("Crossref", value))
+      ]);
+      if(!panel.isConnected) return;
+      const original = ppNormTitle(title);
+      const phrases = [...new Set(queries.flatMap(value => value.match(/[\p{Script=Han}]{2,}|[a-z]{3,}/giu) || []).map(value => value.toLowerCase()))];
+      const candidates = new Map();
+      for(const response of responses){
+        if(response.status !== "fulfilled") continue;
+        for(const paper of response.value){
+          const key = ppNormTitle(paper.name);
+          if(!key || key === original || (original && (key.endsWith(original) || original.endsWith(key)) && Math.abs(key.length-original.length)<8)) continue;
+          const overlap = phrases.reduce((sum, phrase) => {
+            if(key.includes(phrase)) return sum + 5;
+            if(!/\p{Script=Han}/u.test(phrase) || phrase.length < 3) return sum;
+            const fragments = Array.from({length:phrase.length - 2}, (_, index) => phrase.slice(index, index + 3));
+            return sum + Math.min(3, fragments.filter(part => key.includes(part)).length);
+          }, 0);
+          const score = overlap * 3 + (6 - paper.rank) + (paper.source === "OpenAlex" ? 2 : 0);
+          if(overlap === 0 && paper.source === "Crossref") continue;
+          if(!candidates.has(key) || candidates.get(key).score < score) candidates.set(key, {...paper, score});
+        }
+      }
+      const papers = [...candidates.values()].sort((a,b) => b.score-a.score).slice(0, 8);
+      status.textContent = papers.length
+        ? "找到 " + papers.length + " 条索引记录。可换关键词缩小范围。"
+        : responses.some(response => response.status === "fulfilled")
+          ? "索引里没有找到匹配记录。可以换短一些的检索词。"
+          : "两个学术索引暂时都无法连接。可试下方的站外检索。";
+      list.insertAdjacentHTML("beforeend", papers.map(paper => {
+        const meta = [paper.venue, paper.year, paper.source].filter(Boolean).join(" · ");
+        const record = /^https:\/\/openalex\.org\/W\d+$/i.test(paper.id || "")
+          ? '<div class="pr-literature-links"><a href="' + escapeHtml(paper.id) + '" target="_blank" rel="noopener noreferrer">索引详情</a></div>' : "";
+        return '<div class="rel-item"><div class="rel-title">' + escapeHtml(paper.name) + '</div><div class="rel-meta">' + escapeHtml(meta) + '</div>' + record + literatureLinks(paper.name, paper.doi) + '</div>';
       }).join(""));
-    }catch(error){
-      status.textContent = "暂时无法连接 Crossref。可以使用下方的检索入口。";
     }finally{
-      form.querySelector("button").disabled = false;
+      button.disabled = false;
     }
   }
   const automatic = panel.querySelector("[data-auto]");
@@ -9927,7 +10023,9 @@ function fetchRelatedPapers(){
   form.onsubmit = function(event){
     event.preventDefault();
     autoRun++;
-    search(input.value.trim());
+    const query = input.value.trim();
+    const terms = query.split(/[、，,；;]+/).map(value => value.trim()).filter(Boolean);
+    search(query, terms.length > 1 ? terms : []);
   };
   automatic.onclick = async function(){
     if(!cloudAI?.signedIn()){
@@ -9937,9 +10035,10 @@ function fetchRelatedPapers(){
     }
     const run = ++autoRun;
     automatic.disabled = true;
+    const fallback = [...keywords, title].map(value => value.trim()).filter(Boolean);
     try{
       const sections = paperSections((item.fullText || "").trim());
-      if(!sections.length){ status.textContent = "当前论文暂无可供 AI 阅读的正文，可以手动检索。"; return; }
+      if(!sections.length){ await search(initial, fallback); return; }
       const topics = [];
       for(const [index, section] of sections.entries()){
         if(!panel.isConnected || run !== autoRun) return;
@@ -9950,18 +10049,15 @@ function fetchRelatedPapers(){
         ], 350, 0.1);
         if(!panel.isConnected || run !== autoRun) return;
         const terms = aiList(result.content);
-        if(!terms?.length){
-          status.textContent = "AI 未能完成阅读。可以重试，或手动检索。" + (result.error ? " " + result.error : "");
-          list.innerHTML = literatureLinks(input.value.trim());
-          return;
-        }
+        if(!terms?.length) continue;
         topics.push(...new Set(terms.map(term => term.trim()).filter(Boolean)));
       }
       const frequency = new Map();
       for(const term of topics) frequency.set(term, (frequency.get(term) || 0) + 1);
-      const query = [...frequency.keys()].sort((a,b) => frequency.get(b) - frequency.get(a)).slice(0, 4).join(" ").slice(0, 160);
+      const terms = [...frequency.keys()].sort((a,b) => frequency.get(b) - frequency.get(a)).slice(0, 4);
+      const query = terms.slice(0, 2).join(" ").slice(0, 160) || initial;
       input.value = query;
-      await search(query);
+      await search(query, [...terms, ...fallback]);
     }finally{
       automatic.disabled = false;
     }
