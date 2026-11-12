@@ -9830,7 +9830,9 @@ function fetchRelatedPapers(){
     list.innerHTML = literatureLinks(query);
     try{
       const params = new URLSearchParams({query, rows:"16", select:"DOI,title,container-title,issued"});
-      const result = JSON.parse(await ppFetchTimeout("https://api.crossref.org/works?" + params, 8000));
+      const response = await fetch("https://api.crossref.org/works?" + params, {signal:AbortSignal.timeout(8000)});
+      if(!response.ok) throw new Error("Crossref HTTP " + response.status);
+      const result = await response.json();
       const normalizedTitle = ppNormTitle(title);
       const terms = (query.match(/[一-龥]{2,}|[a-z]{4,}/gi) || []).flatMap(term =>
         /[一-龥]/.test(term) && term.length > 2 ? Array.from({length:term.length - 2}, (_, i) => term.slice(i, i + 3)) : [term.toLowerCase()]
@@ -9840,8 +9842,8 @@ function fetchRelatedPapers(){
         const name = paper.title?.[0];
         const key = name ? ppNormTitle(name) : "";
         if(!key || key === normalizedTitle || seen.has(key)) return [];
-        const overlap = terms.filter(term => key.toLowerCase().includes(term)).length;
-        if(!overlap) return [];
+        const overlap = new Set(terms.filter(term => key.includes(term))).size;
+        if(overlap < Math.min(2, new Set(terms).size || 1)) return [];
         seen.add(key);
         return [{paper, name, overlap}];
       }).sort((a,b) => b.overlap - a.overlap).slice(0, 6);
