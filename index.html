@@ -63,7 +63,6 @@
     display:flex; align-items:center; justify-content:space-between; gap:18px;
   }
   .brand{ display:flex; align-items:center; gap:10px; font-family:"Cormorant Garamond", "Noto Serif SC", serif; white-space:nowrap; }
-  .brand .mark{ display:grid; place-items:center; width:32px; height:32px; border-radius:9px; background:#E7EEE5; color:var(--teal); font-size:20px; line-height:1; }
   .brand .name{ font-size:18px; font-weight:700; letter-spacing:.05em; }
   .topnav{ display:flex; gap:4px; align-items:center; flex-wrap:wrap; justify-content:flex-end; font-family:var(--ui-font); }
   .topnav a{ font-size:13px; color:var(--ink-soft); padding:7px 9px; border-radius:8px; text-decoration:none; white-space:nowrap; transition:color .2s, background .2s; }
@@ -164,9 +163,6 @@
   }
   .cc-chip .swatch{ width:6px; height:6px; border-radius:50%; }
   .cc-chip.active .swatch{ background:#fff8e7; }
-  .cc-chip.active .cat-svg{ color:#fff8e7; }
-  .chip.active .cat-svg{ color:var(--paper); }
-  .modal-cat.active .cat-svg{ color:var(--cat-color); }
 
   /* ============ 饮品品牌小门类 (录入区) ============ */
   .composer-brand{
@@ -264,9 +260,6 @@
     --cat-color:var(--accent);
   }
   .stat:hover{ transform:translateY(-2px); box-shadow:var(--shadow); }
-  .stat .stat-head{ display:flex; align-items:center; gap:7px; margin-bottom:2px; }
-  .stat .stat-ic{ color:var(--cat-color); display:inline-flex; }
-  .stat .stat-ic svg{ width:18px; height:18px; }
   .stat .num{ font-family:var(--ui-font); font-size:23px; font-weight:650; line-height:1; color:var(--ink); }
   .stat .num small{ font-size:13px; color:var(--ink-mute); margin-left:4px; font-weight:400; }
   .stat .lbl{ font-family:"JetBrains Mono", monospace; font-size:11px; font-weight:500; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-mute); margin-top:6px; }
@@ -401,7 +394,6 @@
     border:1px solid color-mix(in srgb, var(--cat-color, var(--accent)) 35%, transparent);
   }
   .bb-count{ margin-left:6px; padding:0 5px; border-radius:8px; background:rgba(60,40,20,.08); font-size:10px; font-family:"JetBrains Mono", monospace; }
-  .cat-svg{ display:inline-block; vertical-align:middle; flex-shrink:0; color:var(--cat-color, var(--accent)); }
   .card-del{
     background:transparent; border:none; cursor:pointer; color:var(--ink-mute);
     padding:2px 6px; line-height:1; border-radius:8px; font-size:16px; opacity:.4;
@@ -445,7 +437,6 @@
   footer{ border-top:1px solid var(--line); background:rgba(232,223,201,.4); padding:28px 28px 36px; text-align:center; }
   footer .ft-inner{ max-width:var(--maxw); margin:0 auto; font-size:13px; color:var(--ink-mute); font-style:italic; line-height:1.8; }
   footer .ft-inner strong{ color:var(--ink-soft); font-style:normal; font-weight:500; }
-  footer .ft-mark{ font-family:"Fraunces", serif; color:var(--accent); font-size:18px; margin-bottom:8px; display:block; }
 
   /* ============ Toast ============ */
   .toast-wrap{
@@ -458,7 +449,6 @@
     animation:toastIn .3s ease, toastOut .3s ease 2.4s forwards;
     display:flex; align-items:center; gap:10px; max-width:90vw;
   }
-  .toast .ic{ color:var(--accent); font-weight:600; }
   @keyframes toastIn{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
   @keyframes toastOut{ to{ opacity:0; transform:translateY(8px); } }
 
@@ -688,7 +678,6 @@
     flex-shrink:0;
   }
   .pr-title-row{ display:flex; align-items:baseline; gap:10px; flex:1; min-width:0; }
-  .pr-icon{ font-family:"Fraunces",serif; font-size:20px; color:var(--teal); }
   .pr-title{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
     font-size:clamp(18px, 2.4vw, 26px); font-weight:600; line-height:1.2;
@@ -858,7 +847,6 @@
     font-family:"Cormorant Garamond","Noto Serif SC",serif; font-size:13px; font-weight:600;
     color:var(--ink); margin:0 0 6px; display:flex; align-items:center; gap:6px;
   }
-  .pa-block-h .ms-ic{ color:var(--teal); font-size:13px; }
   .pa-text{
     font-size:13px; line-height:1.85; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word;
     text-align:justify;
@@ -1405,10 +1393,6 @@
     position:relative; text-decoration:none; border-bottom:1px dashed var(--teal); cursor:pointer;
     color:inherit;
   }
-  .pr-text u.pr-note::after{
-    content:"✦"; position:absolute; left:100%; top:-.45em; margin-left:2px;
-    color:var(--teal); font-size:.65em; line-height:1; font-family:system-ui,sans-serif;
-  }
   .pr-text u.pr-note:hover{ border-bottom-style:solid; }
   .pr-note-popup{
     position:fixed; z-index:200; max-width:340px; padding:10px 14px;
@@ -1447,7 +1431,6 @@
     letter-spacing:.16em; text-transform:uppercase; color:var(--ink-soft);
     margin-bottom:6px; display:flex; align-items:center; gap:6px;
   }
-  .pa-block-h .ms-ic{ color:var(--teal); font-size:13px; }
   .pa-text{
     font-family:"Newsreader","Noto Serif SC",serif; font-size:13px; line-height:1.7;
     color:var(--ink-soft); text-align:justify; word-break:break-word;
@@ -1557,7 +1540,6 @@
     color:var(--ink); margin:0 0 10px; padding-bottom:6px; border-bottom:1px solid var(--line-soft);
     display:flex; align-items:center; gap:8px;
   }
-  .meta-section-h .ms-ic{ color:var(--teal); font-size:14px; }
   .meta-summary{
     font-size:14px; line-height:1.9; color:var(--ink-soft); white-space:pre-wrap; word-break:break-word;
     text-align:justify;
@@ -1693,7 +1675,6 @@
     display:flex; align-items:center; gap:8px; justify-content:center;
     margin-bottom:6px;
   }
-  .login-brand .mark{ font-size:26px; color:var(--accent); }
   .login-brand .name{
     font-family:"Cormorant Garamond","Noto Serif SC",serif;
     font-size:26px; font-weight:700; color:var(--ink); letter-spacing:.04em;
@@ -1775,7 +1756,6 @@
     background:rgba(176,67,44,.06);
     font-family:"Newsreader","Noto Serif SC",serif;
   }
-  .nav-user::before{ content:"❦ "; color:var(--accent); }
   @keyframes loginIn{ from{ opacity:0; transform:translateY(14px) scale(.98); } to{ opacity:1; transform:translateY(0) scale(1); } }
 
   /* 柔和渐变主题与统一的按钮回弹 */
@@ -1790,7 +1770,7 @@
   .login-screen{ background:radial-gradient(ellipse 65% 55% at 12% 12%,rgba(177,206,218,.48),transparent 75%),radial-gradient(ellipse 65% 55% at 91% 85%,rgba(220,196,217,.5),transparent 75%),linear-gradient(130deg,#F5F8F8,#F4F1F7 58%,#F7F6F0); }
   .login-card{ max-width:420px; padding:32px; border-color:#D7E1E7; border-radius:20px; background:linear-gradient(145deg,rgba(255,255,255,.97),rgba(248,248,251,.96)); box-shadow:0 24px 70px -30px rgba(55,76,109,.36); }
   .login-card::before{ height:4px; background:linear-gradient(90deg,#89ADB9,#8B99BC,#B9A4BE); border-radius:20px 20px 0 0; }
-  .login-brand .mark,.login-tab.active{ color:#496B83; }
+  .login-tab.active{ color:#496B83; }
   .login-tab.active{ border-bottom-color:#7996AD; }
   .login-field input:focus{ border-color:#7E9DB0; box-shadow:0 0 0 3px rgba(150,181,199,.18); }
   .login-submit{ background:linear-gradient(120deg,#3E6277,#696383); color:#fff; }
@@ -1909,7 +1889,7 @@
     padding:17px 28px; border-bottom-color:rgba(103,123,145,.22);
     background:linear-gradient(112deg,rgba(230,239,244,.96),rgba(237,233,245,.96) 55%,rgba(247,232,233,.96));
   }
-  .pr-title,.pr-icon{ font-family:var(--ui-font); color:#293F54; }
+  .pr-title{ font-family:var(--ui-font); color:#293F54; }
   .pr-title{ font-weight:750; letter-spacing:-.025em; }
   .pr-sub,.pr-hl-label,.pr-zoom-pct,.pr-outline-section,.pa-label,.pa-metrics span,.rel-rank,.ref-idx{
     font-family:var(--ui-font); font-size:12px; font-weight:650; letter-spacing:.045em; text-transform:none;
@@ -1994,7 +1974,7 @@
 <div class="login-screen" id="loginScreen">
   <div class="login-card">
     <div class="login-brand">
-      <span class="mark">❦</span>
+
       <span class="name">书影食单</span>
     </div>
     <div class="login-kicker">私家志录 · 各自独立</div>
@@ -2040,12 +2020,12 @@
 <header class="topbar">
   <div class="topbar-inner">
     <div class="brand">
-      <span class="mark" aria-hidden="true">❦</span>
+
       <span class="name">书影食单</span>
     </div>
     <nav class="topnav">
-      <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">⚙ AI</a>
-      <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">🗑 回收站</a>
+      <a href="#" id="navAiCfg" title="配置 AI 接口(智谱 GLM-4-Flash 免费直连)">AI</a>
+      <a href="#" id="navTrash" title="回收站:删除的记录可恢复或彻底删除">回收站</a>
       <button class="cloud-nav-btn" type="button" id="siteCloudOpen">全站云同步</button>
       <a href="#" id="navAccount" class="nav-code-btn" title="管理网站密码和本机备份">账号与密码</a>
       <span class="nav-user" id="navUser"></span>
@@ -2087,14 +2067,14 @@
     </div>
   </div>
   <div class="paper-workspace-focus">
-    <button class="paper-workspace-back" id="paperWorkspaceBack" type="button">← 返回全部志录</button>
+    <button class="paper-workspace-back" id="paperWorkspaceBack" type="button">返回全部志录</button>
     <div class="paper-workspace-focus-main">
       <div>
         <span class="paper-workspace-focus-kicker">RESEARCH LIBRARY / 论文阅读</span>
         <h2>我的论文</h2>
         <p>在原版页面上阅读、标注与备注，继续你的研究。</p>
       </div>
-      <button class="paper-workspace-btn" id="paperWorkspaceImport" type="button">＋ 导入论文</button>
+      <button class="paper-workspace-btn" id="paperWorkspaceImport" type="button">导入论文</button>
     </div>
     <div class="paper-workspace-focus-foot"><span>文献目录</span><span>共 <strong id="paperFocusCount">0</strong> 篇论文</span></div>
   </div>
@@ -2104,7 +2084,7 @@
   <div class="composer-card">
     <div class="composer-label">
       <h2>录入新条目</h2>
-      <button class="btn-link" id="essayBtn" title="撰写并保存一篇随笔" type="button">＋ 录入随笔</button>
+      <button class="btn-link" id="essayBtn" title="撰写并保存一篇随笔" type="button">录入随笔</button>
     </div>
     <div class="composer-row">
       <input id="entryInput" class="composer-input" type="text" autocomplete="off" aria-label="条目名称" placeholder="输入书名、片名等" />
@@ -2120,7 +2100,7 @@
       <div class="cb-row">
         <select id="beverageBrandSel" title="选择已有小门类"></select>
         <input id="beverageBrandNew" class="cb-new-input" type="text" placeholder="或输入新名称" autocomplete="off" />
-        <button id="beverageBrandAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">＋ 加入</button>
+        <button id="beverageBrandAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">加入</button>
       </div>
       <span class="cb-hint" id="cbHintText">请选择或新建小门类</span>
     </div>
@@ -2144,7 +2124,7 @@
   </div>
   <div class="toolbar-actions">
     <button class="btn-link" id="pendingBtn" style="display:none" title="低置信条目待人工确认">识别列表</button>
-    <button class="btn-link" id="batchSelectBtn" title="勾选多条批量删除">✕ 批量删除</button>
+    <button class="btn-link" id="batchSelectBtn" title="勾选多条批量删除">批量删除</button>
   </div>
 </section>
 
@@ -2192,7 +2172,7 @@
 
 <footer>
   <div class="ft-inner">
-    <span class="ft-mark">❦</span>
+
     <strong>书影食单</strong> · 阅读、观影与日常收藏
   </div>
 </footer>
@@ -2216,7 +2196,7 @@
       <div class="cb-row" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <select id="editSubcatSel" title="选择已有小门类" style="flex:1;min-width:120px"></select>
         <input id="editSubcatNew" type="text" class="cb-new-input" placeholder="或输入新名称" autocomplete="off" style="flex:1;min-width:120px" />
-        <button id="editSubcatAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">＋ 加入</button>
+        <button id="editSubcatAddBtn" type="button" class="cb-add-btn" title="把左侧输入的名称加入小门类">加入</button>
       </div>
     </div>
     <div class="modal-field" id="editEssayDateField" style="display:none">
@@ -2256,7 +2236,7 @@
       <button class="modal-btn" id="batchClear">清空</button>
       <button class="modal-btn" id="batchUndo" title="撤销上一步操作" disabled>↶ 撤销</button>
       <button class="modal-btn" id="batchOnline" title="联网查询百科词条,智能判断类别">联网识别</button>
-      <button class="modal-btn" id="batchAiDetect" title="用AI智能识别每个条目的分类" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">✨ AI识别</button>
+      <button class="modal-btn" id="batchAiDetect" title="用AI智能识别每个条目的分类" style="background:linear-gradient(135deg,#a78bfa,#f472b6);color:#fff;border:none;">AI 识别</button>
     </div>
     <div class="batch-list" id="batchList"></div>
     <div class="modal-actions">
@@ -2287,13 +2267,13 @@
         <span class="edi-unit">日</span>
       </div>
     </div>
-    <button class="paper-pdf-btn" id="paperPdfBtn" type="button">⇪ 导入文档</button>
+    <button class="paper-pdf-btn" id="paperPdfBtn" type="button">导入文档</button>
     <div class="modal-field">
       <label>论文全文 </label>
       <input id="paperPdfFile" type="file" accept=".pdf,.docx,.caj" hidden />
       <textarea class="paper-textarea" id="paperFullText" placeholder="粘贴论文全文于此,或点击上方「导入文档」(支持 PDF / Word / CAJ)……&#10;&#10;支持中英文论文,系统将自动识别摘要、引言、方法、结论等章节,并生成解读分析。"></textarea>
       <div class="pp-convert-tip">
-        <div class="pp-convert-head">☁ 需要转换为可编辑的 Word？可尝试以下工具（转换后排版可能变化）：</div>
+        <div class="pp-convert-head">需要转换为可编辑的 Word？可尝试以下工具（转换后排版可能变化）：</div>
         <div class="pp-convert-links">
           <a href="https://www.ilovepdf.com/zh-cn/pdf_to_word" target="_blank" rel="noopener">iLovePDF</a>
           <a href="https://smallpdf.com/cn/pdf-to-word" target="_blank" rel="noopener">Smallpdf</a>
@@ -2317,7 +2297,7 @@
   <div class="paper-reader">
     <div class="pr-header">
       <div class="pr-title-row">
-        <span class="pr-icon">§</span>
+
         <h3 class="pr-title" id="prTitle"></h3>
         <span class="pr-sub" id="prMeta"></span>
       </div>
@@ -2331,13 +2311,13 @@
           <button class="pr-hl-color" data-color="#F5C6C6" style="background:#F5C6C6" title="淡红"></button>
           <button class="pr-hl-color" data-color="#E0C6E8" style="background:#E0C6E8" title="淡紫"></button>
           <span class="pr-hl-sep"></span>
-          <button class="pr-hl-fmt" data-fmt="note" title="为选中句子添加备注(平时隐藏,点击可见)">💬 备注</button>
+          <button class="pr-hl-fmt" data-fmt="note" title="为选中句子添加备注(平时隐藏,点击可见)">备注</button>
           <button class="pr-hl-undo" id="prHlUndo" title="撤销上一步(Ctrl+Z)">↶</button>
           <button class="pr-hl-undo" id="prHlRedo" title="重做(Ctrl+Y / Ctrl+Shift+Z)">↷</button>
           <button class="pr-hl-eraser" data-color="clear" title="清除全部标记（可逐步撤回）">×</button>
-          <button class="pr-hl-save" id="prHlSave" title="立即保存文字修改、标注和备注,下次进入仍可见">✓ 保存修改</button>
+          <button class="pr-hl-save" id="prHlSave" title="立即保存文字修改、标注和备注,下次进入仍可见">保存修改</button>
           <span class="pr-hl-sep"></span>
-          <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">✕ 取消标记</button>
+          <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">取消标记</button>
           <button class="pr-hl-fmt" id="prTranslate" title="开启后，选中任意文字会自动翻译；再次点击关闭">文 翻译</button>
           <span class="pr-hl-sep"></span>
         </div>
@@ -2347,7 +2327,7 @@
           <button class="pr-zoom-btn" id="prZoomIn" title="放大 (Ctrl+=)">+</button>
           <button class="pr-zoom-btn" id="prZoomLock" type="button" aria-label="锁定缩放" aria-pressed="false" title="锁定缩放" style="padding-inline:6px">🔓</button>
         </div>
-        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">⚙ AI</button>
+        <button class="pr-reformat-btn" id="prAiCfg" title="配置AI接口(智谱GLM-4-Flash免费直连)">AI</button>
         <button class="modal-btn" id="prFindOpen" aria-expanded="false">搜索</button>
         <button class="modal-btn" id="prPagesOpen" aria-expanded="false">页面</button>
         <button class="modal-btn" id="prMarksOpen" aria-expanded="false">标注与备注</button>
@@ -2367,17 +2347,17 @@
         <div class="pr-outline-resizer" id="prOutlineResizer" title="拖动调整宽度"></div>
         <div class="pr-outline-section">智能工具 · AI LAB</div>
         <div class="pr-ai-btns">
-          <button class="pr-ai-btn" id="prAiRead" title="选中一段文字后点击,AI基于上下文深度解读">✦ 解读选中</button>
-          <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">💬 AI 提问</button>
-          <button class="pr-ai-btn" id="prRelated" title="联想知网内与该论文研究内容相似的论文五篇(真实学术数据源)">⇄ 联想论文</button>
-          <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">❑ 参考文献</button>
+          <button class="pr-ai-btn" id="prAiRead" title="选中一段文字后点击,AI基于上下文深度解读">解读选中</button>
+          <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">AI 提问</button>
+          <button class="pr-ai-btn" id="prRelated" title="联想知网内与该论文研究内容相似的论文五篇(真实学术数据源)">联想论文</button>
+          <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">参考文献</button>
         </div>
         <div class="pr-ai-result" id="prAiResult"></div>
         <div class="pr-chat" id="prChat">
           <div class="pr-chat-log" id="prChatLog"></div>
           <div class="pr-chat-row">
             <input type="text" id="prChatInput" placeholder="向 AI 提问…" maxlength="500">
-            <button id="prChatSend" title="发送">↑</button>
+            <button id="prChatSend" title="发送">发送</button>
           </div>
         </div>
       </aside>
@@ -2398,7 +2378,7 @@
 <!-- 回收站弹窗 -->
 <div class="modal-bg" id="trashModal">
   <div class="modal trash-modal">
-    <h3>🗑 回收站 <span class="sub">删除的记录保留 7 天</span></h3>
+    <h3>回收站 <span class="sub">删除的记录保留 7 天</span></h3>
     <div class="trash-tip">误删的条目可随时恢复回原分类;超过 7 天将自动彻底清空。恢复论文类条目时,全文与颜色标注一并还原。</div>
     <div class="trash-list" id="trashList"></div>
     <div class="modal-row">
@@ -2552,42 +2532,36 @@
 
 const CATEGORIES = {
   essay: {
-    name:"随笔", color:"#5B4B8B", icon:"✎",
-    svg:'<path d="M3 17l10-10 4 4-10 10H3v-4z"/><path d="M13 7l4 4"/>',
+    name:"随笔", color:"#5B4B8B",
     /* 随笔/散文/杂文: 个人书写, 粘贴长文入册, 可查看编辑 */
     keywords:["随笔","散文","杂文","笔记","札记","手记","随想","杂感","小品","随笔集","essay","essays","琐记","闲话","散记","心情","日记","杂记","笔谈","抒情","记叙","议论","见闻","感悟","思考","品味","风物","乡愁","旧事","往事","回忆","行记","游记","闲情","偶记","漫记","随感"],
     patterns:[]
   },
   movie: {
-    name:"影视", color:"#9B7B33", icon:"✦",
-    svg:'<rect x="3" y="5" width="18" height="14" rx="1.5"/><path d="M3 9h18M3 15h18M8 5v4M16 5v4M8 15v4M16 15v4"/>',
+    name:"影视", color:"#9B7B33",
     keywords:["电影","影视","movie","film","cinema","导演","主演","imax","蓝光","dvd","剧场版","续集","电视剧","连续剧","网剧","剧","韩剧","美剧","日剧","泰剧","综艺","纪录片"],
     patterns:[]
   },
   novel: {
-    name:"小说", color:"#8B5E3C", icon:"❉",
-    svg:'<path d="M4 19c2-1 4-1 8 0 4-1 6-1 8 0"/><path d="M6 19V5c2-.8 4-.8 6 0v14"/><path d="M18 19V5c-2-.8-4-.8-6 0"/>',
+    name:"小说", color:"#8B5E3C",
     /* 小说(网络小说): 不参与AI自动识别,需手动选择;关键词只用于已有条目检索 */
     keywords:["网络小说","网文","网文小说","连载","番外","穿越","重生","系统流","金手指","爽文","修仙","玄幻","奇幻","仙侠","武侠","都市言情","架空","盗墓","同人","轻小说","起点","纵横","晋江","番茄","飞卢","创世","连载中","追更","追读","完本","书荒"],
     patterns:[]
   },
   tosee: {
-    name:"待看", color:"#6B8E9E", icon:"◐",
-    svg:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    name:"待看", color:"#6B8E9E",
     /* 待看清单: 不参与AI自动识别,需手动选择 */
     keywords:[],
     patterns:[]
   },
   treatise: {
-    name:"论著", color:"#3D5A6B", icon:"§",
-    svg:'<path d="M4 4h12a2 2 0 0 1 2 2v14H6a2 2 0 0 1-2-2V4z"/><path d="M4 4v16"/><path d="M8 8h6M8 11h6M8 14h4"/>',
+    name:"论著", color:"#3D5A6B",
     /* 学术论著/专著/研究性书籍: 按学科分类(历史/文学/心理学等) */
     keywords:["论著","专著","学术","研究","史学","哲学","心理学","社会学","政治学","经济学","法学","教育学","人类学","考古","历史","文学批评","文学理论","文艺学","美学","逻辑学","伦理学","宗教学","传播学","管理学","地理","军事","国际关系","公共管理","统计学","数学","物理","化学","生物","医学","工程","计算机","信息论","系统论","控制论","方法论","导论","概论","通史","断代史","编年","纪传","史料","考据","校勘","注释","译注","批评论","思想史","文化史","社会史","制度史","制度","改革","革命","运动","思潮","流派","学派","理论","实践","评传","传记","年谱","方志","地方志","县志","府志","通志","文献","典籍","经籍","经史","子集","丛刊","集刊","论集","文集","选集","选读","读本","文选","文存","文献综述","研究综述"],
     patterns:[]
   },
   literature: {
-    name:"文学", color:"#5C6B4A", icon:"❧",
-    svg:'<path d="M4 19c2-1 4-1 8 0 4-1 6-1 8 0"/><path d="M6 19V5c2-.8 4-.8 6 0v14"/><path d="M18 19V5c-2-.8-4-.8-6 0"/><path d="M9 9h2M9 12h2"/>',
+    name:"文学", color:"#5C6B4A",
     /* 传统文学/经典/严肃文学: 与网文区分 */
     keywords:["散文","诗集","诗选","随笔","集子","文丛","文集","回忆录","传记","memoir","essays","poetry","选集","手记","札记","漫记",
       "名著","经典","文学","鲁迅","老舍","茅盾","巴金","沈从文","汪曾祺","萧红","朱自清","冰心","徐志摩","海子","顾城","北岛",
@@ -2595,20 +2569,17 @@ const CATEGORIES = {
     patterns:[]
   },
   paper: {
-    name:"论文", color:"#2F5D62", icon:"§",
-    svg:'<path d="M6 3h9l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 16h7M9 10h3"/>',
+    name:"论文", color:"#2F5D62",
     keywords:["论文","paper","arxiv","doi","ieee","acm","nature","science","research","研究","algorithm","neural","transformer","learning","model","attention","bert","gpt","deep","quantum","survey","review","optimization","method","approach","analysis","network","dataset"],
     patterns:[/10\.\d{4,}\/\S+/i, /arxiv:\s?\d{4}\.\d{4,5}/i, /arxiv\.org\/abs\/\d{4}\.\d{4,5}/i, /\b[A-Z][a-z]+\s+et\s+al\b/]
   },
   takeout: {
-    name:"外卖", color:"#5A3A52", icon:"◉",
-    svg:'<path d="M5 8h14l-1 12H6L5 8z"/><path d="M9 8V5a3 3 0 0 1 6 0v3"/><path d="M9 12v4M15 12v4"/>',
+    name:"外卖", color:"#5A3A52",
     keywords:["外卖","takeout","delivery","美团","饿了么","麦当劳","肯德基","starbucks","星巴克","瑞幸","luckin","必胜客","华莱士","塔斯汀","喜茶","奈雪","蜜雪","霸王茶姬","达美乐","subway","赛百味","burger","wendy","kfc","mcdonald","德克士","dicos","老乡鸡","乡村基","真功夫","沙县小吃","兰州拉面馆","永和","李先生","加州牛肉面","庆丰","狗不理","海底捞","西贝","莜面村","杨国福","张亮","麻辣烫店"],
     patterns:[]
   },
   dish: {
-    name:"菜品", color:"#B5651D", icon:"❉",
-    svg:'<path d="M3 11c0 5 4 8 9 8s9-3 9-8H3z"/><path d="M3 11h18"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/><circle cx="12" cy="5" r="1.5"/>',
+    name:"菜品", color:"#B5651D",
     /* 烹饪法 + 调味 + 食材 + 形态 — 多维度覆盖 */
     keywords:[
       /* 烹饪法 */
@@ -2629,15 +2600,13 @@ const CATEGORIES = {
     patterns:[]
   },
   food: {
-    name:"美食", color:"#C44536", icon:"♨",
-    svg:'<path d="M5 11h14l-1 9a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 11z"/><path d="M5 11a7 7 0 0 1 14 0"/><path d="M12 4v4"/><path d="M8 6c0 1 .5 2 2 2M16 6c0 1-.5 2-2 2"/>',
+    name:"美食", color:"#C44536",
     /* 美食/餐厅: 按城市分类的探店记录, 小门类=城市 */
     keywords:["美食","餐厅","饭馆","菜馆","餐馆","食府","酒楼","饭店","探店","打卡","美食店","面馆","火锅店","烧烤店","日料店","韩餐","泰餐","法餐","意餐","brunch","自助餐","烤肉","寿司","拉面","居酒屋","烧鸟","omakase","fine dining"],
     patterns:[]
   },
   skincare: {
-    name:"护肤", color:"#7B5982", icon:"✿",
-    svg:'<path d="M9 3h6v3l1.5 3.5V20a1 1 0 0 1-1 1H8.5a1 1 0 0 1-1-1V9.5L9 6V3z"/><path d="M9 6h6"/><path d="M10 13h4"/><circle cx="12" cy="11" r="1"/>',
+    name:"护肤", color:"#7B5982",
     keywords:[
       /* 品类词 */
       "护肤品","skincare","cosmetics","makeup","美妆","彩妆",
@@ -2665,8 +2634,7 @@ const CATEGORIES = {
     patterns:[]
   },
   snack: {
-    name:"零食", color:"#B47D8E", icon:"❊",
-    svg:'<circle cx="12" cy="12" r="8"/><circle cx="9" cy="10" r="1.2"/><circle cx="15" cy="11" r="1"/><circle cx="11" cy="15" r="1.1"/><circle cx="15" cy="15" r="0.9"/>',
+    name:"零食", color:"#B47D8E",
     keywords:[
       /* 品类词 */
       "零食","snack","snacks","休闲食品","小食","嘴馋",
@@ -2690,8 +2658,7 @@ const CATEGORIES = {
     patterns:[]
   },
   beverage: {
-    name:"饮品", color:"#5A7B96", icon:"◈",
-    svg:'<path d="M6 4h12l-1.5 16a1 1 0 0 1-1 .9H8.5a1 1 0 0 1-1-.9L6 4z"/><path d="M6 4h12"/><path d="M10 9l1 8M14 9l-1 8"/>',
+    name:"饮品", color:"#5A7B96",
     keywords:[
       /* 品类词 */
       "饮品","饮料","beverage","drink","drinks","解渴","冲调",
@@ -5754,7 +5721,7 @@ function openPaperReader(itemId){
   if(pdfEditBtn){
     pdfEditBtn.hidden = true;
     pdfEditBtn.classList.remove("on");
-    pdfEditBtn.textContent = "✎ 编辑文字";
+    pdfEditBtn.textContent = "编辑文字";
     pdfEditBtn.onclick = function(){
       const pt = document.getElementById("prText");
       if(!pt || !pt.classList.contains("pr-pdf-native")){
@@ -5764,7 +5731,7 @@ function openPaperReader(itemId){
       prState.pdfEditMode = !prState.pdfEditMode;
       pt.classList.toggle("pdf-edit-mode", prState.pdfEditMode);
       this.classList.toggle("on", prState.pdfEditMode);
-      this.textContent = prState.pdfEditMode ? "✓ 退出编辑" : "✎ 编辑文字";
+      this.textContent = prState.pdfEditMode ? "退出编辑" : "编辑文字";
       if(prState.pdfEditMode){
         toast("编辑模式已开启:蓝框是可编辑文字块,点击任一文字即可修改");
       }else{
@@ -7598,7 +7565,7 @@ function renderStructuredPaper(item, prText){
     /* 来源徽章: 原文链接(联网查询DOI) + 多学术网站检索直达(知网/万方/维普/百度学术/谷歌学术/S2/arXiv/RG/PubMed/CORE) */
     h += '<div class="pp-src-row" contenteditable="false">';
     if(st.sourceUrl){
-      h += '<a class="pp-src-badge pp-src-doi" href="' + escapeHtml(st.sourceUrl) + '" target="_blank" rel="noopener">🔗 原文链接</a>';
+      h += '<a class="pp-src-badge pp-src-doi" href="' + escapeHtml(st.sourceUrl) + '" target="_blank" rel="noopener">原文链接</a>';
     }
     h += '<span class="pp-src-label">文献检索</span>';
     const acLinks = buildAcademicLinks(title);
@@ -8612,7 +8579,7 @@ function openAiCfgModal(){
       };
       if(cfg2.endpoint && cfg2.key){
         localStorage.setItem(AI_CFG_KEY, JSON.stringify(cfg2));
-        toast("AI 接口已配置 ✓");
+        toast("AI 接口已配置");
         modal.classList.remove("show");
         updateNavAiState();
       }else{
@@ -8646,7 +8613,7 @@ function openAiCfgModal(){
         testRes.style.background = "#f0f7ff";
         testRes.style.padding = "10px 14px";
         testRes.style.borderRadius = "8px";
-        testRes.innerHTML = '<b style="color:#1976d2;">⏳ 正在连接…</b><br><span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(endpoint) + ' / ' + escapeHtml(mname) + '</span>';
+        testRes.innerHTML = '<b style="color:#1976d2;">正在连接…</b><br><span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(endpoint) + ' / ' + escapeHtml(mname) + '</span>';
         testRes.scrollIntoView({ behavior:"smooth", block:"center" });
       }
       const t0 = Date.now();
@@ -8667,9 +8634,9 @@ function openAiCfgModal(){
           const content = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : "";
           if(testRes){
             testRes.style.background = "#e8f5e9";
-            testRes.innerHTML = '<b style="color:#2e7d32;font-size:15px;">✓ 连接成功</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">模型回复: ' + escapeHtml(content || "(无内容)") + '</span>';
+            testRes.innerHTML = '<b style="color:#2e7d32;font-size:15px;">连接成功</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">模型回复: ' + escapeHtml(content || "(无内容)") + '</span>';
           }
-          toast("✓ 连接成功 · " + elapsed + "s");
+          toast("连接成功 · " + elapsed + "s");
         }else{
           const errText = await resp.text().catch(function(){ return ""; });
           let hint = "";
@@ -8678,33 +8645,33 @@ function openAiCfgModal(){
           else if(resp.status === 429) hint = " <b>限流</b> — 免费版同一时间仅1个并发,稍后重试";
           if(testRes){
             testRes.style.background = "#fef2f2";
-            testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">✗ 连接失败</b> <span style="color:var(--ink-mute);font-size:12px;">HTTP ' + resp.status + ' (' + elapsed + 's)</span><br>' + hint + (errText ? ' <span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(errText.substring(0, 120)) + '</span>' : '');
+            testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">连接失败</b> <span style="color:var(--ink-mute);font-size:12px;">HTTP ' + resp.status + ' (' + elapsed + 's)</span><br>' + hint + (errText ? ' <span style="color:var(--ink-mute);font-size:12px;">' + escapeHtml(errText.substring(0, 120)) + '</span>' : '');
           }
-          toast("✗ 连接失败 HTTP " + resp.status);
+          toast("连接失败 HTTP " + resp.status);
         }
       }catch(e){
         const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
         if(testRes){
           testRes.style.background = "#fef2f2";
-          testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">✗ 网络错误</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">' + escapeHtml(e.message || "未知") + ' — 请检查网络/端点地址</span>';
+          testRes.innerHTML = '<b style="color:#c0392b;font-size:15px;">网络错误</b> <span style="color:var(--ink-mute);font-size:12px;">(' + elapsed + 's)</span><br><span style="font-size:13px;">' + escapeHtml(e.message || "未知") + ' — 请检查网络/端点地址</span>';
         }
-        toast("✗ 网络错误: " + (e.message || "未知"));
+        toast("网络错误: " + (e.message || "未知"));
       }
       testBtn.disabled = false;
       testBtn.textContent = oldText;
     };
   }
 }
-/* 导航栏 ⚙ AI 按钮状态: 已配置显示 ✓ */
+/* 导航栏 AI 按钮状态: 显示配置状态 */
 function updateNavAiState(){
   const btn = document.getElementById("navAiCfg");
   if(!btn) return;
   const cfg = getAiConfig();
   if(cfg && cfg.key){
-    btn.textContent = "⚙ AI ✓";
+    btn.textContent = "AI 已配置";
     btn.title = "AI 已接入: " + (cfg.model || "glm-4-flash");
   }else{
-    btn.textContent = "⚙ AI";
+    btn.textContent = "AI";
     btn.title = "配置 AI 接口(智谱 GLM-4-Flash 免费直连)";
   }
 }
@@ -9831,7 +9798,7 @@ async function runAiRead(){
     selectedText = sel.toString().replace(/\u00A0/g, "\n").trim();
   }
   if(!selectedText){
-    resultEl.innerHTML = '<div class="pr-ai-hint">请先在正文中<b>选中一段文字</b>,<br>再点击「✦ 解读选中」。<br><br>AI 将结合上下文为你解读该段内容。</div>';
+    resultEl.innerHTML = '<div class="pr-ai-hint">请先在正文中<b>选中一段文字</b>,<br>再点击「解读选中」。<br><br>AI 将结合上下文为你解读该段内容。</div>';
     toast("请先选中一段文字再点「解读选中」");
     return;
   }
@@ -9846,7 +9813,7 @@ async function runAiRead(){
     return;
   }
   const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
-  resultEl.innerHTML = '<div class="pr-ai-loading">✦ AI 正在结合上下文解读选中内容,请稍候…</div>';
+  resultEl.innerHTML = '<div class="pr-ai-loading">AI 正在结合上下文解读选中内容,请稍候…</div>';
 
   if(cfg && cfg.key){
     /* 定位选中文本的上下文(前500字+后500字) */
@@ -9867,7 +9834,7 @@ async function runAiRead(){
     ];
     const r = await callAI(messages, 2200);
     if(r.content){
-      let ah = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">✦</span> 解读选中</div>';
+      let ah = '<div class="pa-block"><div class="pa-block-h">解读选中</div>';
       ah += '<div class="pa-text" style="border-left:2px solid var(--teal);padding-left:8px;margin-bottom:8px;color:var(--ink-mute);font-size:12px;">' + escapeHtml(selText.length > 80 ? selText.substring(0, 80) + "…" : selText) + '</div>';
       ah += '<div class="pa-text">' + escapeHtml(r.content) + '</div></div>';
       ah += '<div class="pa-metrics" style="margin-top:10px;"><span>选中 ' + selText.length + ' 字</span><span>AI 模型: ' + escapeHtml(cfg.model) + '</span></div>';
@@ -9980,7 +9947,7 @@ async function fetchReferences(){
   if(!item) return;
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">❑ AI 正在检索论文参考文献…</div>';
+  resultEl.innerHTML = '<div class="pr-ai-loading">AI 正在检索论文参考文献…</div>';
 
   const full = item.fullText || "";
   /* 优先截取参考文献章节(通常在文末) */
@@ -9992,7 +9959,7 @@ async function fetchReferences(){
   const refCtx = refSection.length > 200 ? refSection : full.substring(Math.max(0, full.length - 8000));
 
   function renderRefs(refs, note){
-    let h = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">❑</span> 参考文献 · ' + refs.length + ' 条</div>';
+    let h = '<div class="pa-block"><div class="pa-block-h">参考文献 · ' + refs.length + ' 条</div>';
     if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
     h += '<div class="ref-list" style="margin-top:8px;">';
     for(let i=0; i<refs.length; i++){
@@ -10140,7 +10107,7 @@ async function sendChatMessage(){
     prState.chat.push({ role: "assistant", content: r.content });
     appendChatMsg("ai", r.content);
   }else{
-    appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请检查 ⚙ AI 配置(端点/密钥/模型)或稍后重试。");
+    appendChatMsg("err", "AI 调用失败: " + (r.error || "未知错误") + "\n请检查 AI 配置(端点/密钥/模型)或稍后重试。");
   }
 }
 
@@ -10153,7 +10120,7 @@ async function fetchRelatedPapers(){
   if(!item) return;
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">⇄ 正在检索真实相似文献…</div>';
+  resultEl.innerHTML = '<div class="pr-ai-loading">正在检索真实相似文献…</div>';
 
   /* 构造检索词: 标题 + 关键词 */
   const a = item.analysis || {};
@@ -10165,7 +10132,7 @@ async function fetchRelatedPapers(){
 
   /* 渲染结果: 真实论文 + 真实被引数,点击整条跳知网检索,带DOI可直达原文 */
   function renderList(papers, note){
-    let h = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⇄</span> 相似文献 · 知网联想</div>';
+    let h = '<div class="pa-block"><div class="pa-block-h">相似文献 · 知网联想</div>';
     if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
     h += '<div class="rel-list" style="margin-top:8px;">';
     for(let i=0; i<papers.length; i++){
@@ -10173,7 +10140,7 @@ async function fetchRelatedPapers(){
       h += '<div class="rel-item" data-title="' + escapeHtml(p.title) + '">';
       h += '<div class="rel-rank">#' + (i+1) + (p.year ? " · " + escapeHtml(p.year) : "") + (p.cites !== "" ? ' · 被引 <b style="color:var(--accent);">' + escapeHtml(p.cites) + '</b>' : "") + '</div>';
       h += '<div class="rel-title">' + escapeHtml(p.title) + '</div>';
-      h += '<div class="rel-meta">点击在知网检索 →' + (p.doi ? ' <a class="rel-doi" href="' + escapeHtml(p.doi) + '" target="_blank" rel="noopener">原文DOI ↗</a>' : '') + '</div>';
+      h += '<div class="rel-meta">点击在知网检索' + (p.doi ? ' <a class="rel-doi" href="' + escapeHtml(p.doi) + '" target="_blank" rel="noopener">原文 DOI</a>' : '') + '</div>';
       h += '</div>';
     }
     h += '</div></div>';
@@ -10345,7 +10312,7 @@ async function fetchRelatedPapers(){
   }
 
   /* 均无结果: 诚实提示,绝不编造论文;给标题+主题词两条知网检索直链 */
-  resultEl.innerHTML = '<div class="pa-block"><div class="pa-block-h"><span class="ms-ic">⇄</span> 相似文献 · 知网联想</div>' +
+  resultEl.innerHTML = '<div class="pa-block"><div class="pa-block-h">相似文献 · 知网联想</div>' +
     '<div class="pa-mute">暂未检索到可关联的中文文献(本文可能未被学术索引收录)。可点击下方按钮直达知网检索:</div>' +
     '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">' +
     '<button class="pr-ai-btn" style="width:100%;" id="prRelatedTitle">按标题检索「' + escapeHtml((item.name || "本文标题").substring(0, 24)) + '」</button>' +
@@ -10636,7 +10603,7 @@ function renderMetaBody(item){
 
   /* 内容概要 —— 分段展示 */
   html += '<div class="meta-section">';
-  html += '<div class="meta-section-h"><span class="ms-ic">§</span> 内容概要 · SUMMARY</div>';
+  html += '<div class="meta-section-h">内容概要 · SUMMARY</div>';
   if(m.summary){
     var sumParas = organizeMetaText(m.summary, 800);
     for(let i=0; i<sumParas.length; i++){
@@ -10649,7 +10616,7 @@ function renderMetaBody(item){
 
   /* 情节 —— 按叙事逻辑分段 */
   html += '<div class="meta-section">';
-  html += '<div class="meta-section-h"><span class="ms-ic">❦</span> 情节 · PLOT</div>';
+  html += '<div class="meta-section-h">情节 · PLOT</div>';
   if(m.plot){
     var plotParas = organizeMetaText(m.plot, 2000);
     for(let i=0; i<plotParas.length; i++){
@@ -10665,7 +10632,7 @@ function renderMetaBody(item){
     var tps = formatTurningPoints(m.turningPoints);
     if(tps.length > 0){
       html += '<div class="meta-section">';
-      html += '<div class="meta-section-h"><span class="ms-ic">⚡</span> 重要转折 · TURNING POINTS</div>';
+      html += '<div class="meta-section-h">重要转折 · TURNING POINTS</div>';
       html += '<ol class="meta-turning-list">';
       for(let i=0; i<tps.length; i++){
         html += '<li>' + escapeHtml(tps[i]) + '</li>';
@@ -10677,7 +10644,7 @@ function renderMetaBody(item){
 
   /* 主要人物 —— 结构化列表 */
   html += '<div class="meta-section">';
-  html += '<div class="meta-section-h"><span class="ms-ic">✦</span> 主要人物 · CHARACTERS</div>';
+  html += '<div class="meta-section-h">主要人物 · CHARACTERS</div>';
   if(m.mainCharacters){
     var chars = parseCharacters(m.mainCharacters);
     if(chars.length > 0 && chars[0].name){
@@ -10704,7 +10671,7 @@ function renderMetaBody(item){
   /* 人物关系 —— 分段展示 */
   if(m.relationships){
     html += '<div class="meta-section">';
-    html += '<div class="meta-section-h"><span class="ms-ic">⇄</span> 人物关系 · RELATIONSHIPS</div>';
+    html += '<div class="meta-section-h">人物关系 · RELATIONSHIPS</div>';
     var relParas = organizeMetaText(m.relationships, 1500);
     html += '<div class="meta-relations">';
     for(let i=0; i<relParas.length; i++){
@@ -10717,7 +10684,7 @@ function renderMetaBody(item){
   /* 豆瓣评分 */
   if(m.doubanRating){
     html += '<div class="meta-section">';
-    html += '<div class="meta-section-h"><span class="ms-ic">★</span> 豆瓣评分 · RATING</div>';
+    html += '<div class="meta-section-h">豆瓣评分 · RATING</div>';
     html += '<div class="meta-summary" style="font-size:18px;font-weight:600;color:var(--accent);">★ ' + escapeHtml(m.doubanRating) + '</div>';
     html += '</div>';
   }
@@ -10725,7 +10692,7 @@ function renderMetaBody(item){
   /* 网络报道摘要 */
   if(m.webSnippets && m.webSnippets.length > 0){
     html += '<div class="meta-section">';
-    html += '<div class="meta-section-h"><span class="ms-ic">⌘</span> 网络报道 · WEB REPORTS</div>';
+    html += '<div class="meta-section-h">网络报道 · WEB REPORTS</div>';
     for(let i=0; i<m.webSnippets.length; i++){
       html += '<div class="meta-summary" style="margin-bottom:8px;padding-left:12px;border-left:2px solid var(--line);">' + escapeHtml(m.webSnippets[i]) + '</div>';
     }
@@ -10735,7 +10702,7 @@ function renderMetaBody(item){
   /* 章节大纲 */
   if(m.outline && m.outline.length > 0){
     html += '<div class="meta-section">';
-    html += '<div class="meta-section-h"><span class="ms-ic">☰</span> 章节大纲 · OUTLINE</div>';
+    html += '<div class="meta-section-h">章节大纲 · OUTLINE</div>';
     html += '<ul class="meta-outline">';
     for(let i=0; i<m.outline.length; i++){
       html += '<li>' + escapeHtml(m.outline[i]) + '</li>';
@@ -11178,7 +11145,6 @@ function renderStats(){
     const c = CATEGORIES[key];
     const cnt = counts[key]||0;
     html += '<div class="stat" style="--cat-color:' + c.color + '">';
-    html += '<div class="stat-head"><span class="stat-ic">' + catIcon(key, 18) + '</span></div>';
     html += '<div class="num">' + cnt + '</div>';
     html += '<div class="lbl">' + c.name + '</div>';
     html += '<div class="bar"><span style="width:' + (cnt/max*100) + '%;background:' + c.color + '"></span></div>';
@@ -11233,7 +11199,7 @@ function renderFilters(){
   const _catOrder = getCatOrder();
   for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
-    html += '<button class="chip ' + (state.filter===key?'active':'') + '" data-filter="' + key + '" style="--cat-color:' + c.color + '">' + catIcon(key, 14) + c.name + '<span class="count">' + (counts[key]||0) + '</span></button>';
+    html += '<button class="chip ' + (state.filter===key?'active':'') + '" data-filter="' + key + '" style="--cat-color:' + c.color + '">' + c.name + '<span class="count">' + (counts[key]||0) + '</span></button>';
   }
   el.innerHTML = html;
   const chips = el.querySelectorAll(".chip");
@@ -11391,7 +11357,7 @@ function renderSubcatBar(){
   const addBtn = document.createElement("button");
   addBtn.className = "bb-chip bb-add";
   addBtn.type = "button";
-  addBtn.textContent = "＋ 新增" + subLbl;
+  addBtn.textContent = "新增" + subLbl;
   addBtn.title = "新建一个" + subLbl + "小门类";
   chips.appendChild(addBtn);
   addBtn.onclick = function(){
@@ -11562,19 +11528,19 @@ function renderGallery(){
     const isPaper = (it.category === "paper" || it.category === "essay") && it.fullText;
     const position = paperWorkspaceActive && it.category === "paper" ? getPaperPosition(it.id) : null;
     const readLabel = position?.page > 1 || position?.top > 0
-      ? "继续阅读" : it.category === "essay" ? "✎ 查看全文" : "§ 查看全文";
+      ? "继续阅读" : "查看全文";
     const paperBtnHtml = isPaper ?
       '<button class="card-paper-btn" data-id="' + it.id + '" title="阅读全文 · 解读分析 · 颜色标注">' + readLabel + '</button>' : "";
     const isPaperCat = it.category === "paper";
     const cnkiBtnHtml = isPaperCat ?
-      '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">⌕ 知网搜索</button>' : "";
+      '<button class="card-cnki-btn" data-id="' + it.id + '" title="在知网搜索该论文">知网搜索</button>' : "";
     const uploadBtnHtml = isPaperCat ?
-      '<button class="card-upload-btn" data-id="' + it.id + '" title="上传本地论文文件(TXT/MD)">↑ 上传全文</button>' : "";
+      '<button class="card-upload-btn" data-id="' + it.id + '" title="上传本地论文文件(TXT/MD)">上传全文</button>' : "";
 
     // 菜品专属:查看做法按钮
     const isDish = it.category === "dish";
     const recipeBtnHtml = isDish ?
-      '<button class="card-recipe-btn" data-id="' + it.id + '" title="跳转下厨房查看做法">❉ 查看做法</button>' : "";
+      '<button class="card-recipe-btn" data-id="' + it.id + '" title="跳转下厨房查看做法">查看做法</button>' : "";
 
     /* 概要按钮已删除(文学/影视/小说不再生成概要) */
     const metaBtnHtml = "";
@@ -11584,13 +11550,13 @@ function renderGallery(){
       html += '<input type="checkbox" class="card-check" data-id="' + it.id + '"' + (checked ? ' checked' : '') + ' title="勾选以批量删除" />';
     }
     html += '<div class="card-head">';
-    html += '<div class="card-cat">' + catIcon(it.category, 16) + ' ' + c.name + '</div>';
+    html += '<div class="card-cat">' + ' ' + c.name + '</div>';
     if(!paperWorkspaceActive) html += '<button class="card-edit" data-id="' + it.id + '" title="编订名目">编订</button>';
     html += '<button class="card-del" data-id="' + it.id + '" title="移入回收站" aria-label="删除' + escapeHtml(it.name) + '">' + (paperWorkspaceActive ? '移入回收站' : '×') + '</button>';
     html += '</div>';
     /* 饮品(品牌)/护肤(功效)/美食(城市): 小门类标签 */
     if((it.category === "beverage" || it.category === "skincare" || it.category === "food" || it.category === "treatise") && it.subCategory){
-      html += '<div class="card-brand" title="' + subcatLabel(it.category) + '小门类">◈ ' + escapeHtml(it.subCategory) + '</div>';
+      html += '<div class="card-brand" title="' + subcatLabel(it.category) + '小门类">' + escapeHtml(it.subCategory) + '</div>';
     }
     /* 随笔: 卡片标题统一显示写作日期(YYYY年M月D日),不以正文文字作标题 */
     let _dispTitle = it.name;
@@ -11825,14 +11791,6 @@ function escapeHtml(s){
   });
 }
 
-/* 渲染门类图标 SVG (统一线条风格,粗笔画) */
-function catIcon(key, size){
-  const c = CATEGORIES[key];
-  if(!c || !c.svg) return "";
-  const sz = size || 18;
-  return '<svg class="cat-svg" width="' + sz + '" height="' + sz + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + c.svg + '</svg>';
-}
-
 /* ============================================================
    交互
    ============================================================ */
@@ -11850,7 +11808,7 @@ function renderComposerCats(){
     const c = CATEGORIES[key];
     const active = state.composerCategory === key;
     html += '<button class="cc-chip ' + (active?'active':'') + '" data-cat="' + key + '" style="--cat-color:' + c.color + '">' +
-      catIcon(key, 15) + c.name +
+      c.name +
     '</button>';
   }
   composerCatsEl.innerHTML = html;
@@ -11952,7 +11910,7 @@ function updatePredict(){
   if(manual){
     const c = CATEGORIES[manual] || CATEGORIES[FALLBACK_CAT];
     predictEl.innerHTML = '<span class="predict-tag" style="background:' + c.color + '1f;color:' + c.color + ';border:1px solid ' + c.color + '50">' +
-      '<span class="dot"></span>' + catIcon(manual, 14) + ' ' + c.name +
+      '<span class="dot"></span>' + ' ' + c.name +
     '</span><span class="predict-conf">手选 · ' + escapeHtml(c.name) + '</span>';
   } else {
     predictEl.innerHTML = '<span class="predict-conf">请选择门类(纯手动录入)</span>';
@@ -12240,7 +12198,7 @@ function renderEditCats(){
   const _catOrder = getCatOrder();
   for(let _oi=0; _oi<_catOrder.length; _oi++){ const key = _catOrder[_oi];
     const c = CATEGORIES[key];
-    html += '<button class="modal-cat ' + (key===editSelectedCat?'active':'') + '" data-cat="' + key + '" style="--cat-color:' + c.color + '">' + catIcon(key, 16) + c.name + '</button>';
+    html += '<button class="modal-cat ' + (key===editSelectedCat?'active':'') + '" data-cat="' + key + '" style="--cat-color:' + c.color + '">' + c.name + '</button>';
   }
   modalCats.innerHTML = html;
   const btns = modalCats.querySelectorAll(".modal-cat");
@@ -12947,21 +12905,21 @@ if(paperPdfBtn){
         /* ---- Word(.docx)导入: 优先JSZip版面保真还原(字号/缩进/双栏),失败回退mammoth纯文本 ---- */
         if(!window.JSZip && !window.mammoth){ toast("Word解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
-        paperPdfBtn.innerHTML = "⇪ 解析中…";
+        paperPdfBtn.innerHTML = "解析中…";
         const reader = new FileReader();
         reader.onerror = function(){
           paperPdfBtn.classList.remove("busy");
-          paperPdfBtn.textContent = "⇪ 导入文档";
+          paperPdfBtn.textContent = "导入文档";
           toast("无法读取 Word 文件，请重新选择");
         };
         reader.onload = function(){
           const ab = this.result;
           /* mammoth纯文本回退(JSZip解析失败/无字号信息时) */
           const mammothFallback = function(){
-            if(!window.mammoth){ paperPdfBtn.classList.remove("busy"); paperPdfBtn.textContent = "⇪ 导入文档"; toast("Word解析库未加载,请检查网络"); return; }
+            if(!window.mammoth){ paperPdfBtn.classList.remove("busy"); paperPdfBtn.textContent = "导入文档"; toast("Word解析库未加载,请检查网络"); return; }
             mammoth.convertToHtml({ arrayBuffer: ab }).then(function(r){
               paperPdfBtn.classList.remove("busy");
-              paperPdfBtn.innerHTML = "⇪ 导入文档";
+              paperPdfBtn.innerHTML = "导入文档";
               const doc = new DOMParser().parseFromString(r.value, "text/html");
               const lines = [];
               const blocks = doc.body ? doc.body.querySelectorAll("h1,h2,h3,h4,h5,h6,p,li") : [];
@@ -12978,14 +12936,14 @@ if(paperPdfBtn){
               paperEntrySubmit.click();
             }).catch(function(e){
               paperPdfBtn.classList.remove("busy");
-              paperPdfBtn.innerHTML = "⇪ 导入文档";
+              paperPdfBtn.innerHTML = "导入文档";
               toast("Word解析失败:" + (e.message || "未知错误"));
             });
           };
           if(!window.JSZip){ mammothFallback(); return; }
           parseDocxToLayout(ab).then(function(res){
             paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入文档";
+            paperPdfBtn.innerHTML = "导入文档";
             if(res && res.html && res.text.trim()){
               if(paperFullTextInput){ paperFullTextInput.value = res.text; updatePaperEntryStats(); }
               paperEntryFromPdf = true; paperEntryImages = null;
@@ -12996,7 +12954,7 @@ if(paperPdfBtn){
             }
           }).catch(function(){
             paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入文档";
+            paperPdfBtn.innerHTML = "导入文档";
             mammothFallback();
           });
         };
@@ -13007,11 +12965,11 @@ if(paperPdfBtn){
         /* ---- CAJ导入: 知网专有格式,尝试检测内嵌PDF流(多数CAJ实为加壳PDF) ---- */
         if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
-        paperPdfBtn.innerHTML = "⇪ 解析中…";
+        paperPdfBtn.innerHTML = "解析中…";
         const reader = new FileReader();
         reader.onerror = function(){
           paperPdfBtn.classList.remove("busy");
-          paperPdfBtn.textContent = "⇪ 导入文档";
+          paperPdfBtn.textContent = "导入文档";
           toast("无法读取 CAJ 文件，请重新选择");
         };
         reader.onload = function(){
@@ -13024,7 +12982,7 @@ if(paperPdfBtn){
           }
           if(pdfOff < 0){
             paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入文档";
+            paperPdfBtn.innerHTML = "导入文档";
             toast("该CAJ为知网加密格式(非内嵌PDF),请用CAJViewer打开→另存为PDF后再导入");
             return;
           }
@@ -13038,7 +12996,7 @@ if(paperPdfBtn){
             }, { lowMemory: lowMemoryImport });
           }).then(function(res){
             paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入文档";
+            paperPdfBtn.innerHTML = "导入文档";
             ppProgressHide(300);
             const isScannedCaj = !res || pdfTextNeedsOcr(res.text, res.pages);
             if(paperFullTextInput){
@@ -13052,7 +13010,7 @@ if(paperPdfBtn){
             paperEntrySubmit.click();
           }).catch(function(e){
             paperPdfBtn.classList.remove("busy");
-            paperPdfBtn.innerHTML = "⇪ 导入文档";
+            paperPdfBtn.innerHTML = "导入文档";
             ppProgressHide(0);
             toast("CAJ解析失败,建议用CAJViewer另存为PDF后导入");
           });
@@ -13062,12 +13020,12 @@ if(paperPdfBtn){
       }
       if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
       paperPdfBtn.classList.add("busy");
-      paperPdfBtn.innerHTML = "⇪ 解析中…";
+      paperPdfBtn.innerHTML = "解析中…";
       ppProgressShow(lowMemoryImport ? "正在本机逐页解析大 PDF…" : "正在本机解析 PDF…");
       paperEntryPdfBytes = file;
       if(deferPdfParsing){
         paperPdfBtn.classList.remove("busy");
-        paperPdfBtn.innerHTML = "⇪ 导入文档";
+        paperPdfBtn.innerHTML = "导入文档";
         ppProgressHide(0);
         if(paperFullTextInput){ paperFullTextInput.value = "超大PDF已完整保留：为避免浏览器内存溢出，入册后将在阅读时按页显示原文并按需OCR。"; updatePaperEntryStats(); }
         paperEntryFromPdf = true;
@@ -13090,7 +13048,7 @@ if(paperPdfBtn){
           }, { lowMemory: lowMemoryImport }).catch(function(){ return null; });
         }).then(function(res){
           paperPdfBtn.classList.remove("busy");
-          paperPdfBtn.innerHTML = "⇪ 导入文档";
+          paperPdfBtn.innerHTML = "导入文档";
           ppProgressHide(300);
           const isScannedPdf = !res || pdfTextNeedsOcr(res.text, res.pages);
           if(paperFullTextInput){
@@ -13104,7 +13062,7 @@ if(paperPdfBtn){
           paperEntrySubmit.click();
         }).catch(function(e){
           paperPdfBtn.classList.remove("busy");
-          paperPdfBtn.innerHTML = "⇪ 导入文档";
+          paperPdfBtn.innerHTML = "导入文档";
           ppProgressHide(0);
           paperEntryPdfBytes = null;
           toast("PDF 解析失败，请确认文件能正常打开后重试");
@@ -13112,7 +13070,7 @@ if(paperPdfBtn){
       };
       reader.onerror = function(){
         paperPdfBtn.classList.remove("busy");
-        paperPdfBtn.innerHTML = "⇪ 导入文档";
+        paperPdfBtn.innerHTML = "导入文档";
         ppProgressHide(0);
         paperEntryPdfBytes = null;
         toast("无法读取 PDF 文件，请重新选择");
@@ -13169,7 +13127,7 @@ function toast(msg, duration){
   if(!wrap) return;
   const t = document.createElement("div");
   t.className = "toast";
-  t.innerHTML = '<span class="ic">❦</span>' + escapeHtml(msg);
+  t.innerHTML = escapeHtml(msg);
   wrap.appendChild(t);
   setTimeout(function(){
     if(t.parentNode) t.parentNode.removeChild(t);
@@ -13328,7 +13286,7 @@ function toast(msg, duration){
   if(regenMetaBtn){
     regenMetaBtn.onclick = async function(){
       const cfg = getAiConfig();
-      if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 ⚙ AI)"); openAiCfgModal(); return; }
+      if(!cfg || !cfg.key){ toast("请先配置 AI 接口(右上角 AI)"); openAiCfgModal(); return; }
       /* 找出所有文学/小说/电影条目 */
       const targets = state.items.filter(function(it){
         return it.category === "literature" || it.category === "movie" || it.category === "novel";
