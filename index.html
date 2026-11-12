@@ -784,25 +784,20 @@
     flex:1; display:flex; overflow:hidden; min-height:0;
   }
   .pr-outline{
-    width:240px; min-width:200px; max-width:520px; flex-shrink:0; overflow-y:auto;
+    width:280px; min-width:200px; max-width:min(520px, 55%); flex-shrink:0; overflow-y:auto;
     padding:24px 20px 24px 28px; border-right:1px solid var(--line-soft);
     background:linear-gradient(180deg, var(--paper-deep), var(--paper));
     position:relative;
   }
-  /* 左栏拖拽调整宽度手柄 */
   .pr-outline-resizer{
-    position:absolute; top:0; right:-3px; width:6px; height:100%;
-    cursor:col-resize; z-index:5;
+    position:relative; flex:0 0 12px; cursor:col-resize; touch-action:none; margin-left:-1px;
   }
   .pr-outline-resizer::after{
-    content:""; position:absolute; top:50%; right:2px; transform:translateY(-50%);
-    width:2px; height:36px; border-radius:2px; background:var(--line);
-    opacity:0; transition:opacity .2s, background .2s;
+    content:""; position:absolute; top:50%; left:4px; transform:translateY(-50%);
+    width:3px; height:36px; border-radius:4px; background:#A7B6C6;
   }
-  .pr-outline-resizer:hover::after, .pr-outline.resizing .pr-outline-resizer::after{
-    opacity:1; background:var(--teal);
-  }
-  .pr-outline.resizing{ user-select:none; cursor:col-resize; }
+  .pr-outline-resizer:hover::after, .pr-outline-resizer:focus-visible::after,
+  .pr-outline.resizing + .pr-outline-resizer::after{ background:var(--teal); }
   body.pr-resizing{ cursor:col-resize; user-select:none; }
   .pr-outline-section{
     font-family:"JetBrains Mono", monospace; font-size:10px; font-weight:500; letter-spacing:.18em;
@@ -882,36 +877,31 @@
   }
   .rel-meta{ font-size:11px; color:var(--ink-mute); }
 
-  /* ===== AI 对话面板 ===== */
-  .pr-chat{ display:none; flex-direction:column; margin-top:14px; height:400px; }
+  .pr-chat{ display:none; flex-direction:column; gap:10px; margin-top:14px; height:400px; }
   .pr-chat.show{ display:flex; }
   .pr-chat-log{
-    flex:1; overflow-y:auto; padding:10px; border:1px solid var(--line-soft);
-    border-radius:10px; background:rgba(255,255,255,.5); display:flex; flex-direction:column; gap:10px;
+    flex:1; min-height:0; overflow-y:auto; padding:10px;
+    border-radius:14px; background:linear-gradient(160deg,#F6F9FD,#EDF0F8);
+    display:flex; flex-direction:column; gap:10px;
   }
-  .chat-msg{ max-width:92%; padding:8px 12px; border-radius:10px; font-size:13px; line-height:1.7; word-break:break-word; white-space:pre-wrap; }
-  .chat-msg.user{
-    align-self:flex-end; background:var(--teal); color:var(--paper-soft);
-    border-bottom-right-radius:3px;
+  .chat-msg{
+    max-width:92%; padding:8px 11px; border-radius:13px; font:14px/1.65 var(--ui-font);
+    overflow-wrap:anywhere; white-space:pre-wrap;
   }
-  .chat-msg.ai{
-    align-self:flex-start; background:var(--paper); border:1px solid var(--line);
-    color:var(--ink-soft); border-bottom-left-radius:3px;
+  .chat-msg.user{ align-self:flex-end; background:linear-gradient(135deg,#DEEAF5,#E8E3F3); color:#294560; }
+  .chat-msg.ai{ align-self:flex-start; background:#FFF; color:#30475E; }
+  .chat-msg.err{ align-self:flex-start; background:#FAEBE8; color:#9A4236; }
+  .pr-chat-row, .pr-literature-search{ display:flex; gap:6px; align-items:stretch; }
+  .pr-chat-row input, .pr-literature-search input{
+    flex:1; min-width:0; padding:8px 9px; border:1px solid #C9D5E2; border-radius:10px;
+    font:14px var(--ui-font); background:#FAFCFF; color:var(--ink);
   }
-  .chat-msg.err{ align-self:flex-start; background:rgba(176,67,44,.08); border:1px solid rgba(176,67,44,.25); color:#B0432C; }
-  .pr-chat-row{ display:flex; gap:8px; margin-top:10px; }
-  .pr-chat-row input{
-    flex:1; padding:8px 12px; border:1px solid var(--line); border-radius:8px;
-    font-family:"Newsreader","Noto Serif SC",serif; font-size:13px; background:var(--paper);
-    color:var(--ink); outline:none;
+  .pr-chat-row button, .pr-literature-search button{
+    flex:none; padding:7px 10px; border:0; border-radius:10px; white-space:nowrap;
+    background:linear-gradient(135deg,#41647F,#4A5C80); color:white; font:600 14px var(--ui-font); cursor:pointer;
   }
-  .pr-chat-row input:focus{ border-color:var(--teal); }
-  .pr-chat-row button{
-    width:36px; height:36px; border:none; border-radius:8px; background:var(--teal);
-    color:var(--paper-soft); font-size:16px; cursor:pointer; transition:all .2s; flex-shrink:0;
-  }
-  .pr-chat-row button:hover{ filter:brightness(1.15); }
-
+  .pr-literature-search{ margin:8px 0; }
+  .pr-literature-links{ display:flex; flex-wrap:wrap; gap:6px 10px; margin-top:6px; }
   /* ===== 删除模式按钮 + 检查标红 ===== */
   #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
 
@@ -1631,7 +1621,7 @@
     .batch-row-name{ min-width:100%; }
     .paper-textarea{ min-height:200px; }
     .pr-header{ padding:12px 16px; }
-    .pr-outline{ display:none; }
+    .pr-outline, .pr-outline-resizer{ display:none; }
     .pr-text-wrap{ padding:20px 20px 60px; }
     .pr-text{ font-size:15px; line-height:1.85; }
   }
@@ -2344,13 +2334,12 @@
     </form></div>
     <div class="pr-body">
       <aside class="pr-outline" id="prOutline">
-        <div class="pr-outline-resizer" id="prOutlineResizer" title="拖动调整宽度"></div>
-        <div class="pr-outline-section">智能工具 · AI LAB</div>
+        <div class="pr-outline-section">阅读工具</div>
         <div class="pr-ai-btns">
           <button class="pr-ai-btn" id="prAiRead" title="选中一段文字后点击,AI基于上下文深度解读">解读选中</button>
           <button class="pr-ai-btn" id="prAiAsk" title="与AI讨论论文相关问题">AI 提问</button>
-          <button class="pr-ai-btn" id="prRelated" title="联想知网内与该论文研究内容相似的论文五篇(真实学术数据源)">联想论文</button>
-          <button class="pr-ai-btn" id="prReferences" title="AI检索论文参考文献,点击可跳转知网">参考文献</button>
+          <button class="pr-ai-btn" id="prRelated" title="按主题检索相关论文">相关论文</button>
+          <button class="pr-ai-btn" id="prReferences" title="查看原文中的参考文献">参考文献</button>
         </div>
         <div class="pr-ai-result" id="prAiResult"></div>
         <div class="pr-chat" id="prChat">
@@ -2361,6 +2350,7 @@
           </div>
         </div>
       </aside>
+      <div class="pr-outline-resizer" id="prOutlineResizer" role="separator" tabindex="0" aria-label="调整左栏宽度" aria-orientation="vertical" aria-controls="prOutline" aria-valuemin="200" aria-valuemax="520" aria-valuenow="280"></div>
       <div class="pr-text-wrap" id="prTextWrap">
         <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
@@ -6136,27 +6126,33 @@ function openPaperReader(itemId){
       const savedW = parseInt(localStorage.getItem("pr_outline_width") || "0", 10);
       if(savedW >= 200 && savedW <= 520) outlineEl.style.width = savedW + "px";
     }catch(e){}
-    resizer.onmousedown = function(e){
+    function setWidth(width){
+      outlineEl.style.width = Math.min(520, Math.max(200, width)) + "px";
+      resizer.setAttribute("aria-valuenow", String(Math.round(outlineEl.getBoundingClientRect().width)));
+    }
+    function saveWidth(){
+      try{ localStorage.setItem("pr_outline_width", String(Math.round(outlineEl.getBoundingClientRect().width))); }catch(e){}
+    }
+    resizer.onpointerdown = function(e){
+      if(e.button !== 0) return;
       e.preventDefault();
+      resizer.setPointerCapture(e.pointerId);
       outlineEl.classList.add("resizing");
       document.body.classList.add("pr-resizing");
-      const startX = e.clientX;
-      const startW = outlineEl.getBoundingClientRect().width;
-      function onMove(ev){
-        const w = Math.min(520, Math.max(200, startW + (ev.clientX - startX)));
-        outlineEl.style.width = w + "px";
-      }
-      function onUp(){
-        document.removeEventListener("mousemove", onMove);
-        document.removeEventListener("mouseup", onUp);
-        outlineEl.classList.remove("resizing");
-        document.body.classList.remove("pr-resizing");
-        try{
-          localStorage.setItem("pr_outline_width", String(Math.round(outlineEl.getBoundingClientRect().width)));
-        }catch(e){}
-      }
-      document.addEventListener("mousemove", onMove);
-      document.addEventListener("mouseup", onUp);
+    };
+    resizer.onpointermove = function(e){
+      if(resizer.hasPointerCapture(e.pointerId)) setWidth(e.clientX - outlineEl.getBoundingClientRect().left);
+    };
+    resizer.onlostpointercapture = function(){
+      outlineEl.classList.remove("resizing");
+      document.body.classList.remove("pr-resizing");
+      saveWidth();
+    };
+    resizer.onkeydown = function(e){
+      if(e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+      e.preventDefault();
+      setWidth(outlineEl.getBoundingClientRect().width + (e.key === "ArrowLeft" ? -20 : 20));
+      saveWidth();
     };
   }
 
@@ -9718,115 +9714,41 @@ async function translateCurrentSelection(){
 /* ============================================================
    参考文献 —— AI检索论文参考文献列表,点击跳转知网
    ============================================================ */
-async function fetchReferences(){
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item) return;
-  const resultEl = document.getElementById("prAiResult");
-  if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">AI 正在检索论文参考文献…</div>';
+function literatureLinks(query, doi){
+  const q = encodeURIComponent(query);
+  const links = [];
+  if(doi && /^10\.\d{4,9}\/\S+$/i.test(doi)){
+    links.push('<a href="https://doi.org/' + encodeURI(doi).replace(/["<>#?]/g, encodeURIComponent) + '" target="_blank" rel="noopener noreferrer">DOI</a>');
+  }
+  links.push('<a href="https://kns.cnki.net/kns8s/defaultresult/index?kw=' + q + '" target="_blank" rel="noopener noreferrer">知网检索</a>');
+  links.push('<a href="https://scholar.google.com/scholar?q=' + q + '" target="_blank" rel="noopener noreferrer">Google 学术</a>');
+  return '<div class="pr-literature-links">' + links.join("") + '</div>';
+}
 
-  const full = item.fullText || "";
-  /* 优先截取参考文献章节(通常在文末) */
-  let refSection = "";
-  const refMatch = full.match(/(参\s*考\s*文\s*献|References?\s*\n)/i);
-  if(refMatch && refMatch.index !== undefined){
-    refSection = full.substring(refMatch.index);
+function fetchReferences(){
+  const item = state.items.find(i => i.id === prState.itemId);
+  const panel = document.getElementById("prAiResult");
+  if(!item || !panel) return;
+  const lines = (item.fullText || "").split(/\r?\n/);
+  const heading = /^\s*(?:\d+[.、]?\s*)?[【\[（(]?\s*(?:参\s*考\s*文\s*献|参考书目|引用文献|references|bibliography|works cited)\s*[】\]）)]?\s*[:：]?\s*$/i;
+  const start = lines.findLastIndex(line => heading.test(line));
+  const end = lines.findIndex((line, index) => index > start && /^\s*(?:附录|致谢|作者简介|appendix|acknowledg(?:e)?ments?)\s*[:：]?\s*$/i.test(line));
+  const section = start < 0 ? [] : lines.slice(start + 1, end < 0 ? undefined : end);
+  const entries = [];
+  const numbered = section.some(line => /^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/.test(line));
+  for(const line of section){
+    const value = line.trim();
+    if(!value) continue;
+    if(!numbered || /^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/.test(value) || !entries.length) entries.push(value);
+    else entries[entries.length - 1] += " " + value;
   }
-  const refCtx = refSection.length > 200 ? refSection : full.substring(Math.max(0, full.length - 8000));
-
-  function renderRefs(refs, note){
-    let h = '<div class="pa-block"><div class="pa-block-h">参考文献 · ' + refs.length + ' 条</div>';
-    if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
-    h += '<div class="ref-list" style="margin-top:8px;">';
-    for(let i=0; i<refs.length; i++){
-      const rf = refs[i];
-      /* 提取干净的检索标题(剥离作者/编号前缀) */
-      let st = rf.title || "";
-      const bm = st.match(/《([^》]{3,100})》/);
-      if(bm) st = bm[1];
-      st = st.replace(/^[\u4e00-\u9fa5]{2,4}([,，]\s*[\u4e00-\u9fa5]{2,4})*[.．]?\s+/, "");
-      st = st.replace(/^[A-Z][a-zA-Z.\-']+(,\s*[A-Z]\.?)+\s*(et al\.?)?\s*[\(（]\d{4}[\)）]\.\s*/i, "");
-      st = st.split(/[\[\.]/)[0].trim() || rf.title;
-      const sl = buildRefSearchLinks(rf.title || "");
-      h += '<div class="ref-item" data-q="' + escapeHtml(st.slice(0, 160)) + '">';
-      h += '<div class="ref-idx">[' + (i+1) + ']</div>';
-      h += '<div class="ref-title">' + escapeHtml(rf.title) + '</div>';
-      const meta = [];
-      if(rf.authors) meta.push(escapeHtml(rf.authors));
-      if(rf.year) meta.push(escapeHtml(String(rf.year)));
-      if(rf.source) meta.push(escapeHtml(rf.source));
-      h += '<div class="ref-meta">' + (meta.join(" · ") || "") + '</div>';
-      if(sl){
-        h += '<div class="ref-links" style="margin-top:4px;">';
-        h += '<a class="pp-ref-link pp-g" href="' + escapeHtml(sl.scholar) + '" target="_blank" rel="noopener" title="谷歌学术检索">G 谷歌学术</a>';
-        h += '<a class="pp-ref-link pp-s2" href="' + escapeHtml(sl.semantic) + '" target="_blank" rel="noopener" title="Semantic Scholar检索">S2 Semantic Scholar</a>';
-        h += '<a class="pp-ref-link pp-cnki" href="' + escapeHtml(sl.cnki) + '" target="_blank" rel="noopener" title="知网检索">知 知网</a>';
-        h += '<a class="pp-ref-link pp-news" href="' + escapeHtml(sl.news) + '" target="_blank" rel="noopener" title="百度新闻检索">闻 百度新闻</a>';
-        h += '</div>';
-      }
-      h += '</div>';
-    }
-    h += '</div></div>';
-    resultEl.innerHTML = h;
-  }
-
-  /* 本地兜底: 全局正则提取 [1]xxx 文献条目(不受换行/标题合并影响) */
-  function localExtract(){
-    const refs = [];
-    /* 优先取参考文献章节之后的内容 */
-    let src = full;
-    const refIdx = full.search(/参\s*考\s*文\s*献|References?\s*[:：]?/i);
-    if(refIdx >= 0) src = full.substring(refIdx);
-    const re = /\[(\d{1,3})\]\s*([^\[\]\n]{10,200})/g;
-    let m;
-    while((m = re.exec(src)) !== null && refs.length < 60){
-      if(!refs.some(function(r){ return r.title === m[2].substring(0, 80); })){
-        refs.push({ title: m[2].substring(0, 120), authors:"", year:"", source:"" });
-      }
-    }
-    /* 无方括号格式时: 逐行匹配 n. 开头且非中文开头的条目 */
-    if(refs.length === 0){
-      const lines = full.split(/\r?\n/);
-      for(let i=0; i<lines.length && refs.length < 60; i++){
-        const t = lines[i].trim();
-        const m2 = t.match(/^(\d{1,3})[.、]\s+(.{10,200})/);
-        if(m2 && !/^[\u4e00-\u9fa5\s，。；、]/.test(m2[2]) && !refs.some(function(r){ return r.title === m2[2].substring(0, 80); })){
-          refs.push({ title: m2[2].substring(0, 120), authors:"", year:"", source:"" });
-        }
-      }
-    }
-    if(refs.length > 0){
-      renderRefs(refs.slice(0, 40), "本地提取 · 点击条目智能检索原文");
-    }else{
-      resultEl.innerHTML = '<div class="pa-mute" style="padding:8px 0;">未检测到参考文献章节</div>';
-    }
-  }
-
-  if(!cloudAI?.signedIn()){
-    localExtract();
-    return;
-  }
-  try{
-    const messages = [
-      { role: "system", content: "你是文献检索专家。从用户提供的论文参考文献部分,提取文献列表。输出严格的JSON数组,每项格式:{\"title\":\"文献标题\",\"authors\":\"第一作者等\",\"year\":年份,\"source\":\"期刊或会议名\"}。只输出JSON数组,不要其他文字。最多40条,尽量提取全部。" },
-      { role: "user", content: "论文标题:" + item.name + "\n\n参考文献部分:\n" + refCtx.substring(0, 16000) }
-    ];
-    const r = await callAI(messages, 3000);
-    if(r.content){
-      let txt = r.content.trim();
-      const s = txt.indexOf("[");
-      const e = txt.lastIndexOf("]");
-      if(s >= 0 && e > s) txt = txt.substring(s, e + 1);
-      const refs = JSON.parse(txt);
-      if(Array.isArray(refs) && refs.length > 0){
-        renderRefs(refs.filter(function(x){ return x && x.title; }).slice(0, 40), "AI 提取 · 点击条目智能检索原文");
-        return;
-      }
-    }
-    localExtract();
-  }catch(e){
-    localExtract();
-  }
+  panel.innerHTML = entries.length
+    ? '<div class="pa-block"><div class="pa-block-h">原文参考文献 · ' + entries.length + ' 条</div>' + entries.map(entry => {
+        const doi = entry.match(/\b10\.\d{4,9}\/[^\s<>"，。；]+/i)?.[0].replace(/[.,;]+$/, "");
+        const query = entry.match(/《([^》]+)》/)?.[1] || entry.replace(/^\s*(?:[［\[]\s*\d+\s*[］\]]|\d{1,3}[.、)]\s+)/, "").slice(0, 160);
+        return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
+      }).join("") + '</div>'
+    : '<div class="pa-mute">正文里没有识别到独立的参考文献章节。采用页脚注释的论文，请在原页查看引用。</div>';
 }
 
 /* AI 对话面板 */
@@ -9884,220 +9806,57 @@ async function sendChatMessage(){
    联想论文 —— 真实学术API检索相似论文五篇,按真实被引数排名
    点击跳转知网检索该论文 (数据源: OpenAlex / Semantic Scholar,均为真实论文+真实被引,不做AI编造)
    ============================================================ */
-async function fetchRelatedPapers(){
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item) return;
-  const resultEl = document.getElementById("prAiResult");
-  if(!resultEl) return;
-  resultEl.innerHTML = '<div class="pr-ai-loading">正在检索真实相似文献…</div>';
-
-  /* 构造检索词: 标题 + 关键词 */
-  const a = item.analysis || {};
-  let kw = item.name || "";
-  if(a.keywords && a.keywords.length > 0){
-    kw += " " + a.keywords.slice(0, 3).join(" ");
-  }
-  kw = kw.trim() || "学术论文";
-
-  /* 渲染结果: 真实论文 + 真实被引数,点击整条跳知网检索,带DOI可直达原文 */
-  function renderList(papers, note){
-    let h = '<div class="pa-block"><div class="pa-block-h">相似文献 · 知网联想</div>';
-    if(note) h += '<div class="pa-mute">' + escapeHtml(note) + '</div>';
-    h += '<div class="rel-list" style="margin-top:8px;">';
-    for(let i=0; i<papers.length; i++){
-      const p = papers[i];
-      h += '<div class="rel-item" data-title="' + escapeHtml(p.title) + '">';
-      h += '<div class="rel-rank">#' + (i+1) + (p.year ? " · " + escapeHtml(p.year) : "") + (p.cites !== "" ? ' · 被引 <b style="color:var(--accent);">' + escapeHtml(p.cites) + '</b>' : "") + '</div>';
-      h += '<div class="rel-title">' + escapeHtml(p.title) + '</div>';
-      h += '<div class="rel-meta">点击在知网检索' + (p.doi ? ' <a class="rel-doi" href="' + escapeHtml(p.doi) + '" target="_blank" rel="noopener">原文 DOI</a>' : '') + '</div>';
-      h += '</div>';
-    }
-    h += '</div></div>';
-    resultEl.innerHTML = h;
-    /* 点击跳知网 */
-    const items = resultEl.querySelectorAll(".rel-item");
-    for(let i=0; i<items.length; i++){
-      items[i].onclick = function(e){
-        if(e.target && e.target.closest && e.target.closest(".rel-doi")) return; /* DOI链接自己处理,不触发知网跳转 */
-        const t = this.dataset.title;
-        window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(t) + "&korder=TI", "_blank");
-        toast("正在知网检索「" + t.substring(0, 20) + "…」");
-      };
-    }
-  }
-
-  /* 主源 Crossref: 全球DOI注册库,CORS开放,中文期刊同样注册(实测可命中
-     "论古希腊神话传说中女性形象的类群演变与性别意识"等真正相关中文文献)
-     硬性只保留中文标题文献(含汉字=知网可查),按真实被引数降序 */
-  async function fetchCrossrefRelated(){
-    const results = [];
-    const seen = {};
-    const a = item.analysis || {};
-    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 3) : [];
-    const tq = (item.name || kw).slice(0, 80).trim();
-    /* 检索词组合(逐级提高中文召回): 标题+关键词 → 标题 → 关键词组合 → 单关键词 */
-    const queries = [];
-    if(tq && kws.length) queries.push(tq + " " + kws.join(" "));
-    if(tq) queries.push(tq);
-    if(kws.length >= 2) queries.push(kws.slice(0, 2).join(" "));
-    for(let i=0; i<kws.length; i++) queries.push(kws[i]);
-    for(let i=0; i<queries.length && results.length < 10; i++){
-      const q = queries[i];
-      if(!q) continue;
-      try{
-        const url = "https://api.crossref.org/works?query=" + encodeURIComponent(q) +
-          "&rows=20&select=DOI,title,container-title,is-referenced-by-count,issued";
-        const txt = await ppFetchTimeout(url, 9000);
-        const j = JSON.parse(txt);
-        const list = (j.message && j.message.items) || [];
-        for(let k=0; k<list.length; k++){
-          const it = list[k];
-          const t = (it.title && it.title[0]) ? it.title[0] : "";
-          if(!t) continue;
-          /* 硬性门禁: 非中文标题(知网查不到)直接丢弃 */
-          if(!/[\u4e00-\u9fff]/.test(t)) continue;
-          /* 排除自身论文 */
-          if(item.name && ppTitleMatch(t, item.name)) continue;
-          const key = ppNormTitle(t);
-          if(!key || seen[key]) continue;
-          seen[key] = 1;
-          const yr = (it.issued && it.issued["date-parts"] && it.issued["date-parts"][0] && it.issued["date-parts"][0][0]) ? it.issued["date-parts"][0][0] : "";
-          results.push({
-            title: t,
-            cites: (it["is-referenced-by-count"] != null && it["is-referenced-by-count"] > 0) ? it["is-referenced-by-count"] : "",
-            year: yr,
-            doi: it.DOI ? "https://doi.org/" + it.DOI : "",
-            zh: true
-          });
-        }
-      }catch(e){ /* 尝试下一个检索词 */ }
-    }
-    results.sort(function(x, y){
-      const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
-      return cy - cx;
-    });
-    return results.slice(0, 5);
-  }
-
-  /* 次级 OpenAlex: 只检索中文文献(language:zh),且带主题门禁——
-     标题必须命中至少一个关键词/标题前段,杜绝"青藏高原式"主题漂移误配 */
-  async function fetchOpenAlexRelatedStrict(){
-    const results = [];
-    const seen = {};
-    const a = item.analysis || {};
-    const kws = (a.keywords && a.keywords.length) ? a.keywords.slice(0, 3) : [];
-    const tq = (item.name || "").slice(0, 60).trim();
-    const candidates = [];
-    if(tq) candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(tq) + "&filter=language:zh&per-page=12&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi");
-    for(let i=0; i<kws.length && candidates.length < 3; i++){
-      candidates.push("https://api.openalex.org/works?search=" + encodeURIComponent(kws[i]) + "&filter=language:zh&per-page=12&sort=cited_by_count:desc&select=id,display_name,publication_year,cited_by_count,doi");
-    }
-    const mustHave = (kws.length >= 2) ? kws.slice(0, 2) : [tq.slice(0, 8)];
-    const tqHead = tq.slice(0, 8);
-    for(let c=0; c<candidates.length && results.length < 8; c++){
-      try{
-        const txt = await ppFetchTimeout(candidates[c], 9000);
-        const j = JSON.parse(txt);
-        const list = (j.results) || [];
-        for(let k=0; k<list.length; k++){
-          const it = list[k];
-          if(!it || !it.display_name) continue;
-          const t = it.display_name;
-          if(item.name && ppTitleMatch(t, item.name)) continue;
-          /* 主题门禁: 标题须含关键词或标题前段,否则丢弃(防误配) */
-          const hit = (tqHead.length >= 2 && t.indexOf(tqHead) >= 0) ||
-            mustHave.some(function(kw){ return kw && kw.length >= 2 && t.indexOf(kw) >= 0; });
-          if(!hit) continue;
-          const key = ppNormTitle(t);
-          if(!key || seen[key]) continue;
-          seen[key] = 1;
-          results.push({
-            title: t,
-            cites: (it.cited_by_count != null && it.cited_by_count > 0) ? it.cited_by_count : "",
-            year: it.publication_year || "",
-            doi: it.doi || "",
-            zh: true /* filter=language:zh 保证 */
-          });
-        }
-      }catch(e){ /* 尝试下一个候选 */ }
-    }
-    results.sort(function(x, y){
-      const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
-      return cy - cx;
-    });
-    return results.slice(0, 5);
-  }
-
-  /* Semantic Scholar 兜底: 只保留中文标题文献(知网可查) */
-  async function fetchS2Related(){
+function fetchRelatedPapers(){
+  const item = state.items.find(i => i.id === prState.itemId);
+  const panel = document.getElementById("prAiResult");
+  if(!item || !panel) return;
+  const title = item.name || "";
+  const keywords = Array.isArray(item.analysis?.keywords) ? item.analysis.keywords.filter(word => typeof word === "string").slice(0, 3) : [];
+  const initial = keywords.length ? keywords.join(" ") : title;
+  panel.innerHTML = '<div class="pa-block"><div class="pa-block-h">相关论文</div>' +
+    '<form class="pr-literature-search"><input type="search" aria-label="论文检索词" maxlength="160" required><button>检索</button></form>' +
+    '<div class="pa-mute" role="status"></div><div class="rel-list"></div></div>';
+  const form = panel.querySelector("form");
+  const input = form.querySelector("input");
+  const status = panel.querySelector('[role="status"]');
+  const list = panel.querySelector(".rel-list");
+  input.value = initial.slice(0, 160);
+  form.onsubmit = async function(event){
+    event?.preventDefault();
+    const query = input.value.trim();
+    if(!query || form.querySelector("button").disabled) return;
+    form.querySelector("button").disabled = true;
+    status.textContent = "正在查询 Crossref…";
+    list.innerHTML = literatureLinks(query);
     try{
-      const txt = await ppFetchTimeout("https://api.semanticscholar.org/graph/v1/paper/search?query=" + encodeURIComponent(kw) + "&limit=10&fields=title,year,citationCount,externalIds", 9000);
-      const j = JSON.parse(txt);
-      const list = (j.data) || [];
-      const results = [];
-      const seen = {};
-      for(let i=0; i<list.length; i++){
-        const it = list[i];
-        if(!it || !it.title) continue;
-        if(!/[\u4e00-\u9fff]/.test(it.title)) continue; /* 非中文标题知网难查,过滤 */
-        const key = ppNormTitle(it.title);
-        if(!key || seen[key]) continue;
-        seen[key] = 1;
-        results.push({
-          title: it.title,
-          cites: (it.citationCount != null && it.citationCount > 0) ? it.citationCount : "",
-          year: it.year || "",
-          doi: (it.externalIds && it.externalIds.DOI) ? ("https://doi.org/" + it.externalIds.DOI) : "",
-          zh: true
-        });
-      }
-      results.sort(function(x, y){
-        const cx = parseInt(x.cites, 10) || 0, cy = parseInt(y.cites, 10) || 0;
-        return cy - cx;
-      });
-      return results.slice(0, 5);
-    }catch(e){ return []; }
-  }
-
-  /* 主路径: Crossref 真实索引(中文文献知网可查,真实被引数) */
-  const exactPapers = await fetchCrossrefRelated();
-  if(exactPapers.length > 0){
-    renderList(exactPapers, "来源: Crossref 真实学术索引(中文文献知网可查)· 真实被引数 · 点击直达知网检索");
-    return;
-  }
-
-  /* 次级: OpenAlex 中文文献(带主题门禁,防误配) */
-  const realPapers = await fetchOpenAlexRelatedStrict();
-  if(realPapers.length > 0){
-    renderList(realPapers, "来源: OpenAlex 中文文献(主题相关已筛选· 知网可查)· 真实被引数 · 点击直达知网检索");
-    return;
-  }
-
-  /* 三级: Semantic Scholar 中文文献 */
-  const s2Papers = await fetchS2Related();
-  if(s2Papers.length > 0){
-    renderList(s2Papers, "来源: Semantic Scholar 中文文献 · 真实被引数 · 点击直达知网检索");
-    return;
-  }
-
-  /* 均无结果: 诚实提示,绝不编造论文;给标题+主题词两条知网检索直链 */
-  resultEl.innerHTML = '<div class="pa-block"><div class="pa-block-h">相似文献 · 知网联想</div>' +
-    '<div class="pa-mute">暂未检索到可关联的中文文献(本文可能未被学术索引收录)。可点击下方按钮直达知网检索:</div>' +
-    '<div style="margin-top:10px;display:flex;flex-direction:column;gap:8px;">' +
-    '<button class="pr-ai-btn" style="width:100%;" id="prRelatedTitle">按标题检索「' + escapeHtml((item.name || "本文标题").substring(0, 24)) + '」</button>' +
-    '<button class="pr-ai-btn" style="width:100%;" id="prRelatedKw">按主题检索「' + escapeHtml((kw || "主题").substring(0, 24)) + '」</button></div></div>';
-  const titleBtn = document.getElementById("prRelatedTitle");
-  if(titleBtn){
-    titleBtn.onclick = function(){
-      window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(item.name || kw) + "&korder=TI", "_blank");
-    };
-  }
-  const kwBtn = document.getElementById("prRelatedKw");
-  if(kwBtn){
-    kwBtn.onclick = function(){
-      window.open("https://kns.cnki.net/kns8s/defaultresult/index?kw=" + encodeURIComponent(kw) + "&korder=TI", "_blank");
-    };
-  }
+      const params = new URLSearchParams({query, rows:"16", select:"DOI,title,container-title,issued"});
+      const result = JSON.parse(await ppFetchTimeout("https://api.crossref.org/works?" + params, 8000));
+      const normalizedTitle = ppNormTitle(title);
+      const terms = (query.match(/[一-龥]{2,}|[a-z]{4,}/gi) || []).flatMap(term =>
+        /[一-龥]/.test(term) && term.length > 2 ? Array.from({length:term.length - 2}, (_, i) => term.slice(i, i + 3)) : [term.toLowerCase()]
+      );
+      const seen = new Set();
+      const papers = (result.message?.items || []).flatMap(paper => {
+        const name = paper.title?.[0];
+        const key = name ? ppNormTitle(name) : "";
+        if(!key || key === normalizedTitle || seen.has(key)) return [];
+        const overlap = terms.filter(term => key.toLowerCase().includes(term)).length;
+        if(!overlap) return [];
+        seen.add(key);
+        return [{paper, name, overlap}];
+      }).sort((a,b) => b.overlap - a.overlap).slice(0, 6);
+      status.textContent = papers.length ? "Crossref 结果，按标题与检索词的匹配程度排序。" : "Crossref 暂未找到匹配结果。可改用更短的主题词，或试试下方的检索入口。";
+      list.insertAdjacentHTML("beforeend", papers.map(({paper,name}) => {
+        const meta = [paper["container-title"]?.[0], paper.issued?.["date-parts"]?.[0]?.[0]].filter(Boolean).join(" · ");
+        return '<div class="rel-item"><div class="rel-title">' + escapeHtml(name) + '</div><div class="rel-meta">' + escapeHtml(meta) + '</div>' + literatureLinks(name, paper.DOI) + '</div>';
+      }).join(""));
+    }catch(error){
+      status.textContent = "暂时无法连接 Crossref。可以使用下方的检索入口。";
+    }finally{
+      form.querySelector("button").disabled = false;
+    }
+  };
+  form.onsubmit();
 }
 
 /* ============================================================
