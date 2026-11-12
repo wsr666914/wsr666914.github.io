@@ -6109,7 +6109,10 @@ function openPaperReader(itemId){
 
   /* ===== AI 按钮组 ===== */
   const prAiReadBtn = document.getElementById("prAiRead");
-  if(prAiReadBtn) prAiReadBtn.onclick = runAiRead;
+  if(prAiReadBtn){
+    prAiReadBtn.addEventListener("mousedown", function(event){ event.preventDefault(); });
+    prAiReadBtn.onclick = runAiRead;
+  }
   const prAiAskBtn = document.getElementById("prAiAsk");
   if(prAiAskBtn) prAiAskBtn.onclick = toggleChatPanel;
   const prRelatedBtn = document.getElementById("prRelated");
@@ -8473,7 +8476,13 @@ const KB_HIST_PAUSE = 800;
    AI 接口 —— OpenAI 兼容协议 (智谱GLM免费/硅基流动免费/DeepSeek/Kimi/通义)
    ============================================================ */
 let cloudAI;
-const aiLoginMessage = "请先通过「全站云同步」登录云端账号。";
+const aiLoginMessage = "请登录云端账号后使用 AI。";
+
+function requireAiLogin(){
+  if(cloudAI?.signedIn()) return true;
+  cloudAI?.openLogin();
+  return false;
+}
 
 async function callAI(messages, maxTokens, temperature){
   return cloudAI ? cloudAI.call({messages, max_tokens:maxTokens, temperature}) : {error:aiLoginMessage};
@@ -9560,7 +9569,8 @@ researchEl("prPdfExport").onclick = async function(){
 /* AI 解读选中文字: 选中一段文字后点击,基于上下文深度解读 */
 async function runAiRead(){
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item || !item.fullText){ toast("当前无全文"); return; }
+  if(!item) return;
+  if(!requireAiLogin()) return;
   const resultEl = document.getElementById("prAiResult");
   if(!resultEl) return;
 
@@ -9577,10 +9587,6 @@ async function runAiRead(){
   }
   if(selectedText.length < 4){
     toast("选中文字过短,请选择更完整的一段");
-    return;
-  }
-  if(!cloudAI?.signedIn()){
-    resultEl.textContent = aiLoginMessage;
     return;
   }
   const selText = selectedText.length > 3000 ? selectedText.substring(0, 3000) : selectedText;
@@ -9627,6 +9633,7 @@ function clearTranslations(){
 }
 function toggleTranslate(){
   const btn = document.getElementById("prTranslate");
+  if(!prState.translateMode && !requireAiLogin()) return;
   prState.translateMode = !prState.translateMode;
   if(!prState.translateMode){
     prState.translateRequestId++;
@@ -9824,6 +9831,7 @@ async function fetchReferences(){
 
 /* AI 对话面板 */
 function toggleChatPanel(){
+  if(!requireAiLogin()) return;
   const chat = document.getElementById("prChat");
   if(!chat) return;
   chat.classList.toggle("show");
@@ -9848,16 +9856,12 @@ function appendChatMsg(role, text){
 async function sendChatMessage(){
   const input = document.getElementById("prChatInput");
   const q = input ? input.value.trim() : "";
-  if(!q) return;
+  if(!q || !requireAiLogin()) return;
   input.value = "";
   prState.chat = prState.chat || [];
   prState.chat.push({ role: "user", content: q });
   appendChatMsg("user", q);
 
-  if(!cloudAI?.signedIn()){
-    appendChatMsg("err", aiLoginMessage);
-    return;
-  }
   const item = state.items.find(function(i){ return i.id === prState.itemId; });
   if(!item) return;
   appendChatMsg("ai", "…思考中");
@@ -13167,6 +13171,10 @@ document.addEventListener("DOMContentLoaded", function(){
   }
 
   cloudAI = {
+    openLogin(){
+      openCloud();
+      if(dialog.open && !session?.user?.id) status.textContent = aiLoginMessage;
+    },
     signedIn(){
       if(!STORAGE_KEY) return false;
       try{ return !!JSON.parse(sessionStorage.getItem(sessionKey()))?.user?.id; }
@@ -13192,10 +13200,21 @@ document.addEventListener("DOMContentLoaded", function(){
         });
         if(account !== STORAGE_KEY) return {error:aiLoginMessage};
         const data = await resp.json().catch(function(){ return null; });
-        if(resp.status === 401) return {error:"云端登录已失效，请重新登录。"};
+        if(resp.status === 401){
+          if(session?.access_token === token){
+            sessionStorage.removeItem(sessionKey());
+            session = null;
+            this.openLogin();
+          }
+          return {error:"云端登录已失效，请重新登录。"};
+        }
         if(!resp.ok || typeof data?.content !== "string") return {error:data?.error || "网站 AI 暂不可用，请稍后重试。"};
         return data;
       }catch(error){
+        if(account === STORAGE_KEY && !this.signedIn()){
+          this.openLogin();
+          return {error:aiLoginMessage};
+        }
         return {error:"AI 连接暂时不可用，请稍后重试。"};
       }
     }
@@ -13250,7 +13269,7 @@ document.addEventListener("DOMContentLoaded", function(){
     try{ session = JSON.parse(sessionStorage.getItem(sessionKey())); }catch(error){ session = null; }
     status.textContent = session?.user?.email ? "已登录 " + session.user.email : "";
     updateDialog();
-    dialog.showModal();
+    if(!dialog.open) dialog.showModal();
   }
   document.getElementById("siteCloudOpen").addEventListener("click", openCloud);
 
