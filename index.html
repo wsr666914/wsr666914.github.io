@@ -938,26 +938,26 @@
   /* ===== 删除模式按钮 + 检查标红 ===== */
   #prTranslate.on{ border-color:var(--teal); background:rgba(47,93,98,.1); color:var(--teal); }
 
-  /* ===== 译文行内展示 ===== */
   .pr-translation{
-    display:block; margin:6px 0; padding:8px 12px;
-    border-left:3px solid var(--teal); border-radius:0 8px 8px 0;
-    background:rgba(47,93,98,.07); color:var(--teal);
-    font-size:14px; line-height:1.9; text-indent:0; text-align:left;
-    animation:transIn .3s ease;
+    position:fixed; right:18px; bottom:18px; z-index:2147483646;
+    width:min(400px,calc(100vw - 24px)); display:flex; flex-direction:column;
+    max-height:min(52vh,calc(100vh - 24px)); overflow:hidden; text-align:left;
+    border:1px solid #C9D5E2; border-radius:14px; color:#30475E;
+    background:linear-gradient(150deg,#F8FBFF,#F0EEF8);
+    box-shadow:0 12px 32px #30405233; font:14px/1.65 var(--ui-font);
   }
-  .pr-translation .tr-label{
-    display:block; font-family:"JetBrains Mono",monospace; font-size:9px; font-weight:600;
-    letter-spacing:.16em; text-transform:uppercase; color:var(--teal); opacity:.75; margin-bottom:3px;
+  .pr-translation-head{
+    display:flex; align-items:center; justify-content:space-between; gap:8px;
+    padding:8px 12px; border-bottom:1px solid #D5DFEA; cursor:grab;
+    touch-action:none; user-select:none;
   }
-  .pr-translation.pr-pdf-translation{
-    position:fixed; right:24px; bottom:24px; z-index:2147483646;
-    width:min(420px,calc(100vw - 48px)); max-height:42vh; overflow:auto;
-    margin:0; padding:14px 16px; background:#f4fbfa;
-    border:1px solid rgba(47,93,98,.35); border-left:4px solid var(--teal);
-    box-shadow:0 12px 36px rgba(0,0,0,.2); color:var(--ink);
+  .pr-translation-head:active{ cursor:grabbing; }
+  .pr-translation-head button{
+    padding:4px 10px; border:1px solid #C9D5E2; border-radius:8px;
+    background:#F4F8FF; color:#345674; font:600 13px var(--ui-font); cursor:pointer;
   }
-  @keyframes transIn{ from{ opacity:0; transform:translateY(-4px); } to{ opacity:1; transform:none; } }
+  .pr-translation-head button:disabled{ opacity:.55; cursor:default; }
+  .pr-translation-body{ min-height:0; overflow:auto; padding:10px 12px; white-space:pre-wrap; overflow-wrap:anywhere; }
 
   /* ===== 参考文献列表 ===== */
   .ref-list{ display:flex; flex-direction:column; gap:8px; }
@@ -2326,7 +2326,7 @@
           <button class="pr-hl-save" id="prHlSave" title="立即保存文字修改、标注和备注,下次进入仍可见">保存修改</button>
           <span class="pr-hl-sep"></span>
           <button class="pr-hl-fmt pr-unwrap-btn" id="prUnmarkBtn" title="取消标记:选中已标注的文字后点击,清除该处的颜色或备注">取消标记</button>
-          <button class="pr-hl-fmt" id="prTranslate" title="开启后，选中任意文字会自动翻译；再次点击关闭">文 翻译</button>
+          <button class="pr-hl-fmt" id="prTranslate" title="开启后，选中任意文字会自动翻译；再次点击关闭">翻译</button>
           <span class="pr-hl-sep"></span>
         </div>
         <div class="pr-zoom-ctl">
@@ -9689,73 +9689,94 @@ function toggleTranslate(){
   toast("自动翻译已开启 · 选中文字即可翻译");
   translateCurrentSelection();
 }
+const readerTranslationCache = new Map();
+const readerTranslationPending = new Map();
+
+function showReaderTranslation(target){
+  let panel = document.querySelector(".pr-translation");
+  if(panel) return panel;
+  panel = document.createElement("div");
+  panel.className = "pr-translation";
+  panel.setAttribute("role", "region");
+  panel.setAttribute("aria-label", "译文");
+  panel.innerHTML = '<div class="pr-translation-head"><strong></strong><button type="button" disabled>复制</button></div>' +
+    '<div class="pr-translation-body" aria-live="polite"></div>';
+  const handle = panel.firstElementChild;
+  const button = handle.querySelector("button");
+  button.onclick = async function(){
+    const body = panel.lastElementChild;
+    try{ await navigator.clipboard.writeText(body.textContent); toast("已复制译文"); }
+    catch(error){ toast("复制失败，可选中译文手动复制"); }
+  };
+  handle.onpointerdown = function(event){
+    if(event.button !== 0 || event.target.closest("button")) return;
+    event.preventDefault();
+    const {left, top} = panel.getBoundingClientRect();
+    const offsetX = event.clientX - left, offsetY = event.clientY - top;
+    handle.setPointerCapture(event.pointerId);
+    handle.onpointermove = function(move){
+      if(!handle.hasPointerCapture(move.pointerId)) return;
+      panel.style.right = panel.style.bottom = "auto";
+      panel.style.left = Math.max(0, Math.min(innerWidth - panel.offsetWidth, move.clientX - offsetX)) + "px";
+      panel.style.top = Math.max(0, Math.min(innerHeight - panel.offsetHeight, move.clientY - offsetY)) + "px";
+    };
+  };
+  handle.querySelector("strong").textContent = "译文 · " + target;
+  document.body.append(panel);
+  return panel;
+}
+
 async function translateCurrentSelection(){
-  const btn = document.getElementById("prTranslate");
-  const item = state.items.find(function(i){ return i.id === prState.itemId; });
-  if(!item || !prState.translateMode) return;
+  const itemId = prState.itemId;
+  if(!itemId || !prState.translateMode) return;
 
-  /* 获取选中文字 */
   const sel = window.getSelection();
-  if(!sel || sel.isCollapsed || sel.rangeCount === 0){
-    return;
-  }
-  const selText = sel.toString().replace(/\u00A0/g, "\n").trim();
-  if(!selText || selText.length < 2){ toast("选中的是空白"); return; }
-  const selectionRange = sel.getRangeAt(0).cloneRange();
+  const root = document.getElementById("prText");
+  if(!sel || sel.isCollapsed || !sel.rangeCount || !root?.contains(sel.anchorNode) || !root.contains(sel.focusNode)) return;
+  const text = sel.toString().replace(/\s+/g, " ").trim().slice(0, 4000);
+  if(text.length < 2) return;
+  if(!cloudAI?.signedIn()){ toast(aiLoginMessage); return; }
+
+  const target = /[\p{Script=Han}]/u.test(text) ? "英文" : "中文";
+  const key = target + "\n" + text;
+  const panel = showReaderTranslation(target);
+  const header = panel.querySelector("strong");
+  const copy = panel.querySelector("button");
+  const body = panel.lastElementChild;
   const requestId = ++prState.translateRequestId;
-  const prTextRoot = document.getElementById("prText");
-  const isPdfNativeMode = !!(prTextRoot && prTextRoot.classList.contains("pr-pdf-native"));
-
-  if(!cloudAI?.signedIn()){
-    toast(aiLoginMessage);
+  header.textContent = "译文 · " + target;
+  const cached = readerTranslationCache.get(key);
+  if(cached){
+    body.textContent = cached;
+    copy.disabled = false;
     return;
   }
 
-  clearTranslations();
-  toast("AI 翻译中…");
-
-  const isZh = /[\u4e00-\u9fa5]/.test(selText);
-  const target = isZh ? "英文" : "中文";
-  const messages = [
-    { role: "system", content: "你是专业学术翻译。将用户提供的文字翻译成" + target + "。要求:准确传达原意,术语规范,语句通顺。只输出译文本身,不要任何解释、不要重复原文。" },
-    { role: "user", content: selText.substring(0, 4000) }
-  ];
-  const r = await callAI(messages, 2000);
-  if(requestId !== prState.translateRequestId || !prState.translateMode) return;
-  if(!r.content){
-    toast("翻译失败: " + (r.error || "未知错误"));
-    return;
+  copy.disabled = true;
+  body.textContent = "翻译中…";
+  if(!readerTranslationPending.has(key)){
+    const messages = [
+      {role:"system",content:"把选中的论文文字翻译成" + target + "。准确保留术语，只输出译文。"},
+      {role:"user",content:text}
+    ];
+    const pending = callAI(messages, Math.min(2000, Math.max(128, text.length * 3)), 0.1)
+      .then(result => {
+        const translation = result.content?.trim();
+        if(translation){
+          if(readerTranslationCache.size >= 30) readerTranslationCache.delete(readerTranslationCache.keys().next().value);
+          readerTranslationCache.set(key, translation);
+        }
+        return result;
+      }).finally(() => readerTranslationPending.delete(key));
+    readerTranslationPending.set(key, pending);
   }
-
-  /* PDF保持只读:译文放在独立浮窗;其他文档仍放在选区之后。 */
-  let inserted = false;
-  if(isPdfNativeMode){
-    const trEl = document.createElement("span");
-    trEl.className = "pr-translation pr-pdf-translation";
-    trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
-    document.body.appendChild(trEl);
-    inserted = true;
-  }else{
-    try{
-      let endNode = selectionRange.endContainer;
-      if(endNode.nodeType === 3) endNode = endNode.parentNode;
-      const trEl = document.createElement("span");
-      trEl.className = "pr-translation";
-      trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
-      if(endNode.after){ endNode.after(trEl); inserted = true; }
-    }catch(e){ /* 忽略,走兜底 */ }
+  const result = await readerTranslationPending.get(key);
+  if(itemId !== prState.itemId || requestId !== prState.translateRequestId || !prState.translateMode || !panel.isConnected) return;
+  body.textContent = result.content?.trim() || ("翻译失败：" + (result.error || "请稍后重试"));
+  copy.disabled = !result.content?.trim();
+  if(panel.style.top){
+    panel.style.top = Math.max(0, Math.min(parseFloat(panel.style.top), innerHeight - panel.offsetHeight)) + "px";
   }
-  if(!inserted){
-    const prText = document.getElementById("prText");
-    if(prText){
-      const trEl = document.createElement("span");
-      trEl.className = "pr-translation";
-      trEl.innerHTML = '<span class="tr-label">译文 · ' + (isZh ? "English" : "中文") + '</span>' + escapeHtml(r.content.trim());
-      prText.appendChild(trEl);
-    }
-  }
-  if(btn) btn.classList.add("on");
-  toast("翻译完成 · 可继续选中下一段自动翻译");
 }
 
 /* ============================================================
