@@ -924,6 +924,9 @@
     border-radius:8px; background:#F4F8FF; color:#345674; font:600 13px var(--ui-font);
     text-decoration:none; cursor:pointer;
   }
+  .pr-literature-sources{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:6px; margin:8px 0 12px; }
+  .pr-literature-sources a{ justify-content:center; text-align:center; min-width:0; }
+  .pr-literature-sources a:first-child{ grid-column:1 / -1; }
   .pr-literature-links a:hover, .pr-literature-panel > button:hover{ background:#E2ECF8; }
   .pr-chat-prompts{ display:flex; flex-wrap:wrap; gap:6px; }
   .pr-chat-prompts button{
@@ -9758,7 +9761,7 @@ async function translateCurrentSelection(){
 /* ============================================================
    参考文献 —— AI检索论文参考文献列表,点击跳转知网
    ============================================================ */
-function literatureLinks(query, doi){
+function literatureLinks(query, doi, extraLinks = ""){
   const q = encodeURIComponent(query);
   const links = [];
   if(doi && /^10\.\d{4,9}\/\S+$/i.test(doi)){
@@ -9767,7 +9770,7 @@ function literatureLinks(query, doi){
   links.push('<a href="https://kns.cnki.net/kns8s/defaultresult/index?kw=' + q + '" target="_blank" rel="noopener noreferrer">知网智能检索</a>');
   links.push('<a href="https://scholar.google.com/scholar?q=' + q + '" target="_blank" rel="noopener noreferrer">Google 学术</a>');
   links.push('<a href="https://openalex.org/works?search=' + q + '" target="_blank" rel="noopener noreferrer">OpenAlex</a>');
-  return '<div class="pr-literature-links">' + links.join("") + '</div>';
+  return '<div class="pr-literature-links' + (extraLinks ? ' pr-literature-sources' : '') + '">' + links.join("") + extraLinks + '</div>';
 }
 
 function paperSections(text){
@@ -9781,7 +9784,7 @@ function aiList(content){
   if(!match) return null;
   try{
     const list = JSON.parse(match[0]);
-    return Array.isArray(list) ? list.filter(value => typeof value === "string") : null;
+    return Array.isArray(list) ? list.filter(value => typeof value?.citation === "string" && typeof value.title === "string") : null;
   }catch(error){ return null; }
 }
 
@@ -9806,6 +9809,10 @@ function hasReferenceDetails(entry){
     /(?:18|19|20)\d{2}/.test(entry) && /(?:《[^》]+》|\bvol\.|\bpp?\.|[:：]\s*\d+|\d+\s*\(\d+\)|\bjournal\b)/i.test(entry);
 }
 
+function referenceContinuation(line){
+  return /^(?:\/\/|doi\b|https?:|(?:卷|第)?\s*\d+\s*卷|第\s*\d+\s*[期页]|(?:vol|pp?)\.|[（(]?\d{2,4}\s*[-–—：:.,，）)]|(?:[^。！？]{1,25}[：:]\s*)?[^。！？]{0,30}(?:出版社|出版局|书局|press)\s*[,，.。;；:：\d年\s-]*$)/i.test(line);
+}
+
 function localBibliography(full){
   const lines = full.split(/\r?\n/);
   const heading = /^\s*(?:[【\[])?\s*(?:参考文献|参考书目|引用文献|references|bibliography|works cited)\s*(?:[】\]])?\s*[:：]?\s*$/i;
@@ -9816,9 +9823,11 @@ function localBibliography(full){
   for(const line of lines.slice(boundary + 1)){
     const value = line.trim();
     if(/^(?:附录|致谢|作者简介|责任编辑|基金项目|收稿日期|appendix|acknowledg(?:e)?ments?)(?:$|[：:\s])/i.test(value)) break;
+    if(!value || /^\d+$/.test(value)) continue;
     if(numbered.test(value)) entries.push(value);
-    else if(hasReferenceDetails(value) && (!entries.length || hasReferenceDetails(entries.at(-1)))) entries.push(value);
-    else if(entries.length && value && !/^\d+$/.test(value) && (!hasReferenceDetails(entries.at(-1)) || /^(?:\/\/|doi\b|https?:|\d{4}[.,，:]|\d+[-–]\d+)/i.test(value))) entries[entries.length-1] += " " + value;
+    else if(entries.length && referenceContinuation(value)) entries[entries.length - 1] += " " + value;
+    else if(hasReferenceDetails(value) && !referenceContinuation(value) && (!entries.length || hasReferenceDetails(entries.at(-1)))) entries.push(value);
+    else if(entries.length && !hasReferenceDetails(entries.at(-1))) entries[entries.length - 1] += " " + value;
   }
   return entries.filter(hasReferenceDetails);
 }
@@ -9836,11 +9845,12 @@ async function fetchReferences(){
   if(!sections.length){ status.textContent = "这篇论文暂无可识别的文字。"; return; }
   const normalize = value => value.normalize("NFKC").replace(/\s+/g, "");
   const entries = new Map();
-  function addEntry(entry){
-    const query = referenceTitle(entry);
-    if(query.length < 3) return;
+  function addEntry(entry, title = referenceTitle(entry)){
+    const query = title.trim();
+    if(query.length < 3 || referenceContinuation(query) || /^[\d\p{P}\s]+$/u.test(query) || referenceContinuation(entry)) return;
     const key = normalize(query).toLowerCase();
-    if(!entries.has(key)) entries.set(key, {entry, query});
+    const previous = entries.get(key);
+    if(!previous || normalize(previous.entry).length < normalize(entry).length) entries.set(key, {entry, query});
   }
   function render(){
     list.innerHTML = [...entries.values()].map(({entry,query}) => {
@@ -9848,7 +9858,7 @@ async function fetchReferences(){
       return '<div class="ref-item"><div class="ref-title">' + escapeHtml(entry) + '</div>' + literatureLinks(query, doi) + '</div>';
     }).join("");
   }
-  localBibliography(full).forEach(addEntry);
+  localBibliography(full).forEach(entry => addEntry(entry));
   render();
   if(!cloudAI?.signedIn()){
     status.textContent = (entries.size ? "已列出文末书目。 " : "") + "登录云端账号后可补查正文及脚注引用。";
@@ -9860,7 +9870,7 @@ async function fetchReferences(){
     if(!panel.isConnected) return;
     status.textContent = "AI 正在核对原文引用 " + (index + 1) + " / " + sections.length;
     const result = await callAI([
-      {role:"system",content:"从论文原文提取正式的参考文献和脚注中的完整来源。排除正文引用编号、章节标题、页眉页脚、作者简介、项目说明和非书目性注释。每项逐字引用原文中连续的一段完整书目信息，保留作者、题名和已写出的出版信息。禁止改写、补全或猜测。返回 JSON 字符串数组，找不到返回 []。"},
+      {role:"system",content:"按书目格式从论文提取可独立检索的完整文献。GB/T 7714 期刊：作者.题名[J].刊名,年,卷(期):页码；专著：作者.书名[M].出版地:出版社,年；析出文献：作者.篇名[C]//编者.文集.出版地:出版社,年:页码；APA：作者.(年).题名.期刊或出版社。历史脚注：作者：《题名》，刊物或出版社，年，页码。示例：戴槃.杨府庙碑记[C] //金柏东.温州历代碑刻集.上海:上海社会科学院出版社, 2002: 369-370. 是一条，题名是杨府庙碑记。续行的出版社、年、卷期、页码和文集名必须归回原条目，不能当成独立文献或题名。排除正文论述、页眉和作者简介。返回 JSON 对象数组，每项包含 citation 和 title 两个字符串。citation 必须逐字摘录原文中连续完整条目，title 必须是 citation 中可找到的原文题名。禁止补全或猜测，找不到返回 []。"},
       {role:"user",content:section}
     ], 5000, 0.1);
     if(!panel.isConnected) return;
@@ -9872,11 +9882,13 @@ async function fetchReferences(){
     completed++;
     const source = normalize(section);
     for(const candidate of matches){
-      const entry = candidate.replace(/\s+/g, " ").trim();
+      const entry = candidate.citation.replace(/\s+/g, " ").trim();
       const key = normalize(entry);
       if(key.length < 12 || key.length > 900 || !source.includes(key)) continue;
       if(!hasReferenceDetails(entry)) continue;
-      addEntry(entry);
+      if(!key.includes(normalize(candidate.title))) continue;
+      const typedTitle = entry.match(/^[\s\S]+?\[(?:J|M|D|C|R|N|A|Z|EB)(?:\/OL)?\]/i) ? referenceTitle(entry) : candidate.title;
+      addEntry(entry, typedTitle);
     }
     render();
   }
@@ -9951,9 +9963,9 @@ function openSourceSearch(){
     button.disabled = true;
     status.textContent = "正在查询学术索引…";
     const encoded = encodeURIComponent(query);
-    list.innerHTML = literatureLinks(query) + '<div class="pr-literature-links">' +
+    list.innerHTML = literatureLinks(query, undefined,
       '<a href="https://www.baidu.com/s?tn=news&amp;wd=' + encoded + '" target="_blank" rel="noopener noreferrer">百度新闻</a>' +
-      '<a href="https://news.google.com/search?q=' + encoded + '" target="_blank" rel="noopener noreferrer">Google 新闻</a></div>';
+      '<a href="https://news.google.com/search?q=' + encoded + '" target="_blank" rel="noopener noreferrer">Google 新闻</a>');
     const queries = mode === "keyword"
       ? [...new Set([query, ...query.split(/[、，,；;]+/).map(value => value.trim()).filter(Boolean)])].slice(0, 4)
       : [query];
