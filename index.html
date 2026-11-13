@@ -914,6 +914,7 @@
     margin-top:8px; padding:9px; border:1px solid #DCE5F0; border-radius:10px;
     background:#FFFFFFD9; color:#30475E; cursor:default;
   }
+  .pr-literature-panel .rel-item:hover, .pr-literature-panel .ref-item:hover{ transform:none; }
   .pr-literature-panel .rel-title, .pr-literature-panel .ref-title{
     font:600 14px/1.55 var(--ui-font); color:#30475E; overflow-wrap:anywhere;
   }
@@ -1087,11 +1088,6 @@
   /* 版面保真模式: 取消单栏740px限制,让PDF页自由展开并居中,左右留白对称 */
   .pr-text.pr-layout-mode{ max-width:none; }
   .pr-text .pr-layout-root{ padding:8px 0; text-align:center; overflow-x:auto; }
-  .pr-text .pr-layout-root::before{
-    content:"PDF只读审阅 · 原版式1:1还原 · 可选中、标注、备注与翻译";
-    display:block; margin:0 0 12px; font-size:12px; color:#b58e2b; background:#fdf6e3;
-    border:1px solid #ecd9a8; border-radius:6px; padding:6px 10px; text-align:center;
-  }
   .pr-text .pr-layout-page{
     position:relative; margin:0 auto 18px; background:#fff;
     box-shadow:0 1px 8px rgba(0,0,0,.14); overflow:hidden;
@@ -1115,11 +1111,6 @@
      - svgLayer 层: 颜色标注/临时高亮/AI解读标识都画SVG矩形在文字上方, 不破坏原DOM  */
   .pr-text.pr-pdf-native{ max-width:none; text-indent:0; }
   .pr-text .pr-pdf-root{ padding:8px 0; text-align:center; overflow-x:auto; }
-  .pr-text .pr-pdf-root::before{
-    content:"PDF 只读审阅器 · 原PDF原貌 · 可选中、标注、备注与翻译";
-    display:block; margin:0 0 12px; font-size:12px; color:#2e7d32; background:#e8f5e9;
-    border:1px solid #a5d6a7; border-radius:6px; padding:6px 10px; text-align:center;
-  }
   .pr-text .pr-ocr-status{
     display:none; margin:0 auto 12px; max-width:760px; padding:7px 10px;
     border:1px solid #b7d2e9; border-radius:6px; background:#f2f8fd;
@@ -1937,12 +1928,7 @@
   .pr-outline-section{ margin:16px 0 10px; padding-bottom:7px; border-bottom-color:rgba(108,131,149,.2); color:#536E85; }
   .pr-ai-btn{ min-height:42px; border-color:#CCD7E0; border-radius:11px; background:rgba(255,255,255,.76); color:#3F5B72; font-family:var(--ui-font); font-size:14px; font-weight:650; }
   .pr-ai-btn:hover,.pr-ai-btn.active{ border-color:#7D9AAF; color:#294F69; background:linear-gradient(115deg,#F2F7F8,#F1EDF7); }
-  .pr-ai-hint{ display:none; }
   .pr-text-wrap{ border-left-color:rgba(112,136,153,.14); background:linear-gradient(120deg,rgba(248,250,251,.74),rgba(246,244,249,.64)); }
-  .pr-text .pr-layout-root::before,.pr-text .pr-pdf-root::before{
-    color:#45657C; background:linear-gradient(120deg,#EEF5F7,#F2EEF7); border-color:#CBD9E2;
-    font:600 12px/1.45 var(--ui-font); border-radius:9px;
-  }
   .pr-text .pr-pdf-page,.pr-text .pr-layout-page{ border-color:#D9E0E5; box-shadow:0 12px 30px -21px rgba(46,58,86,.52); }
   .pr-note-popup{ border-color:#C2D0DB; background:linear-gradient(145deg,#FEFFFF,#F4F1F8); box-shadow:0 14px 32px rgba(48,62,89,.2); font-family:var(--ui-font); }
   .pr-note-popup::before{ font-family:var(--ui-font); font-size:11px; letter-spacing:.06em; color:#587087; }
@@ -9814,6 +9800,12 @@ function referenceTitle(entry){
   return text.split(/\s*(?:https?:\/\/|doi\s*:|[。.]\s+|[，,]\s*(?:18|19|20)\d{2})/i).slice(0, 2).join(" ").slice(0, 120);
 }
 
+function hasReferenceDetails(entry){
+  return /\[(?:J|M|D|C|R|N|A|Z|EB)(?:\/OL)?\]|\b10\.\d{4,9}\//i.test(entry) ||
+    /(?:出版社|press\b)/i.test(entry) ||
+    /(?:18|19|20)\d{2}/.test(entry) && /(?:《[^》]+》|\bvol\.|\bpp?\.|[:：]\s*\d+|\d+\s*\(\d+\)|\bjournal\b)/i.test(entry);
+}
+
 function localBibliography(full){
   const lines = full.split(/\r?\n/);
   const heading = /^\s*(?:[【\[])?\s*(?:参考文献|参考书目|引用文献|references|bibliography|works cited)\s*(?:[】\]])?\s*[:：]?\s*$/i;
@@ -9823,11 +9815,12 @@ function localBibliography(full){
   const numbered = /^\s*(?:[［\[]\d+[］\]]|\d{1,3}[.、)]\s+)/;
   for(const line of lines.slice(boundary + 1)){
     const value = line.trim();
-    if(/^(?:附录|致谢|作者简介|appendix|acknowledg(?:e)?ments?)(?:$|[：:\s])/i.test(value)) break;
+    if(/^(?:附录|致谢|作者简介|责任编辑|基金项目|收稿日期|appendix|acknowledg(?:e)?ments?)(?:$|[：:\s])/i.test(value)) break;
     if(numbered.test(value)) entries.push(value);
-    else if(entries.length && value && !/^\d+$/.test(value)) entries[entries.length-1] += " " + value;
+    else if(hasReferenceDetails(value) && (!entries.length || hasReferenceDetails(entries.at(-1)))) entries.push(value);
+    else if(entries.length && value && !/^\d+$/.test(value) && (!hasReferenceDetails(entries.at(-1)) || /^(?:\/\/|doi\b|https?:|\d{4}[.,，:]|\d+[-–]\d+)/i.test(value))) entries[entries.length-1] += " " + value;
   }
-  return entries.filter(entry => /(?:《.+》|\[(?:J|M|D|C|R|N|A|Z|EB)(?:\/OL)?\]|出版社|\b10\.\d{4,9}\/|\b(?:18|19|20)\d{2}\b)/i.test(entry));
+  return entries.filter(hasReferenceDetails);
 }
 
 async function fetchReferences(){
@@ -9861,6 +9854,8 @@ async function fetchReferences(){
     status.textContent = (entries.size ? "已列出文末书目。 " : "") + "登录云端账号后可补查正文及脚注引用。";
     return;
   }
+  let completed = 0;
+  let lastError = "";
   for(const [index, section] of sections.entries()){
     if(!panel.isConnected) return;
     status.textContent = "AI 正在核对原文引用 " + (index + 1) + " / " + sections.length;
@@ -9871,20 +9866,22 @@ async function fetchReferences(){
     if(!panel.isConnected) return;
     const matches = aiList(result.content);
     if(!matches){
-      status.textContent = "只完成了 " + index + " / " + sections.length + " 段。请重试。" + (result.error ? " " + result.error : "");
-      return;
+      lastError = result.error || "模型返回的书目格式有误。";
+      continue;
     }
+    completed++;
     const source = normalize(section);
     for(const candidate of matches){
       const entry = candidate.replace(/\s+/g, " ").trim();
       const key = normalize(entry);
       if(key.length < 12 || key.length > 900 || !source.includes(key)) continue;
-      if(!/(?:\b(?:18|19|20)\d{2}\b|[《》]|\[[JMDCRNA]\]|\b10\.\d{4,9}\/|出版社|卷|期)/i.test(entry)) continue;
+      if(!hasReferenceDetails(entry)) continue;
       addEntry(entry);
     }
     render();
   }
-  status.textContent = entries.size ? "从原文找到 " + entries.size + " 条" : "没有找到可与原文核对的完整书目。";
+  const summary = entries.size ? "从原文找到 " + entries.size + " 条。" : "暂未找到可与原文核对的完整书目。";
+  status.textContent = completed === sections.length ? summary : summary + " AI 仅完成 " + completed + " / " + sections.length + " 段。" + lastError;
 }
 
 function toggleChatPanel(){
@@ -9985,21 +9982,21 @@ function openSourceSearch(){
         ...queries.slice(0, 2).map(value => readIndex("Crossref", value))
       ]);
       if(!panel.isConnected) return;
-      const phrases = [...new Set(queries.flatMap(value => value.match(/[\p{Script=Han}]{2,}|[a-z]{3,}/giu) || []).map(value => value.toLowerCase()))];
+      const terms = [...new Set(query.split(/[\s、，,；;]+/).map(ppNormTitle).filter(Boolean))];
+      const requested = ppNormTitle(query);
       const candidates = new Map();
       for(const response of responses){
         if(response.status !== "fulfilled") continue;
         for(const paper of response.value){
           const key = ppNormTitle(paper.name);
           if(!key) continue;
-          const overlap = phrases.reduce((sum, phrase) => {
-            if(key.includes(phrase)) return sum + 5;
-            if(!/\p{Script=Han}/u.test(phrase) || phrase.length < 3) return sum;
-            const fragments = Array.from({length:phrase.length - 2}, (_, index) => phrase.slice(index, index + 3));
-            return sum + Math.min(3, fragments.filter(part => key.includes(part)).length);
-          }, 0);
-          const score = overlap * 3 + (6 - paper.rank) + (paper.source === "OpenAlex" ? 2 : 0);
-          if(overlap === 0 && paper.source === "Crossref" && mode !== "author") continue;
+          const authorMatch = paper.authors.some(name => {
+            const words = name.trim().split(/[\s,]+/);
+            return ppNormTitle(name) === requested || ppNormTitle(words.reverse().join("")) === requested;
+          });
+          const hits = terms.filter(term => key.includes(term)).length;
+          if(mode === "author" ? !authorMatch : mode === "title" ? !key.includes(requested) : hits < Math.max(1, Math.ceil(terms.length / 2))) continue;
+          const score = (key === requested ? 30 : 0) + hits * 8 + 12 - paper.rank;
           if(!candidates.has(key) || candidates.get(key).score < score) candidates.set(key, {...paper, score});
         }
       }
