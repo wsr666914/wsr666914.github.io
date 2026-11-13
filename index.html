@@ -5633,6 +5633,7 @@ function openPaperReader(itemId){
   prState.kbHistPushed = false;
   prState.pdfEditMode = false;
   prState.translateMode = false;
+  prState.lastMarkedSelection = null;
   prState.translateRequestId = 0;
   /* PDF Canvas原生模式 渲染状态标志(每次打开重置,避免上次回退标志残留) */
   prState._pdfRendered = false;
@@ -5813,6 +5814,7 @@ function openPaperReader(itemId){
       /* Word式:先选中文字再点颜色 → 直接标注(不用进模式) */
       const live = prGetLiveSelection();
       if(live){
+        prState.lastMarkedSelection = readerTranslationSelection();
         prApplyOrToggleAnnotation(live.text, "highlight", color, live.sel.getRangeAt(0).cloneRange());
         live.sel.removeAllRanges();
         return;
@@ -6011,7 +6013,10 @@ function openPaperReader(itemId){
   if(prTextWrap){
     prTextWrap.onmouseup = async function(e){
       if(e.button !== 0 || e.target.closest("#prSelectionTools")) return;
-      if(!prState.translateMode && !prState.activeColor && !prState.activeFmt && showPaperSelectionTools(e)) return;
+      prState.lastMarkedSelection = null;
+      // Capture the selection before highlighting can clear it or rebuild the text layer.
+      if(prState.translateMode) translateCurrentSelection();
+      if(!prState.activeColor && !prState.activeFmt && showPaperSelectionTools(e)) return;
       /* 点击备注元素时显示/隐藏弹窗 */
       const noteEl = e.target.closest("u.pr-note");
       const popup = document.getElementById("prNotePopup");
@@ -6044,16 +6049,12 @@ function openPaperReader(itemId){
       /* 点击其他地方关闭弹窗 */
       if(popup && !noteEl) popup.classList.remove("show");
 
-      if(prState.translateMode){
-        translateCurrentSelection();
-        return;
-      }
-
       if(!prState.activeColor && !prState.activeFmt) return;
       const sel = window.getSelection();
       if(!sel || sel.isCollapsed || sel.rangeCount === 0) return;
       const selectedText = sel.toString().trim();
       if(!selectedText || selectedText.length < 2) return;
+      if(prState.activeColor) prState.lastMarkedSelection = readerTranslationSelection();
       /* 存储标注 */
       const item2 = state.items.find(function(i){ return i.id === prState.itemId; });
       if(!item2) return;
@@ -9694,7 +9695,7 @@ function toggleTranslate(){
   }
   if(btn) btn.classList.add("on");
   toast("自动翻译已开启 · 选中文字即可翻译");
-  translateCurrentSelection();
+  translateCurrentSelection(readerTranslationSelection() || prState.lastMarkedSelection);
 }
 const readerTranslationCache = new Map();
 const readerTranslationPending = new Map();
@@ -9718,16 +9719,30 @@ function showReaderTranslation(target){
     catch(error){ toast("复制失败，可选中译文手动复制"); }
   };
   handle.onpointerdown = function(event){
-    if(event.button !== 0 || event.target.closest("button")) return;
+    if(!event.isPrimary || event.button !== 0 || event.target.closest("button")) return;
     event.preventDefault();
-    const {left, top} = panel.getBoundingClientRect();
+    const {left, top, width, height} = panel.getBoundingClientRect();
     const offsetX = event.clientX - left, offsetY = event.clientY - top;
+    let x = left, y = top, frame = 0;
+    panel.style.willChange = "transform";
     handle.setPointerCapture(event.pointerId);
     handle.onpointermove = function(move){
-      if(!handle.hasPointerCapture(move.pointerId)) return;
+      if(move.pointerId !== event.pointerId) return;
+      x = Math.max(0, Math.min(innerWidth - width, move.clientX - offsetX));
+      y = Math.max(0, Math.min(innerHeight - height, move.clientY - offsetY));
+      if(frame) return;
+      frame = requestAnimationFrame(function(){
+        frame = 0;
+        panel.style.transform = "translate3d(" + (x - left) + "px," + (y - top) + "px,0)";
+      });
+    };
+    handle.onlostpointercapture = function(){
+      cancelAnimationFrame(frame);
       panel.style.right = panel.style.bottom = "auto";
-      panel.style.left = Math.max(0, Math.min(innerWidth - panel.offsetWidth, move.clientX - offsetX)) + "px";
-      panel.style.top = Math.max(0, Math.min(innerHeight - panel.offsetHeight, move.clientY - offsetY)) + "px";
+      panel.style.left = x + "px";
+      panel.style.top = y + "px";
+      panel.style.transform = panel.style.willChange = "";
+      handle.onpointermove = handle.onlostpointercapture = null;
     };
   };
   handle.querySelector("strong").textContent = "译文 · " + target;
@@ -9735,14 +9750,21 @@ function showReaderTranslation(target){
   return panel;
 }
 
-async function translateCurrentSelection(){
-  const itemId = prState.itemId;
-  if(!itemId || !prState.translateMode) return;
-
+function readerTranslationSelection(){
   const sel = window.getSelection();
   const root = document.getElementById("prText");
-  if(!sel || sel.isCollapsed || !sel.rangeCount || !root?.contains(sel.anchorNode) || !root.contains(sel.focusNode)) return;
-  const original = sel.toString().replace(/\u00A0/g, " ").trim();
+  if(!sel || sel.isCollapsed || !sel.rangeCount || !root?.contains(sel.anchorNode) || !root.contains(sel.focusNode)) return null;
+  return {
+    original:sel.toString().replace(/\u00A0/g, " ").trim(),
+    pdfRects:root.classList.contains("pr-pdf-native") ? capturePdfSelectionRects(sel.getRangeAt(0)) : null
+  };
+}
+
+async function translateCurrentSelection(selection = readerTranslationSelection()){
+  const itemId = prState.itemId;
+  if(!itemId || !prState.translateMode || !selection) return;
+  const {original, pdfRects} = selection;
+  const isPdf = pdfRects !== null;
   const text = original.replace(/\s+/g, " ").slice(0, 4000);
   if(!text || (text.length === 1 && !/^[\p{Script=Latin}]$/u.test(text))) return;
   if(!cloudAI?.signedIn()){ toast(aiLoginMessage); return; }
@@ -9750,8 +9772,6 @@ async function translateCurrentSelection(){
   const target = /[\p{Script=Han}]/u.test(text) ? "英文" : "中文";
   const isWord = /^[\p{Script=Latin}][\p{Script=Latin}\p{M}]*(?:[’'-][\p{Script=Latin}\p{M}]+)*$/u.test(text);
   const key = (isWord ? "word:" : "") + target + "\n" + text;
-  const isPdf = root.classList.contains("pr-pdf-native");
-  const pdfRects = isPdf ? capturePdfSelectionRects(sel.getRangeAt(0)) : null;
   const storageKey = STORAGE_KEY;
   const panel = showReaderTranslation(target);
   const header = panel.querySelector("strong");
