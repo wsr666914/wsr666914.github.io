@@ -9848,7 +9848,7 @@ async function fetchReferences(){
   const entries = new Map();
   function addEntry(entry, title = referenceTitle(entry)){
     const query = title.trim();
-    if(query.length < 3 || referenceContinuation(query) || /^[\d\p{P}\s]+$/u.test(query) || referenceContinuation(entry)) return;
+    if(query.length < 3 || referenceContinuation(query) || /^[\d\p{P}\s]+$/u.test(query) || (!/^\s*[［\[]\s*\d+\s*[］\]]\s*\p{L}/u.test(entry) && referenceContinuation(entry))) return;
     const key = normalize(query).toLowerCase();
     const previous = entries.get(key);
     if(!previous || normalize(previous.entry).length < normalize(entry).length) entries.set(key, {entry, query});
