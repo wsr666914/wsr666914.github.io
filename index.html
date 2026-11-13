@@ -957,7 +957,14 @@
     background:#F4F8FF; color:#345674; font:600 13px var(--ui-font); cursor:pointer;
   }
   .pr-translation-head button:disabled{ opacity:.55; cursor:default; }
-  .pr-translation-body{ min-height:0; overflow:auto; padding:10px 12px; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .pr-translation-actions{ display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+  .pr-translation-head [data-save]{ background:#365673; color:#fff; border-color:#365673; }
+  .pr-translation-head button:focus-visible, .pr-translation-original summary:focus-visible{ outline:2px solid #507EAD; outline-offset:2px; }
+  .pr-translation-content{ min-height:0; overflow:auto; padding:10px 12px; }
+  .pr-translation-body, .pr-translation-source{ white-space:pre-wrap; overflow-wrap:anywhere; user-select:text; }
+  .pr-translation-original{ margin-bottom:10px; border-radius:9px; background:#E9F0F8; }
+  .pr-translation-original summary{ padding:6px 9px; cursor:pointer; color:#345674; font-weight:600; }
+  .pr-translation-source{ padding:0 9px 8px; color:#425E77; }
 
   /* ===== 参考文献列表 ===== */
   .ref-list{ display:flex; flex-direction:column; gap:8px; }
@@ -9699,12 +9706,14 @@ function showReaderTranslation(target){
   panel.className = "pr-translation";
   panel.setAttribute("role", "region");
   panel.setAttribute("aria-label", "译文");
-  panel.innerHTML = '<div class="pr-translation-head"><strong></strong><button type="button" disabled>复制</button></div>' +
-    '<div class="pr-translation-body" aria-live="polite"></div>';
+  panel.innerHTML = '<div class="pr-translation-head"><strong></strong><div class="pr-translation-actions">' +
+    '<button type="button" data-copy disabled>复制</button><button type="button" data-save disabled>存为备注</button></div></div>' +
+    '<div class="pr-translation-content"><details class="pr-translation-original"><summary>原文对照</summary>' +
+    '<div class="pr-translation-source"></div></details><div class="pr-translation-body" aria-live="polite"></div></div>';
   const handle = panel.firstElementChild;
-  const button = handle.querySelector("button");
+  const button = handle.querySelector("[data-copy]");
   button.onclick = async function(){
-    const body = panel.lastElementChild;
+    const body = panel.querySelector(".pr-translation-body");
     try{ await navigator.clipboard.writeText(body.textContent); toast("已复制译文"); }
     catch(error){ toast("复制失败，可选中译文手动复制"); }
   };
@@ -9733,30 +9742,66 @@ async function translateCurrentSelection(){
   const sel = window.getSelection();
   const root = document.getElementById("prText");
   if(!sel || sel.isCollapsed || !sel.rangeCount || !root?.contains(sel.anchorNode) || !root.contains(sel.focusNode)) return;
-  const text = sel.toString().replace(/\s+/g, " ").trim().slice(0, 4000);
-  if(text.length < 2) return;
+  const original = sel.toString().replace(/\u00A0/g, " ").trim();
+  const text = original.replace(/\s+/g, " ").slice(0, 4000);
+  if(!text || (text.length === 1 && !/^[\p{Script=Latin}]$/u.test(text))) return;
   if(!cloudAI?.signedIn()){ toast(aiLoginMessage); return; }
 
   const target = /[\p{Script=Han}]/u.test(text) ? "英文" : "中文";
-  const key = target + "\n" + text;
+  const isWord = /^[\p{Script=Latin}][\p{Script=Latin}\p{M}]*(?:[’'-][\p{Script=Latin}\p{M}]+)*$/u.test(text);
+  const key = (isWord ? "word:" : "") + target + "\n" + text;
+  const isPdf = root.classList.contains("pr-pdf-native");
+  const pdfRects = isPdf ? capturePdfSelectionRects(sel.getRangeAt(0)) : null;
+  const storageKey = STORAGE_KEY;
   const panel = showReaderTranslation(target);
   const header = panel.querySelector("strong");
-  const copy = panel.querySelector("button");
-  const body = panel.lastElementChild;
+  const copy = panel.querySelector("[data-copy]");
+  const save = panel.querySelector("[data-save]");
+  const body = panel.querySelector(".pr-translation-body");
   const requestId = ++prState.translateRequestId;
-  header.textContent = "译文 · " + target;
+  header.textContent = isWord ? "单词释义" : "译文 · " + target;
+  panel.querySelector(".pr-translation-source").textContent = original;
+  save.onclick = null;
+  save.disabled = true;
+  function showResult(content){
+    body.textContent = content;
+    copy.disabled = false;
+    save.disabled = original.replace(/\s+/g, " ").length > 4000 || (isPdf && !pdfRects.length);
+    save.onclick = function(){
+      const item = state.items.find(entry => entry.id === itemId);
+      if(!item || STORAGE_KEY !== storageKey || prState.itemId !== itemId || requestId !== prState.translateRequestId) return;
+      if(!isPdf){
+        prClearPendingSync();
+        rebuildFromDom(item);
+      }
+      const entry = {text:original, type:"note", note:content, color:"#FFF1A8"};
+      if(isPdf) entry.pdfRects = pdfRects;
+      if(!item.highlights) item.highlights = [];
+      if(item.highlights.some(note => note.type === "note" && note.text === entry.text && note.note === entry.note &&
+          (!isPdf || JSON.stringify(note.pdfRects) === JSON.stringify(pdfRects)))){
+        toast("这段译文已存为备注");
+        return;
+      }
+      pushHlHistory(item);
+      item.highlights.push(entry);
+      markDirty();
+      refreshHighlightsRender(item);
+      save.disabled = true;
+      savePaperHighlights();
+    };
+    if(panel.style.top) panel.style.top = Math.max(0, Math.min(parseFloat(panel.style.top), innerHeight - panel.offsetHeight)) + "px";
+  }
   const cached = readerTranslationCache.get(key);
   if(cached){
-    body.textContent = cached;
-    copy.disabled = false;
+    showResult(cached);
     return;
   }
 
   copy.disabled = true;
-  body.textContent = "翻译中…";
+  body.textContent = isWord ? "正在查询释义…" : "翻译中…";
   if(!readerTranslationPending.has(key)){
     const messages = [
-      {role:"system",content:"把选中的论文文字翻译成" + target + "。准确保留术语，只输出译文。"},
+      {role:"system",content:isWord ? "你是学术阅读词典。用中文给出这个外语单词常用的词性和释义，优先列出常见学术义项。最多三个义项，分行输出，无需 Markdown。遇到专名请说明。只输出释义。" : "把选中的论文文字翻译成" + target + "。准确保留术语，只输出译文。"},
       {role:"user",content:text}
     ];
     const pending = callAI(messages, Math.min(2000, Math.max(128, text.length * 3)), 0.1)
@@ -9772,11 +9817,8 @@ async function translateCurrentSelection(){
   }
   const result = await readerTranslationPending.get(key);
   if(itemId !== prState.itemId || requestId !== prState.translateRequestId || !prState.translateMode || !panel.isConnected) return;
-  body.textContent = result.content?.trim() || ("翻译失败：" + (result.error || "请稍后重试"));
-  copy.disabled = !result.content?.trim();
-  if(panel.style.top){
-    panel.style.top = Math.max(0, Math.min(parseFloat(panel.style.top), innerHeight - panel.offsetHeight)) + "px";
-  }
+  if(result.content?.trim()) showResult(result.content.trim());
+  else body.textContent = (isWord ? "释义失败：" : "翻译失败：") + (result.error || "请稍后重试");
 }
 
 /* ============================================================
