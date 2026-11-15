@@ -663,6 +663,7 @@
   /* ============ 论文查看器 ============ */
   #prSelectionTools{ position:fixed; z-index:12; display:flex; gap:4px; padding:5px; background:linear-gradient(135deg,#FAFCFD,#EDE9F3); border:1px solid #C7D2DD; border-radius:12px; box-shadow:0 6px 20px #30405233; }
   #prSelectionTools[hidden]{ display:none; }
+  #prSelectionTools{ flex-wrap:wrap; max-width:calc(100vw - 16px); }
   #prSelectionTools button{ width:auto; min-height:32px; padding:4px 10px; white-space:nowrap; }
   .paper-reader-bg{ padding:0; }
   .paper-reader-bg.show{ align-items:stretch; }
@@ -958,6 +959,8 @@
   }
   .pr-translation-head button:disabled{ opacity:.55; cursor:default; }
   .pr-translation-actions{ display:flex; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
+  .pr-translation-head [data-pin]{ min-width:30px; padding-inline:5px; font-size:16px; }
+  .pr-translation-head [data-pin][aria-pressed="true"]{ background:#DDE9F8; color:#294560; border-color:#7898BB; }
   .pr-translation-head [data-save]{ background:#365673; color:#fff; border-color:#365673; }
   .pr-translation-head button:focus-visible, .pr-translation-original summary:focus-visible{ outline:2px solid #507EAD; outline-offset:2px; }
   .pr-translation-content{ min-height:0; overflow:auto; padding:10px 12px; }
@@ -2387,6 +2390,7 @@
         <div class="pr-text" id="prText" contenteditable="true" spellcheck="false"></div>
         <div class="pr-note-popup" id="prNotePopup"></div>
         <div id="prSelectionTools" role="group" aria-label="选中文字的操作" hidden>
+          <button class="modal-btn" type="button" data-action="translate">翻译</button>
           <button class="modal-btn" type="button" data-action="highlight">高亮</button>
           <button class="modal-btn" type="button" data-action="note">备注</button>
           <button class="modal-btn" type="button" data-action="copy">复制</button>
@@ -8102,7 +8106,7 @@ function showPaperSelectionTools(event){
   const selection = window.getSelection();
   if(!selection || selection.isCollapsed || !selection.rangeCount ||
      !root.contains(selection.anchorNode) || !root.contains(selection.focusNode) ||
-     selection.toString().trim().length < 2) return false;
+     !selection.toString().trim()) return false;
   const tools = document.getElementById("prSelectionTools");
   tools.hidden = false;
   tools.style.left = Math.max(8, Math.min(event.clientX + 8, innerWidth - tools.offsetWidth - 8)) + "px";
@@ -8138,6 +8142,13 @@ function showPaperSelectionTools(event){
     const selection = window.getSelection();
     if(!action || !selection || selection.isCollapsed) return;
     tools.hidden = true;
+    if(action === "translate"){
+      if(document.querySelector(".pr-translation [data-pin][aria-pressed='true']")){
+        toast("请先取消固定当前译文");
+        return;
+      }
+      if(requireAiLogin()) translateCurrentSelection();
+    }
     if(action === "highlight") document.querySelector(".pr-hl-color[data-color]").click();
     if(action === "note") document.querySelector('.pr-hl-fmt[data-fmt="note"]').click();
     if(action === "copy"){
@@ -9687,8 +9698,10 @@ function toggleTranslate(){
   if(!prState.translateMode && !requireAiLogin()) return;
   prState.translateMode = !prState.translateMode;
   if(!prState.translateMode){
-    prState.translateRequestId++;
-    clearTranslations();
+    if(!document.querySelector(".pr-translation [data-pin][aria-pressed='true']")){
+      prState.translateRequestId++;
+      clearTranslations();
+    }
     if(btn) btn.classList.remove("on");
     toast("已关闭自动翻译");
     return;
@@ -9708,10 +9721,19 @@ function showReaderTranslation(target){
   panel.setAttribute("role", "region");
   panel.setAttribute("aria-label", "译文");
   panel.innerHTML = '<div class="pr-translation-head"><strong></strong><div class="pr-translation-actions">' +
-    '<button type="button" data-copy disabled>复制</button><button type="button" data-save disabled>存为备注</button></div></div>' +
+    '<button type="button" data-pin aria-pressed="false" aria-label="固定译文" title="固定译文" disabled>⚑</button><button type="button" data-copy disabled>复制</button><button type="button" data-save disabled>存为备注</button></div></div>' +
     '<div class="pr-translation-content"><details class="pr-translation-original"><summary>原文对照</summary>' +
     '<div class="pr-translation-source"></div></details><div class="pr-translation-body" aria-live="polite"></div></div>';
   const handle = panel.firstElementChild;
+  const pin = handle.querySelector("[data-pin]");
+  pin.onclick = function(){
+    const pinned = pin.getAttribute("aria-pressed") !== "true";
+    const label = pinned ? "取消固定译文" : "固定译文";
+    pin.setAttribute("aria-pressed", String(pinned));
+    pin.setAttribute("aria-label", label);
+    pin.title = label;
+    toast(pinned ? "已固定译文，可继续标记正文" : "已取消固定译文");
+  };
   const button = handle.querySelector("[data-copy]");
   button.onclick = async function(){
     const body = panel.querySelector(".pr-translation-body");
@@ -9762,7 +9784,7 @@ function readerTranslationSelection(){
 
 async function translateCurrentSelection(selection = readerTranslationSelection()){
   const itemId = prState.itemId;
-  if(!itemId || !prState.translateMode || !selection) return;
+  if(!itemId || !selection || document.querySelector(".pr-translation [data-pin][aria-pressed='true']")) return;
   const {original, pdfRects} = selection;
   const isPdf = pdfRects !== null;
   const text = original.replace(/\s+/g, " ").slice(0, 4000);
@@ -9776,6 +9798,8 @@ async function translateCurrentSelection(selection = readerTranslationSelection(
   const panel = showReaderTranslation(target);
   const header = panel.querySelector("strong");
   const copy = panel.querySelector("[data-copy]");
+  const pin = panel.querySelector("[data-pin]");
+  pin.disabled = true;
   const save = panel.querySelector("[data-save]");
   const body = panel.querySelector(".pr-translation-body");
   const requestId = ++prState.translateRequestId;
@@ -9786,6 +9810,7 @@ async function translateCurrentSelection(selection = readerTranslationSelection(
   function showResult(content){
     body.textContent = content;
     copy.disabled = false;
+    pin.disabled = false;
     save.disabled = original.replace(/\s+/g, " ").length > 4000 || (isPdf && !pdfRects.length);
     save.onclick = function(){
       const item = state.items.find(entry => entry.id === itemId);
@@ -9836,7 +9861,7 @@ async function translateCurrentSelection(selection = readerTranslationSelection(
     readerTranslationPending.set(key, pending);
   }
   const result = await readerTranslationPending.get(key);
-  if(itemId !== prState.itemId || requestId !== prState.translateRequestId || !prState.translateMode || !panel.isConnected) return;
+  if(itemId !== prState.itemId || requestId !== prState.translateRequestId || !panel.isConnected) return;
   if(result.content?.trim()) showResult(result.content.trim());
   else body.textContent = (isWord ? "释义失败：" : "翻译失败：") + (result.error || "请稍后重试");
 }
