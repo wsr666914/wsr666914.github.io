@@ -2050,8 +2050,8 @@
   .chip.active{ background:linear-gradient(120deg,#35576D,#49617C); border-color:transparent; color:#fff; }
   .chip .count{ font:500 12px var(--ui-font); font-variant-numeric:tabular-nums; }
   .toolbar{ padding-left:36px; padding-right:36px; }
-  .search{ border:1px solid #D9E0E3; border-radius:9px; background:#FCFDFC; padding:9px 12px; }
-  .search input{ font:14px var(--ui-font); }
+  .search{ border:0; border-radius:9px; background:transparent; padding:0; }
+  .search input{ font:14px var(--ui-font); border-color:#D9E0E3; background:#FCFDFC; min-height:42px; }
   .btn-link{ font:600 13px/1.5 var(--ui-font); color:#526B7D; letter-spacing:0; }
   .gallery{ padding:0 36px 80px; gap:20px; }
   .card{ border-color:#DDE3E5; border-radius:12px; background:linear-gradient(140deg,#FFF,#FAFBFC); box-shadow:var(--shadow); padding:22px; gap:12px; }
@@ -2068,6 +2068,7 @@
   body.paper-focus .paper-workspace-focus h2{ font:600 clamp(32px,4vw,48px)/1.4 "Noto Serif SC","Songti SC",serif; color:#283E50; }
   body.paper-focus .paper-workspace-back{ background:#FFFFFFA8; border-color:#D1DDE5; font-size:13px; }
   body.paper-focus .paper-workspace-focus-main{ padding:32px 0; }
+  body.paper-focus .paper-workspace-focus p{ color:#607383; }
   body.paper-focus .paper-workspace-focus-kicker{ color:#60788B; font-size:12px; letter-spacing:.08em; }
   body.paper-focus .paper-workspace-focus-foot{ padding:16px 0 2px; font-size:13px; }
   body.paper-focus .gallery .card{ padding:27px 16px 27px 24px; }
@@ -2092,7 +2093,14 @@
   .login-submit{ background:linear-gradient(120deg,#365B73,#506582); }
   .login-tab,.login-forgot,.login-hint,.login-note{ font-family:var(--ui-font); font-style:normal; }
   .paper-reader{ background:#F4F6F7; border:0; border-radius:0; box-shadow:none; }
-  .pr-header{ background:linear-gradient(115deg,#FAFCFD,#F1F4F8); padding:18px 26px; border-bottom:1px solid #D7E0E6; }
+  .pr-header{ background:linear-gradient(115deg,#FAFCFD,#F1F4F8); padding:14px 26px; border-bottom:1px solid #D7E0E6; gap:12px; }
+  .pr-title-row{ flex:0 0 100%; width:100%; }
+  .pr-title-row .pr-title{ flex:1; }
+  .pr-title-row .pr-sub{ flex-shrink:0; }
+  .pr-tools{ width:100%; gap:8px; }
+  #readerSaveSyncStatus:empty{ display:none; }
+  #prClose{ margin-left:auto; }
+  .pr-highlighter{ background:#F7FAFC; border-color:#D9E2E8; border-radius:9px; box-shadow:none; }
   .pr-title{ font:650 clamp(17px,1.8vw,23px)/1.45 var(--ui-font); color:#293F50; }
   .pr-sub{ font:12px var(--ui-font); color:#657C8D; letter-spacing:0; }
   .pr-body{ background:#EFF2F4; }
