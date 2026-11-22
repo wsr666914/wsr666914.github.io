@@ -665,7 +665,7 @@
   #prSelectionTools[hidden]{ display:none; }
   #prSelectionTools{ flex-wrap:wrap; max-width:calc(100vw - 16px); }
   #prSelectionTools button{ width:auto; min-height:32px; padding:4px 10px; white-space:nowrap; }
-  .paper-reader-bg{ padding:0; backdrop-filter:none; animation:none; }
+  .paper-reader-bg{ padding:0; }
   .paper-reader-bg.show{ align-items:stretch; }
   .paper-reader{
     width:100%; max-width:100%; height:100vh; max-height:100vh;
@@ -1978,292 +1978,13 @@
   .pr-text .pr-pdf-page .pr-pdf-textLayer span::selection{ background:transparent; color:transparent; }
   .pr-selection-overlay{ position:absolute; inset:0; width:100%; height:100%; z-index:4; pointer-events:none; }
   ::highlight(paper-find){ background:rgba(255,157,41,.55); }
-
-  /* 极光与磨砂玻璃视觉层。 */
-  :root{
-    --paper:#F2F3FA; --paper-soft:#FFFFFF; --paper-deep:#E9EBF5;
-    --ink:#20263A; --ink-soft:#4C5570; --ink-mute:#68718B;
-    --line:#D4D9EA; --line-soft:#E2E5F0; --teal:#6457CB;
-    --accent:#7161DB; --accent-deep:#5144B0; --maxw:1400px;
-    --shadow:0 12px 36px -24px #31345C40;
-    --shadow-deep:0 22px 60px -28px #31345C50;
-  }
-  body{
-    padding-left:220px; font-family:var(--ui-font); font-size:16px;
-    background:radial-gradient(ellipse 55% 36% at 90% 5%,#C1D6F172,transparent 85%),
-      radial-gradient(ellipse 42% 30% at 60% 18%,#DDD0F980,transparent 85%),#F2F3FA;
-    background-attachment:fixed; color:var(--ink);
-  }
-  .topbar{
-    position:fixed; inset:22px auto 22px 22px; width:176px; border:1px solid #FFFFFF20;
-    border-radius:24px; background:linear-gradient(160deg,#252A43F5,#151B2DFB 65%,#302B4DF5);
-    box-shadow:0 20px 60px -24px #20263A66; backdrop-filter:blur(24px);
-  }
-  .topbar-inner{ height:100%; padding:32px 18px 22px; display:flex; flex-direction:column; align-items:stretch; gap:46px; }
-  .brand{ padding:0 13px; }
-  .brand .name{ max-width:76px; white-space:normal; font:600 29px/1.5 var(--ui-font); letter-spacing:.14em; color:#F6F5FF; }
-  .topnav{ flex:1; flex-direction:column; align-items:stretch; justify-content:flex-start; flex-wrap:nowrap; gap:10px; }
-  .topnav a,.topnav .cloud-nav-btn{
-    text-align:left; width:100%; min-height:44px; padding:12px 13px;
-    color:#D8DCEC; background:transparent; border:1px solid transparent; border-radius:12px;
-    font:500 14px/1.4 var(--ui-font); letter-spacing:0;
-  }
-  .topnav #navAccount{ border-color:#FFFFFF14; background:#FFFFFF06; }
-  .topnav .cloud-nav-btn{ color:#fff; border-color:#CFC5FF30; background:linear-gradient(115deg,#8B79E8,#6258BF); box-shadow:0 8px 24px -14px #A896FF; }
-  .topnav a:hover{ background:#FFFFFF0D; color:#fff; }
-  .topnav .cloud-nav-btn:hover{ background:linear-gradient(115deg,#9C8AF5,#7266D5); }
-  .nav-user{ margin-top:auto; padding:14px 13px 4px; border:0; border-top:1px solid #FFFFFF16; border-radius:0; background:none; font:500 14px var(--ui-font); color:#C5C7DD; }
-  #logoutBtn{ color:#9FA7C0; }
-  .home-stage{ max-width:var(--maxw); margin:0 auto; padding:0 40px 44px; display:grid; grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr); gap:22px; }
-  .hero{ grid-column:1/-1; width:100%; margin:0; padding:46px 0 38px; min-height:390px; display:grid; grid-template-columns:1.2fr 1fr; gap:20px; overflow:hidden; }
-  .hero .kicker{ margin:0 0 20px; color:#717398; font:600 14px/1.5 var(--ui-font); letter-spacing:.15em; }
-  .hero .kicker::before{ width:24px; height:2px; background:#8173CB; }
-  .hero h1{ display:flex; flex-direction:column; font:600 clamp(54px,6.2vw,92px)/1.08 var(--ui-font); letter-spacing:-.055em; color:#262B40; }
-  .hero h1 span{ display:block; }
-  .hero h1 span:nth-child(2){ margin-left:1.1em; color:#7D6AC4; }
-  .hero h1 span:nth-child(3){ margin-left:2.2em; }
-  .hero .lede{ max-width:470px; margin-top:25px; color:#666E89; font:16px/1.8 var(--ui-font); }
-  .hero-visual{ position:relative; min-width:0; height:330px; perspective:1000px; isolation:isolate; }
-  .hero-visual::before{
-    content:""; position:absolute; inset:5% -22% 0 -25%; z-index:-1; border-radius:50%;
-    background:radial-gradient(ellipse at 25% 30%,#9AA1F6B0,transparent 58%),radial-gradient(ellipse at 70% 65%,#C2A6E7B0,transparent 60%),radial-gradient(ellipse at 85% 25%,#7BD3DA80,transparent 60%);
-    filter:blur(32px); animation:auroraDrift 14s ease-in-out infinite alternate;
-  }
-  .art-sheet{ position:absolute; width:178px; height:236px; left:50%; top:50%; border:1px solid #FFFFFFC0; border-radius:19px; background:linear-gradient(145deg,#FFFFFFCC,#F8F9FF44); backdrop-filter:blur(14px); box-shadow:0 28px 50px -24px #62679660,inset 0 1px 0 #FFF; }
-  .art-sheet::before{ content:""; position:absolute; inset:33px 25px 26px; background:repeating-linear-gradient(to bottom,#747FA82C 0 2px,transparent 2px 16px); border-radius:2px; }
-  .art-sheet:nth-child(1){ transform:translate(-88%,-47%) rotate(-22deg) rotateY(12deg); background:linear-gradient(145deg,#B8C6EFCC,#E3D5F777); }
-  .art-sheet:nth-child(2){ transform:translate(-27%,-56%) rotate(14deg) rotateY(-12deg); }
-  .art-sheet:nth-child(3){ transform:translate(-61%,-40%) rotate(-5deg); transition:transform .6s cubic-bezier(.22,1,.36,1); }
-  .art-sheet:nth-child(3)::after{ content:""; position:absolute; top:87px; left:22px; width:130px; height:16px; background:linear-gradient(90deg,#C2AFE980,#A2CCE780); border-radius:4px; box-shadow:0 32px 0 #C6B2EF50; }
-  .hero-visual:hover .art-sheet:nth-child(3){ transform:translate(-61%,-46%) rotate(-1deg); }
-  .home-stage > .paper-workspace,.home-stage > .composer{ width:100%; max-width:none; padding:0; margin:0; }
-  .paper-workspace-card{ height:100%; min-height:284px; display:flex; flex-direction:column; align-items:stretch; justify-content:space-between; padding:30px; border:1px solid #FBFAFF4D; border-radius:24px; position:relative; overflow:hidden; background:linear-gradient(125deg,#3C3C68,#5B5687 58%,#8187AE); color:#fff; box-shadow:var(--shadow-deep); }
-  .paper-workspace-card::before{ content:""; position:absolute; inset:-70% -50% 25% 15%; pointer-events:none; border-radius:50%; background:radial-gradient(ellipse,#C6B5FF48,transparent 65%); transform:rotate(-25deg); }
-  .paper-workspace-kicker{ position:relative; color:#D9D8EE; font:500 13px/1.6 var(--ui-font); letter-spacing:.03em; }
-  .paper-workspace h2{ font:600 32px/1.4 var(--ui-font); letter-spacing:-.04em; margin:12px 0; }
-  .paper-workspace p{ color:#E4E5F3; font:15px/1.8 var(--ui-font); }
-  .paper-workspace-actions{ justify-content:flex-start; margin-top:24px; }
-  .paper-workspace-btn{ min-height:44px; padding:11px 18px; border:1px solid #FFF7; border-radius:12px; background:#FFFFFFEA; color:#43436A; font:600 14px/1.4 var(--ui-font); box-shadow:0 4px 20px -12px #171C40; }
-  .paper-workspace-btn:hover{ background:#fff; box-shadow:0 8px 24px -14px #151B40; }
-  .composer-card{ height:100%; min-height:284px; padding:28px; border:1px solid #FFFFFFE8; border-radius:24px; background:linear-gradient(135deg,#FFFFFFCF,#FFFFFF77); backdrop-filter:blur(20px); box-shadow:var(--shadow); }
-  .composer-label{ margin-bottom:23px; gap:12px; }
-  .composer-label h2{ font:600 21px/1.5 var(--ui-font); letter-spacing:-.03em; }
-  .composer-input{ background:#F5F6FCB8; border:1px solid #E1E4F1; min-height:50px; border-radius:12px; padding:13px; font:15px var(--ui-font); }
-  .composer-input:focus{ background:#fff; border-color:#9A8FD8; box-shadow:0 0 0 4px #A190E91A; }
-  .composer-submit{ min-height:50px; padding:10px 16px; border-radius:12px; border:0; background:linear-gradient(120deg,#8B79DF,#6861BB); font:600 14px var(--ui-font); color:#fff; box-shadow:0 8px 20px -14px #6552C0; }
-  .composer-submit:hover{ background:linear-gradient(120deg,#7B68D5,#5851AA); }
-  .composer-cats{ margin-top:20px; align-items:flex-start; gap:10px; }
-  .cc-label{ font:500 13px/1.7 var(--ui-font); color:#747B95; padding-top:4px; }
-  .cc-chips{ gap:6px; }
-  .cc-chip{ padding:6px 9px; background:#F1F2FA; border-color:transparent; border-radius:7px; color:#68718C; font:500 13px/1.4 var(--ui-font); }
-  .cc-chip:hover{ background:#E9E5F7; border-color:#D1C9EB; }
-  .cc-chip.active{ background:#7463C0; color:white; border-color:#7463C0; }
-  .archive-heading,.archive-overview,.filters,.toolbar,.gallery{ padding-left:40px; padding-right:40px; }
-  .archive-heading{ gap:14px; margin-bottom:10px; }
-  .archive-heading h2{ font:600 26px/1.5 var(--ui-font); letter-spacing:-.04em; }
-  .archive-heading span{ font-size:14px; color:#7A819A; }
-  .stats{ padding:12px 0 22px; gap:8px; grid-template-columns:repeat(7,minmax(0,1fr)); }
-  .stat{ border:1px solid #FFFFFFB8; padding:15px 12px 13px; border-radius:15px; background:#FFFFFF8C; box-shadow:none; }
-  .stat:hover{ background:#fff; transform:translateY(-2px); box-shadow:var(--shadow); }
-  .stat .num{ font:500 27px/1.2 var(--ui-font); font-variant-numeric:tabular-nums; letter-spacing:-.04em; }
-  .stat .lbl{ font:500 13px/1.5 var(--ui-font); color:#7B8199; letter-spacing:0; margin-top:7px; }
-  .stat .bar{ margin-top:12px; height:2px; background:#E6E7F1; }
-  .stat .bar > span{ background:linear-gradient(90deg,#9A8AD6,#9FBACF); }
-  .stat-total{ background:linear-gradient(135deg,#DFE3F7,#E8DEF5); border-color:#DCE0F0; }
-  .stat .stat-clear{ top:5px; right:5px; width:24px; height:24px; }
-  .filters{ padding-top:5px; padding-bottom:22px; gap:7px; }
-  .filters .label{ font:600 13px var(--ui-font); color:#747D97; letter-spacing:0; }
-  .chip{ padding:8px 11px; border:1px solid #DDE1EF; border-radius:10px; background:#FFFFFF90; font:500 14px/1.4 var(--ui-font); color:#626C87; gap:6px; }
-  .chip.active{ background:linear-gradient(120deg,#7E70CE,#6661B4); color:#fff; border-color:transparent; box-shadow:0 4px 12px -8px #55459C; }
-  .chip:hover{ background:#FFF; border-color:#B9AFDA; box-shadow:none; transform:translateY(-1px); }
-  .chip.active:hover{ background:#7063BE; }
-  .chip .count{ font:500 12px var(--ui-font); }
-  .toolbar{ gap:16px; padding-top:6px; padding-bottom:24px; }
-  #saveSyncStatus{ color:#777E98 !important; font-weight:500 !important; }
-  .search{ border:0; padding:0; background:transparent; }
-  .search input{ min-height:44px; background:#FFFFFFA8; border-color:#DFE3EF; border-radius:12px; font:14px var(--ui-font); }
-  .search input:focus{ border-color:#B0A4D9; box-shadow:0 0 0 3px #AC9CEB20; }
-  .btn-link{ color:#7464AF; font:600 14px/1.5 var(--ui-font); letter-spacing:0; }
-  .gallery{ grid-template-columns:repeat(2,minmax(0,1fr)); gap:20px; padding-bottom:72px; }
-  .card{ padding:25px; border:1px solid #FFFFFFD9; border-radius:22px; background:linear-gradient(140deg,#FFFFFFD9,#FFFFFF8C); box-shadow:var(--shadow); backdrop-filter:blur(12px); }
-  .card:hover{ transform:translateY(-4px); border-color:#D0C5EB; box-shadow:var(--shadow-deep); }
-  .card-title{ font:600 22px/1.6 var(--ui-font); letter-spacing:-.03em; }
-  .card-cat,.card-meta{ font:500 13px/1.6 var(--ui-font); letter-spacing:0; }
-  .card-meta{ border-color:#E4E6F0; color:#7B839A; }
-  .card-desc{ font:15px/1.8 var(--ui-font); color:#707A94; }
-  .card-btns{ gap:8px; }
-  .card-btns button{ font:600 14px var(--ui-font); padding:9px 12px; border-radius:10px; }
-  .card-paper-btn{ background:linear-gradient(120deg,#8071CB,#6962B2); color:#fff; border:0; }
-  .card-del{ color:#8B7C98; opacity:.8; padding:8px; }
-  body.paper-focus .home-stage{ display:block; padding:0; }
-  body.paper-focus .home-stage > .paper-workspace{ max-width:none; }
-  body.paper-focus .paper-workspace-focus{ padding:32px 40px 24px; border:0; border-radius:0 0 32px 32px; background:radial-gradient(ellipse at 90% 0,#C1D8EEA0,transparent 70%),linear-gradient(130deg,#E3E1F3,#EDE6F4 60%,#DDE9F3); }
-  body.paper-focus .paper-workspace-back{ min-height:42px; border:1px solid #FFFFFFD9; border-radius:12px; padding:10px 15px; background:#FFFFFF77; color:#656080; font:600 14px var(--ui-font); }
-  body.paper-focus .paper-workspace-focus-main{ padding:38px 0 33px; }
-  body.paper-focus .paper-workspace-focus-kicker{ color:#767090; font:600 13px/1.5 var(--ui-font); letter-spacing:.08em; }
-  body.paper-focus .paper-workspace-focus h2{ margin:12px 0; font:600 clamp(36px,4.4vw,60px)/1.3 var(--ui-font); letter-spacing:-.05em; color:#34354F; }
-  body.paper-focus .paper-workspace-focus p{ font:16px/1.75 var(--ui-font); color:#73768E; }
-  body.paper-focus .paper-workspace-focus #paperWorkspaceImport{ background:linear-gradient(120deg,#8274CC,#6964AC); padding:13px 20px; color:white; border-radius:12px; }
-  body.paper-focus .paper-workspace-focus-foot{ padding-top:20px; border-color:#C9C5DD; color:#76748E; font:500 14px var(--ui-font); }
-  body.paper-focus .paper-workspace-focus-foot strong{ color:#655B8C; }
-  body.paper-focus .toolbar{ padding-top:30px; }
-  body.paper-focus .gallery .card{ padding:30px 12px 30px 24px; border-color:#DDE0EE; background:transparent; border-radius:0; box-shadow:none; backdrop-filter:none; }
-  body.paper-focus .gallery .card::before{ width:3px; top:32px; bottom:32px; background:linear-gradient(#ADA0D5,#B7CCDD); }
-  body.paper-focus .gallery .card:hover{ background:linear-gradient(90deg,#FFFFFF90,#F6F3FC40); transform:none; }
-  body.paper-focus .card-title{ font:600 clamp(19px,1.8vw,25px)/1.6 var(--ui-font); }
-  body.paper-focus .card-paper-btn{ background:linear-gradient(120deg,#8172CB,#6861AE); }
-  body.paper-focus .card-upload-btn,body.paper-focus .card-cnki-btn{ background:#FFFFFF88; color:#736C95; border-color:#DDD9EC; }
-  body.paper-focus .card-del{ background:#FFFFFF60; border-color:#E0D5E1; color:#8D7A8E; }
-  .modal-bg:not(.paper-reader-bg){ background:#24294555; backdrop-filter:blur(9px); }
-  .modal,.cloud-modal,.sync-modal,.trash-modal,.choice-modal,.note-entry-modal,.login-card{ border:1px solid #FFFFFFD9; border-radius:24px; background:linear-gradient(145deg,#FFFFFFF5,#F0EFFAF5); box-shadow:0 30px 100px -30px #24294566; color:#454662; font-family:var(--ui-font); }
-  .modal h3,.cloud-modal h2{ font:600 24px/1.5 var(--ui-font); letter-spacing:-.03em; color:#33364F; }
-  .modal p{ font:15px/1.8 var(--ui-font); color:#747A95; }
-  .modal input,.modal textarea,.modal select,.login-field input,.cloud-modal .cloud-fields input{ border:1px solid #DADCEF; background:#FFFFFFD9; border-radius:12px; font-family:var(--ui-font); }
-  .modal-btn{ min-height:38px; padding:9px 14px; border:1px solid #DAD7EB; border-radius:10px; color:#70628F; background:#FFFFFFC0; font:600 14px/1.4 var(--ui-font); }
-  .modal-btn.primary,.choice-actions .modal-btn.primary{ background:linear-gradient(120deg,#8B79D9,#6962B4); color:#fff; border-color:transparent; }
-  .login-screen{ background:radial-gradient(ellipse at 20% 20%,#BCC7F9A0,transparent 60%),radial-gradient(ellipse at 85% 70%,#DEBEEC88,transparent 60%),#EFF1F9; }
-  .login-card{ padding:36px; }
-  .login-card::before{ height:3px; background:linear-gradient(90deg,#B5A3E8,#AECDE5); }
-  .login-title{ color:#46435F; }
-  .login-submit{ background:linear-gradient(120deg,#8A79DA,#6862B4); }
-  .login-tab,.login-forgot,.login-hint,.login-note{ font-family:var(--ui-font); font-style:normal; }
-  .paper-reader{ background:#EEF0F7; border:0; border-radius:0; box-shadow:none; }
-  .pr-header{ background:linear-gradient(110deg,#21283D,#2C304C 70%,#373150); padding:15px 26px; gap:12px; border-bottom:1px solid #FFFFFF14; max-height:45vh; overflow-y:auto; }
-  .pr-title-row{ flex:0 0 100%; width:100%; }
-  .pr-title-row .pr-title{ flex:1; font:600 clamp(17px,1.6vw,23px)/1.5 var(--ui-font); color:#EDEEF7; letter-spacing:-.03em; }
-  .pr-title-row .pr-sub{ flex-shrink:0; font:12px var(--ui-font); color:#A4ADC7; letter-spacing:0; }
-  .pr-tools{ width:100%; gap:8px; }
-  .pr-tools button,.pr-hl-label,.pr-zoom-ctl{ flex-shrink:0; white-space:nowrap; }
-  #readerSaveSyncStatus{ color:#C4C5DF !important; }
-  #readerSaveSyncStatus:empty{ display:none; }
-  #prClose{ margin-left:auto; }
-  .pr-header .modal-btn,.pr-hl-fmt,.pr-hl-save,.pr-reformat-btn,.pr-zoom-btn{ min-height:34px; padding-inline:10px; border:1px solid #FFFFFF1F; background:#FFFFFF09; border-radius:9px; color:#D6D9EB; font:600 13px var(--ui-font); }
-  .pr-header .modal-btn:hover,.pr-hl-fmt:hover,.pr-zoom-btn:hover{ background:#FFFFFF18; color:#fff; border-color:#B5A8E566; }
-  .pr-header .modal-btn[aria-expanded="true"]{ background:#A18ADF30; border-color:#AFA1D966; }
-  .pr-highlighter{ max-width:100%; min-width:0; flex-wrap:wrap; background:#141A2C40; border-color:#FFFFFF18; border-radius:11px; box-shadow:none; }
-  .pr-hl-label,.pr-zoom-pct{ color:#B7BBD1; font-family:var(--ui-font); letter-spacing:0; }
-  .pr-hl-undo,.pr-hl-eraser{ background:#FFFFFF0C; color:#C0C4DA; border-color:#FFFFFF20; }
-  .pr-hl-sep{ background:#FFFFFF18; }
-  .pr-hl-save{ background:linear-gradient(120deg,#8673C9,#7166AE); border-color:#AB99DC66; color:#fff; }
-  #prTranslate.on{ background:#A492DF30; border-color:#B5A4DF88; color:#E4DAFF; }
-  .pr-body{ position:relative; background:#E8EAF3; }
-  .pr-outline{ background:linear-gradient(180deg,#1C2336,#25283F); border-color:#FFFFFF14; padding:20px; color:#CFD3E7; }
-  .pr-outline-section{ margin:0 0 16px; padding-bottom:12px; border-color:#FFFFFF16; color:#9DA7C3; font:500 14px/1.5 var(--ui-font); letter-spacing:.06em; }
-  .pr-ai-btns{ gap:8px; }
-  .pr-ai-btn{ min-height:43px; padding:10px 13px; background:#FFFFFF06; border:1px solid #FFFFFF16; border-radius:11px; color:#C7CEE4; font:500 14px var(--ui-font); }
-  .pr-ai-btn:hover,.pr-ai-btn[aria-expanded="true"]{ background:linear-gradient(110deg,#7566A840,#5B608640); color:#EAE6FA; border-color:#9E8ECB66; }
-  .pr-text-wrap{ min-width:0; min-height:0; background:linear-gradient(120deg,#E5E9F1,#EDEBF4); border-color:#D8DEEB; }
-  /* PDF 三层使用自身页面尺寸，横向滚动由阅读区统一承接。 */
-  .pr-text.pr-pdf-native{ width:max-content; min-width:100%; }
-  .pr-text.pr-pdf-native .pr-pdf-root{ overflow:visible; }
-  .pr-outline-resizer{ background:#272D41; }
-  .pr-ai-result .pa-block-h,.pr-ai-result .pa-val{ color:#D7D2ED; font-family:var(--ui-font); }
-  .pr-ai-result .pa-text,.pr-ai-hint{ color:#AEB7D0; font:14px/1.8 var(--ui-font); }
-  .pr-ai-result .pa-mute{ color:#A6ABC5; }
-  .pr-literature-panel{ background:linear-gradient(140deg,#30364D,#292E45); border-color:#FFFFFF18; border-radius:14px; color:#CFD5E8; }
-  .pr-literature-panel h3{ color:#E6E5F4; }
-  .pr-literature-panel .rel-item,.pr-literature-panel .ref-item{ background:#FFFFFF06; border-color:#FFFFFF14; color:#C6CEE5; }
-  .pr-literature-panel .rel-title,.pr-literature-panel .ref-title{ color:#D1D6E9; font-weight:500; }
-  .pr-literature-panel .rel-meta{ color:#A6B0CC; }
-  .pr-literature-links a,.pr-chat-prompts button{ background:#FFFFFF08; border-color:#FFFFFF20; color:#C9C5E5; border-radius:8px; }
-  .pr-literature-links a:hover,.pr-chat-prompts button:hover{ background:#9382CF26; }
-  .pr-chat-log{ background:#161D2F88; border-radius:12px; }
-  .pr-chat-log:empty::before{ color:#A7B0CB; }
-  .chat-msg.ai{ background:#30384F; color:#D9DDEF; border:1px solid #FFFFFF0D; }
-  .chat-msg.user{ background:linear-gradient(120deg,#63568D,#515E89); color:#FFF; }
-  .pr-chat-row input,.pr-literature-search input,.pr-source-field{ background:#1F263B; border-color:#4A4D6B; color:#E0E1EE; }
-  .pr-chat-row button,.pr-literature-search button{ background:linear-gradient(120deg,#8B76D2,#6B65AC); }
-  .pr-research-panel{ background:#F2F1FA; border-color:#DAD7EA; }
-  .pr-page-jump,.pr-find-bar{ border-radius:13px; border-color:#DDD8ED; box-shadow:var(--shadow); }
-  .pr-marks-empty{ background:#FFFFFF99; border-color:#D7D2E7; color:#7B7297; font:14px/1.7 var(--ui-font); }
-  #prSelectionTools{ border:1px solid #FFFFFF; border-radius:14px; padding:6px; background:linear-gradient(135deg,#FFFFFFEF,#EDE8FAEF); backdrop-filter:blur(14px); box-shadow:0 12px 40px -14px #42366355; }
-  .pr-translation{ border:1px solid #FFFFFFD9; border-radius:20px; background:linear-gradient(135deg,#FFFFFFF2,#EEEAF9F2); backdrop-filter:blur(18px); box-shadow:0 20px 60px -20px #423C7655; }
-  .pr-translation-head{ padding:12px 14px; border-color:#DDD8EC; }
-  .pr-translation-head button{ border-color:#D5CCE7; border-radius:9px; color:#796896; }
-  .pr-translation-head [data-save]{ background:#7764B3; color:#fff; border-color:#7764B3; }
-  .pr-translation-body{ font-size:15px; line-height:1.85; color:#554D70; }
-  .pr-translation-original{ background:#E8E2F5; }
-  .pr-note-popup{ background:linear-gradient(135deg,#FFF,#EEE8F8); border-color:#CFC3E5; }
-  :where(button,a,input,textarea,select):focus-visible{ outline:2px solid #A58ED7; outline-offset:3px; }
-  button{ transition-property:background-color,border-color,color,box-shadow,transform; transition-duration:.2s; }
-  footer{ margin-top:10px; padding:26px 40px; color:#8A8EA6; font:14px/1.8 var(--ui-font); border-color:#DDE0ED; }
-  .home-stage > .hero,.home-stage > section{ animation:surfaceIn .7s cubic-bezier(.22,1,.36,1) both; }
-  .home-stage > .paper-workspace{ animation-delay:.08s; }
-  .home-stage > .composer{ animation-delay:.15s; }
-  @keyframes surfaceIn{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
-  @keyframes auroraDrift{ to{ transform:translate(12px,-8px) scale(1.05); } }
-  @media(min-width:1600px){ .hero{ min-height:440px; } .hero-visual{ height:380px; } }
-  @media(max-width:1150px){
-    body{ padding-left:188px; }
-    .topbar{ width:152px; inset:18px auto 18px 18px; }
-    .topbar-inner{ padding:27px 12px 18px; }
-    .home-stage{ padding-inline:28px; gap:16px; }
-    .hero h1{ font-size:65px; }
-    .hero-visual{ height:285px; }
-    .art-sheet{ width:144px; height:206px; }
-    .art-sheet:nth-child(3)::after{ width:100px; }
-    .paper-workspace-card,.composer-card{ padding:24px; }
-    .archive-heading,.archive-overview,.filters,.toolbar,.gallery{ padding-left:28px; padding-right:28px; }
-    .stats{ grid-template-columns:repeat(5,minmax(0,1fr)); }
-    .pr-title-row .pr-sub{ display:none; }
-  }
-  @media(max-width:900px){
-    .home-stage{ grid-template-columns:1fr; }
-    .hero{ padding-top:32px; min-height:360px; }
-    .hero h1{ font-size:58px; }
-    .hero .lede{ font-size:15px; }
-    .hero-visual{ height:260px; }
-    .paper-workspace-card{ min-height:220px; }
-    .composer-card{ min-height:0; }
-    .stats{ grid-template-columns:repeat(4,minmax(0,1fr)); }
-    .gallery{ grid-template-columns:1fr; }
-  }
-  @media(max-width:680px){
-    body{ padding-left:0; padding-top:0; }
-    .topbar{ position:sticky; inset:auto; top:0; width:auto; border-radius:0; }
-    .topbar-inner{ height:auto; padding:14px 18px; flex-direction:row; align-items:center; gap:15px; }
-    .brand{ padding:0; }
-    .brand .name{ max-width:none; white-space:nowrap; font-size:18px; letter-spacing:.02em; }
-    .topnav{ flex-direction:row; flex-wrap:wrap; justify-content:flex-end; gap:4px; }
-    .topnav a,.topnav .cloud-nav-btn{ width:auto; min-height:32px; padding:7px; font-size:12px; }
-    .nav-user{ border:0; margin:0; padding:7px; font-size:12px; }
-    .home-stage{ padding:0 20px 32px; }
-    .hero{ grid-template-columns:1.1fr .9fr; min-height:310px; gap:0; }
-    .hero h1{ font-size:52px; }
-    .hero .kicker{ font-size:13px; }
-    .hero .lede{ font-size:14px; }
-    .hero-visual{ height:230px; }
-    .art-sheet{ width:105px; height:156px; border-radius:12px; }
-    .art-sheet::before{ inset:24px 16px 20px; background-size:auto; }
-    .art-sheet:nth-child(3)::after{ top:66px; left:14px; width:77px; height:13px; }
-    .archive-heading,.archive-overview,.filters,.toolbar,.gallery{ padding-left:20px; padding-right:20px; }
-    .stats{ grid-template-columns:repeat(4,minmax(0,1fr)); }
-    .stat{ padding:12px 10px; }
-    body.paper-focus .paper-workspace-focus{ padding:24px 20px; }
-    body.paper-focus .paper-workspace-focus-main{ align-items:flex-start; }
-    .pr-header{ padding:12px 16px; }
-    .pr-title-row .pr-title{ font-size:17px; }
-    .pr-tools{ gap:6px; }
-  }
-  @media(max-width:760px){
-    .pr-body{ flex-direction:column; }
-    .pr-outline{ display:block; width:100% !important; min-width:0; max-width:none; max-height:32vh; flex:0 0 auto; padding:12px 16px; border-right:0; border-bottom:1px solid #FFFFFF16; }
-    .pr-outline-section{ margin-bottom:10px; padding-bottom:8px; }
-    .pr-ai-btns{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:6px; }
-    .pr-ai-btn{ min-width:0; padding:9px 6px; font-size:13px; white-space:nowrap; }
-    .pr-text-wrap{ padding:18px 16px 50px; }
-    .pr-research-panel{ position:absolute; inset:0 0 0 auto; z-index:10; width:min(280px,85vw); max-width:85vw; box-shadow:-10px 0 30px #24294520; }
-  }
-  @media(prefers-reduced-motion:reduce){
-    *,*::before,*::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
-  }
 </style>
-<script src="pdf.min.js?v=3.11.174"></script>
-<script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.min.js?v=3.11.174"; }</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
 <!-- OCR 仅在扫描件没有可用文字层时按需加载，不影响普通电子 PDF 的打开速度。 -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="jszip.min.js?v=3.10.1"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 </head>
 <body>
 
@@ -2331,14 +2052,25 @@
   </div>
 </header>
 
-<div class="home-stage">
 <section class="hero">
   <div>
     <p class="kicker">私家志录</p>
-    <h1 aria-label="藏书、观影、食单"><span>藏书</span><span>观影</span><span>食单</span></h1>
+    <h1>藏书<span class="sep">·</span>观影<span class="sep">·</span>食单</h1>
     <p class="lede">把读过的书、看过的电影和喜欢的味道，收进自己的志录。</p>
   </div>
-  <div class="hero-visual" aria-hidden="true"><i class="art-sheet"></i><i class="art-sheet"></i><i class="art-sheet"></i></div>
+  <svg class="hero-illustration" viewBox="0 0 254 144" fill="none" aria-hidden="true" focusable="false">
+    <ellipse cx="135" cy="121" rx="106" ry="13" fill="#E9ECE1"/>
+    <circle cx="190" cy="46" r="33" fill="#E5ECE1"/>
+    <path d="M40 43h33v77H40a5 5 0 0 1-5-5V48a5 5 0 0 1 5-5Z" fill="#50715C"/>
+    <path d="M46 54h18M46 107h18M46 112h18" stroke="#DCE7D9" stroke-width="1.5"/>
+    <path d="M75 26h34v94H75V26Z" fill="#DCCDA7"/>
+    <path d="M83 39h18M83 105h18M83 110h18" stroke="#7C725A" stroke-width="1.5"/>
+    <path d="m117 38 23-5 17 82-23 5-17-82Z" fill="#9BAF96"/>
+    <path d="m126 47 9-2m4 61 9-2" stroke="#F9F6EA" stroke-width="1.5"/>
+    <path d="M165 89h50v10a22 22 0 0 1-22 22h-6a22 22 0 0 1-22-22V89Z" fill="#F8F2E0" stroke="#56735D" stroke-width="1.8"/>
+    <path d="M215 94h6a7 7 0 0 1 0 14h-9m-49 13h57m-30-41c-7-9 8-13 2-22" stroke="#56735D" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M23 121h208" stroke="#7C8E7D" stroke-width="1.4" stroke-linecap="round"/>
+  </svg>
 </section>
 
 <section class="paper-workspace" id="paperWorkspace" aria-label="论文工作台">
@@ -2392,8 +2124,6 @@
     </div>
   </div>
 </section>
-
-</div>
 
 <div class="archive-heading"><h2>我的志录</h2><span id="archiveTotal"></span></div>
 <div class="archive-overview">
@@ -2539,7 +2269,7 @@
 <div class="modal-bg" id="paperEntryModal">
   <div class="modal modal-lg">
     <h3>录入论文 <span class="sub">PAPER ENTRY</span></h3>
-    <p>上传 PDF 或 Word（.docx），导入后即可阅读标注。CAJ 仅支持内嵌 PDF 的版本。</p>
+    <p>上传 PDF、Word（.docx）或 CAJ 文件，整理入册后即可阅读和标注。</p>
     <div class="modal-field">
       <label>论文标题</label>
       <input type="text" id="paperTitle" autocomplete="off" placeholder="留空则自动从正文首行提取" />
@@ -4873,110 +4603,18 @@ function importedPaperTitle(filename, metadataTitle){
   }
   return name || "未命名论文";
 }
-let pdfResourceArchive = null;
-function loadPdfResource(name){
-  if(!pdfResourceArchive){
-    pdfResourceArchive = fetch("./pdf-resources.zip?v=3.11.174", {signal:AbortSignal.timeout(20000)})
-      .then(function(response){
-        if(!response.ok) throw new Error("PDF 字体资源加载失败，请刷新后重试");
-        return response.arrayBuffer();
-      }).then(function(bytes){ return JSZip.loadAsync(bytes); })
-      .then(async function(zip){
-        const version = zip.file("version.json");
-        if(!version || JSON.parse(await version.async("string")).pdfjsVersion !== pdfjsLib.version){
-          throw new Error("PDF 字体资源版本不一致，请刷新后重试");
-        }
-        return zip;
-      }).catch(function(error){ pdfResourceArchive = null; throw error; });
-  }
-  return pdfResourceArchive.then(function(zip){
-    const file = zip.file(name);
-    if(!file) throw new Error("PDF 字体资源缺失，请刷新后重试");
-    return file.async("uint8array");
-  });
-}
-class LocalPdfCMapReaderFactory {
-  async fetch({name}){ return {cMapData:await loadPdfResource("cmaps/" + name + ".bcmap"), compressionType:1}; }
-}
-class LocalPdfStandardFontDataFactory {
-  fetch({filename}){ return loadPdfResource("standard_fonts/" + filename); }
-}
 function loadLocalPdf(data){
-  const task = pdfjsLib.getDocument({
+  return pdfjsLib.getDocument({
     data,
+    cMapUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/",
     cMapPacked:true,
-    CMapReaderFactory:LocalPdfCMapReaderFactory,
-    StandardFontDataFactory:LocalPdfStandardFontDataFactory,
-    useWorkerFetch:false,
+    standardFontDataUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/",
     isEvalSupported:false
-  });
-  return new Promise(function(resolve, reject){
-    const timeout = setTimeout(function(){
-      task.destroy().catch(function(){});
-      reject(new Error("PDF 解析等待超时，请重新选择文件后重试"));
-    }, 45000);
-    task.promise.then(function(pdf){
-      clearTimeout(timeout);
-      resolve(pdf);
-    }, function(error){
-      clearTimeout(timeout);
-      reject(error);
-    });
-  });
+  }).promise;
 }
 async function hasPdfHeader(file){
   try{ return (await file.slice(0, 1024).text()).includes("%PDF-"); }
   catch(_){ return false; }
-}
-async function findCajPdf(file){
-  const chunkSize = 1024*1024;
-  for(let offset=0; offset<file.size; offset+=chunkSize){
-    const bytes = new Uint8Array(await file.slice(offset, offset+chunkSize+4).arrayBuffer());
-    for(let i=bytes.indexOf(0x25); i>=0; i=bytes.indexOf(0x25,i+1)){
-      if(bytes[i+1] === 0x50 && bytes[i+2] === 0x44 && bytes[i+3] === 0x46 && bytes[i+4] === 0x2d){
-        return file.slice(offset+i, file.size, "application/pdf");
-      }
-    }
-  }
-  return null;
-}
-async function replacePaperPdf(target, file){
-  const storageKey = STORAGE_KEY;
-  let res = null;
-  const deferred = file.size > 128*1024*1024;
-  if(!deferred){
-    const pdf = await loadLocalPdf(new Uint8Array(await file.arrayBuffer()));
-    try{
-      ppProgressShow("正在解析 PDF(" + pdf.numPages + " 页)…");
-      res = await extractPdfTextEnhanced(pdf, function(d, t){
-        ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
-      }, { lowMemory:file.size > 32*1024*1024 }).catch(function(){ return null; });
-    }finally{
-      await pdf.destroy();
-    }
-  }
-  if(STORAGE_KEY !== storageKey || !state.items.includes(target)) throw new Error("账号或论文已切换，请重新上传");
-  const scanned = !res || pdfTextNeedsOcr(res.text, res.pages);
-  const next = Object.assign({}, target, {
-    pdfCopyId:uid(), html:null, layout:res && !scanned ? res.blocks : null,
-    fullText:deferred ? "超大PDF已完整保留：打开全文后将按页显示原文并按需OCR。" :
-      scanned ? "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。" : res.text,
-    ocrOnly:scanned, images:res && !scanned ? res.images : null
-  });
-  delete next._pdfBytes;
-  next.analysis = analyzePaper(next.fullText);
-  next.outline = generateOutline(next.fullText);
-  const newKey = pdfStorageKey(next);
-  if(!await idbSet(newKey, file)) throw new Error("原 PDF 保存失败，请检查浏览器可用空间后重试");
-  if(STORAGE_KEY !== storageKey || !state.items.includes(target)){
-    await idbDel(newKey);
-    throw new Error("账号或论文已切换，请重新上传");
-  }
-  const saved = await saveState(state.items.map(function(item){ return item === target ? next : item; }));
-  if(!saved){ await idbDel(newKey); return false; }
-  Object.assign(target, next);
-  delete target._pdfBytes;
-  return true;
 }
 function pdfTextNeedsOcr(text, pageCount){
   const compact = String(text || "").replace(/\s/g, "");
@@ -6006,7 +5644,6 @@ function openPaperReader(itemId){
   prState._pdfRenderFallback = false;
   prState.pdfNativeCacheKey = null;
   prState.pdfNativeNumPages = 0;
-  prState.pdfNativeCssPx = false;
   prState.snapshot = snapshotPaper(item);
   updateSaveBtnState();
 
@@ -6309,11 +5946,10 @@ function openPaperReader(itemId){
           const cur = state.items.find(function(i){ return i.id === prState.itemId; });
           if(cur) renderPdfNative(cur, pt);
         }else if(pt.classList.contains("pr-pdf-native")){
-          /* 历史页面整体缩放，画布、选字层和标注层保持同一坐标系。 */
-          pt.style.zoom = prState.zoom;
+          /* 旧版(pt容器+transform, 已废弃但兼容): 直接改scale */
           const pages = pt.querySelectorAll(".pr-pdf-page");
           for(let i=0; i<pages.length; i++){
-            pages[i].style.transform = "";
+            pages[i].style.transform = "scale(" + prState.zoom + ")";
           }
         }else{
           pt.style.zoom = prState.zoom;
@@ -6326,8 +5962,6 @@ function openPaperReader(itemId){
     let savedZoom = 1;
     try{ savedZoom = parseFloat(localStorage.getItem(STORAGE_KEY + "_zoom")); if(!(savedZoom>0)) savedZoom = 1; }catch(e){}
     prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(savedZoom*10)/10));
-    const initialText = document.getElementById("prText");
-    if(initialText && !prState.pdfNativeCssPx) initialText.style.zoom = prState.zoom;
     updateZoomControls();
     /* PDF Canvas原生模式: modal渲染时renderPdfNative已经按窗口fit或savedZoom计算了renderScale,
        不需要再在140ms后按老方式二次设置。layout/fullText仍保留旧逻辑。 */
@@ -6582,7 +6216,6 @@ function markDirty(){
   prState.dirty = true;
   prState.revision++;
   updateSaveBtnState();
-  if(typeof paperPanel !== "undefined" && paperPanel === "marks") renderPaperMarks();
 }
 /* 更新保存按钮状态 */
 function updateSaveBtnState(){
@@ -6852,10 +6485,8 @@ function _updateOcrOnlyPaperText(item, cache){
   saveState();
 }
 function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, renderScale){
-  const storageKey = STORAGE_KEY;
-  const originalKey = pdfStorageKey(item);
   const run = function(){
-    if(prState.itemId === item.id) _setPdfOcrStatus("扫描件无可用文字层，正在识别第 " + pageNum + " 页…", true);
+    _setPdfOcrStatus("扫描件无可用文字层，正在识别第 " + pageNum + " 页…", true);
     /* 中文期刊常见双栏小字号；约300dpi能保住笔画细节，仍按单页队列控制内存。 */
     const ocrScale = Math.max(3.5, Math.min(4.5, renderScale * 2.4));
     const ocrViewport = page.getViewport({ scale:ocrScale });
@@ -6881,10 +6512,8 @@ function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, render
         }
         const payload = { words:words, pageWidth:cssPageW, pageHeight:cssPageH, text:words.map(function(w){ return w.text; }).join(" ") };
         cache.ocrPages[pageNum] = payload;
-        if(STORAGE_KEY === storageKey && state.items.includes(item) && pdfStorageKey(item) === originalKey){
-          _savePdfOcrPages(item, cache);
-          _updateOcrOnlyPaperText(item, cache);
-        }
+        _savePdfOcrPages(item, cache);
+        _updateOcrOnlyPaperText(item, cache);
         return payload;
       });
   };
@@ -6908,20 +6537,16 @@ async function _getPdfNativeDoc(item){
   }catch(_){ return null; }
 }
 /* 主入口: 返回true=走了Canvas渲染,false=回退到旧renderLayoutPaper/fullText */
-async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 0) + 1){
+async function renderPdfNative(item, prText){
   if(!window.pdfjsLib || !item) return false;
-  prState.pdfRenderId = renderId;
-  const isCurrent = function(){ return prState.itemId === item.id && prState.pdfRenderId === renderId; };
   const cache = await _getPdfNativeDoc(item);
-  if(!isCurrent() || !cache || !cache.pdf) return false;
+  if(!cache || !cache.pdf) return false;
   const pdf = cache.pdf;
   await _loadPdfOcrPages(item, cache);
-  if(!isCurrent()) return false;
   /* 旧版已导入论文的 item.ocrOnly 可能还是 false；根据整篇文字密度再次判断，
      让历史记录也能转入中文 OCR，不必要求用户重新导入。 */
   /* 模式标记 */
   prText.classList.add("pr-pdf-native");
-  prText.style.zoom = "1";
   prText.classList.remove("pr-layout-mode");
   prText.contentEditable = "false";
   prText.classList.remove("pdf-edit-mode");
@@ -6937,7 +6562,6 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
   const CSS_PT_TO_PX = 96/72;  /* 1pt = 96/72 px */
   /* 计算第一页 pt 基准 */
   const firstPg = await pdf.getPage(1);
-  if(!isCurrent()) return false;
   const vp0 = firstPg.getViewport({ scale: 1 });
   const pageW_pt = vp0.width;    /* A4=595 */
   const pageH_pt = vp0.height;   /* A4=842 */
@@ -6969,7 +6593,7 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
       + '</div>';
   }
   pagesHtml += '</div>';
-  if(!isCurrent()) return false;
+  if(prState.itemId !== item.id) return false;
   prText.innerHTML = pagesHtml;
   restorePaperPosition(item.id, true);
   const pdfRoot = prText.querySelector("#prPdfRoot");
@@ -6979,13 +6603,13 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
   /* ===== 每页 canvas+textLayer 都用同一个 renderScale 的 viewport 渲染, span定位与canvas像素级对齐 ===== */
   const renderedPdfPages = {};
   function renderPdfPage(pageNum){
-    if(!isCurrent() || renderedPdfPages[pageNum]) return;
+    if(renderedPdfPages[pageNum]) return;
     const canvas = pdfRoot.querySelector("#prPdfCanvas_" + pageNum);
     const textLayerEl = pdfRoot.querySelector("#prPdfText_" + pageNum);
     if(!canvas?.isConnected || !textLayerEl) return;
     renderedPdfPages[pageNum] = true;
     pdf.getPage(pageNum).then(function(page){
-        if(!isCurrent() || !canvas.isConnected) return;
+        if(!canvas.isConnected) return;
         const viewport = page.getViewport({ scale: renderScale });
         const pageBox = canvas.closest(".pr-pdf-page");
         pageBox.style.width = viewport.width + "px";
@@ -7001,7 +6625,7 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
         page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).catch(function(){
           return {items:[], styles:{}};
         }).then(function(tc){
-          if(!isCurrent() || !textLayerEl.isConnected) return;
+          if(!textLayerEl.isConnected) return;
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
           const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
@@ -7014,7 +6638,7 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
             }
             _queuePdfPageOcr(item, cache, page, pageNum, viewport.width, viewport.height, renderScale).then(function(payload){
               const currentLayer = document.getElementById("prPdfText_" + pageNum);
-              if(!isCurrent() || currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
+              if(currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
               const count = _renderPdfOcrWords(currentLayer, pageNum, payload, viewport.width, viewport.height);
               if(count){
                 _setPdfOcrStatus("扫描文字层已识别：可直接选中、标注、备注与翻译。", true);
@@ -7023,7 +6647,6 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
                 _setPdfOcrStatus("这一页未识别到清晰文字；请尝试更清晰、正向的扫描 PDF。", true);
               }
             }).catch(function(){
-              if(!isCurrent()) return;
               _setPdfOcrStatus("OCR 暂时无法完成；请检查网络后重新打开论文。", true);
             });
             return;
@@ -7049,7 +6672,6 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
              span本身不再设contenteditable, 而是"双击弹浮层"编辑 + selection内Backspace/Delete直接截字符串.
              原因: absolute span + PDF.js transform + contenteditable 永远有光标错配(锁左上角),所以改为阅读式+浮层编辑(极光/福昕式) */
           const finishTextLayer = function(){
-            if(!isCurrent() || !textLayerEl.isConnected) return;
             const spans = textLayerEl.querySelectorAll("span");
             const layerRect = textLayerEl.getBoundingClientRect();
              for(let s=0; s<spans.length; s++){
@@ -7100,12 +6722,11 @@ async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 
     for(let p=1; p<=pdf.numPages; p++) renderPdfPage(p);
   }
 
-  setTimeout(function(){ if(isCurrent()) renderHighlightsAsSvg(item); }, 500);
+  setTimeout(function(){ renderHighlightsAsSvg(item); }, 500);
 
   /* ===== 参考文献(基于layout坐标提取的右栏条目)仍追加到 PDF页之后, 保持检索功能不变
      (回退: layout blocks中提取,和renderLayoutPaper同款逻辑) */
   setTimeout(function(){
-    if(!isCurrent()) return;
     const refList = extractLayoutRefs(item.layout);
     if(refList && refList.length){
       const root = document.getElementById("prPdfRoot");
@@ -7825,10 +7446,6 @@ function renderLayoutPaper(item, prText){
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
-  const renderId = (prState.pdfRenderId || 0) + 1;
-  prState.pdfRenderId = renderId;
-  prText.replaceChildren();
-  prText.style.zoom = "";
   /* 重置版面保真类: 仅layout模式添加,普通/随笔模式移除,恢复单栏740px限宽 */
   prText.classList.remove("pr-layout-mode");
   prText.classList.remove("pr-pdf-native");
@@ -7844,24 +7461,17 @@ function renderPaperText(item){
   if(!item.html){
     /* 异步尝试; 若500ms内未渲染成功 → 回退旧renderLayoutPaper/fullText(老论文兜底) */
     let fallbackTimer = setTimeout(function(){
-      if(prState._pdfRendered || prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
+      if(prState._pdfRendered || prState.itemId !== item.id) return;
       prState._pdfRenderFallback = true;
       renderPaperTextLegacy(item, prText);
     }, 500);
-    renderPdfNative(item, prText, renderId).then(function(ok){
-      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId){ clearTimeout(fallbackTimer); return; }
+    renderPdfNative(item, prText).then(function(ok){
       if(ok){ clearTimeout(fallbackTimer); prState._pdfRendered = true; return; }
       /* 失败 → 立即回退 */
       clearTimeout(fallbackTimer);
-      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
+      if(prState.itemId !== item.id) return;
       if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
       restorePaperPosition(item.id, true);
-    }).catch(function(error){
-      clearTimeout(fallbackTimer);
-      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
-      console.warn("PDF render failed", error);
-      if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
-      toast("原 PDF 暂时无法显示，已保留文字内容；请重新打开论文重试", 5000);
     });
     return;
   }
@@ -7869,7 +7479,6 @@ function renderPaperText(item){
 }
 /* 老链路(Word/html、老论文layout/fullText): 从原renderPaperText中剥离 */
 function renderPaperTextLegacy(item, prText){
-  prText.style.zoom = prState.zoom || 1;
   /* Word流式版面保真: 有html(带字号/缩进/对齐/加粗/分栏的富文本)时直接渲染,浏览器自动排版换行 */
   if(item.html){
     prText.innerHTML = item.html;
@@ -8409,7 +8018,6 @@ async function closePaperReader(){
       updateSaveBtnState();
     }
   }
-  prState.pdfRenderId = (prState.pdfRenderId || 0) + 1;
   if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
   _closePdfObjectEditor();
   const translations = document.querySelectorAll(".pr-translation");
@@ -9879,9 +9487,6 @@ researchEl("prFindForm").onsubmit = async function(e){
 };
 researchEl("prMarksOpen").onclick = function(){
   if(paperPanel === "marks"){ showResearchPanel(""); return; }
-  renderPaperMarks();
-};
-function renderPaperMarks(){
   showResearchPanel("marks");
   const panel = researchEl("prResearchPanel"), marks = researchItem()?.highlights || [];
   if(!marks.length){
@@ -9909,7 +9514,7 @@ function renderPaperMarks(){
     };
     panel.appendChild(btn);
   });
-}
+};
 researchEl("prPagesOpen").onclick = async function(){
   if(paperPanel === "pages"){ showResearchPanel(""); return; }
   showResearchPanel("pages");
@@ -9964,10 +9569,8 @@ researchEl("prPdfExport").onclick = async function(){
     if(!cache){ toast("此文档在本机没有原始 PDF，无法导出带批注的副本"); return; }
     if(!window.PDFLib) await new Promise((resolve,reject) => {
       const script = document.createElement("script");
-      script.src = "./pdf-lib.min.js?v=1.17.1";
-      const timeout = setTimeout(() => { script.remove(); reject(new Error("PDF 导出组件加载超时")); }, 30000);
-      script.onload = () => { clearTimeout(timeout); resolve(); };
-      script.onerror = () => { clearTimeout(timeout); reject(new Error("PDF 导出组件加载失败")); };
+      script.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
+      script.onload = resolve; script.onerror = reject;
       document.head.appendChild(script);
     });
     const {PDFDocument, PDFName, PDFHexString, rgb} = window.PDFLib;
@@ -11854,23 +11457,81 @@ function renderGallery(){
           const file = this.files[0];
           if(!file) return;
           const lowMemoryUpload = file.size > 32*1024*1024;
+          const deferPdfUpload = file.size > 128*1024*1024;
           if(lowMemoryUpload) toast("检测到大PDF，将逐页低内存导入，请保持页面打开", 5000);
           const fname = file.name.toLowerCase();
           if(fname.endsWith(".pdf")){
-            if(!window.pdfjsLib){ toast("PDF解析库未加载,请刷新页面重试"); return; }
+            /* PDF 并行提取(双栏检测+页眉页脚过滤) → 原文直接写入 */
+            if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
             if(!await hasPdfHeader(file)){ toast("无法读取 PDF 文件头，请检查原文件"); return; }
-            btn.disabled = true;
-            try{
-              if(await replacePaperPdf(target, file)){
-                render();
-                toast("「" + target.name + "」原 PDF 已保存，可点「查看全文」阅读标注");
-              }
-            }catch(e){
-              toast("上传失败，原论文保持不变：" + (e.message || "请检查文件后重试"), 6000);
-            }finally{
-              btn.disabled = false;
-              ppProgressHide(0);
+            toast("正在并行解析PDF……", 2000);
+            let originalStored = false;
+            try{ originalStored = await idbSet(pdfStorageKey(target), file); }catch(_){}
+            if(!originalStored){
+              toast("浏览器可用空间不足，无法保存原PDF；请释放空间或先导出已有数据", 6000);
+              return;
             }
+            delete _pdfNativeCache[pdfStorageKey(target)];
+            delete target._pdfBytes;
+            if(deferPdfUpload){
+              target.fullText = "超大PDF已完整保留：打开全文后将按页显示原文并按需OCR。";
+              target.ocrOnly = true;
+              target.layout = null;
+              saveState();
+              render();
+              toast("超大PDF已接收 · 为避免内存溢出，将在阅读时按页处理", 6000);
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = function(){
+              const pdfBytes = new Uint8Array(this.result);
+              /* 原PDF以File/Blob直接存IDB，避免大文件重复复制。 */
+              loadLocalPdf(pdfBytes).then(function(pdf){
+                ppProgressShow("正在并行解析 PDF(" + pdf.numPages + " 页)…");
+                return extractPdfTextEnhanced(pdf, function(d, t){
+                  ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
+                }, { lowMemory: lowMemoryUpload });
+              }).then(function(res){
+                ppProgressHide(300);
+                if(!res || pdfTextNeedsOcr(res.text, res.pages)){
+                  target.fullText = "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。";
+                  target.ocrOnly = true;
+                  target.layout = null;
+                  target.analysis = analyzePaper(target.fullText);
+                  target.outline = generateOutline(target.fullText);
+                  saveState();
+                  render();
+                  toast("扫描版 PDF 已保留原貌 · 打开全文将自动 OCR");
+                  return;
+                }
+                /* 原文逐字保存,不经过AI排版 */
+                target.fullText = res.text;
+                target.ocrOnly = false;
+                target.analysis = analyzePaper(target.fullText);
+                target.outline = generateOutline(target.fullText);
+                if(res.images && res.images.length) target.images = res.images;
+                saveState();
+                render();
+                toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
+              }).catch(function(e){
+                ppProgressHide(0);
+                target.fullText = "PDF文字层解析失败：原PDF已完整保留，打开全文后将逐页尝试OCR。";
+                target.ocrOnly = true;
+                target.layout = null;
+                saveState();
+                render();
+                toast("原PDF已保存 · 文字层解析失败，打开全文将自动OCR", 5000);
+              });
+            };
+            reader.onerror = function(){
+              target.fullText = "大PDF已完整保留：打开全文后将逐页显示原页面并尝试OCR。";
+              target.ocrOnly = true;
+              target.layout = null;
+              saveState();
+              render();
+              toast("文件过大，已改为保留原PDF并在阅读时逐页OCR", 5000);
+            };
+            reader.readAsArrayBuffer(file);
           }else{
             /* TXT/MD 直接读取 */
             const reader = new FileReader();
@@ -12899,7 +12560,7 @@ function openPaperEntryModal(category, showModal = true){
     const intro = paperEntryModal.querySelector("p");
     if(intro) intro.textContent = isEssay
       ? "粘贴一篇随笔 —— 填写作时间,系统自动从首行提取标题归册,可随时点击「查看全文」阅读并标注。"
-      : "上传 PDF 或 Word（.docx），导入后即可阅读标注。CAJ 仅支持内嵌 PDF 的版本。";
+      : "上传 PDF、Word（.docx）或 CAJ 文件，整理入册后即可阅读和标注。";
     const fullTextLabel = paperFullTextInput ? paperFullTextInput.closest(".modal-field").querySelector("label") : null;
     if(fullTextLabel && fullTextLabel.firstChild) fullTextLabel.firstChild.nodeValue = isEssay ? "随笔全文 " : "论文全文 ";
   }
@@ -13030,7 +12691,6 @@ if(paperEntrySubmit){
 const paperPdfBtn = document.getElementById("paperPdfBtn");
 if(paperPdfBtn){
   paperPdfBtn.onclick = function(){
-    if(paperPdfBtn.disabled || paperPdfBtn.classList.contains("busy")){ toast("正在导入文档，请稍候"); return; }
     const input = document.getElementById("paperPdfFile");
     input.value = "";
     input.onchange = async function(){
@@ -13114,42 +12774,60 @@ if(paperPdfBtn){
         return;
       }
       if(fname.endsWith(".caj")){
-        if(!window.pdfjsLib){ toast("PDF解析库未加载,请刷新后重试"); return; }
+        /* ---- CAJ导入: 知网专有格式,尝试检测内嵌PDF流(多数CAJ实为加壳PDF) ---- */
+        if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
         paperPdfBtn.classList.add("busy");
-        paperPdfBtn.textContent = "解析中…";
-        ppProgressShow("正在查找 CAJ 中的 PDF 页面…");
-        try{
-          const original = await findCajPdf(file);
-          if(!original){
-            toast("此 CAJ 不含可直接读取的 PDF 页面。请用 CAJViewer 打开后打印为 PDF，再选择生成的 PDF 导入。", 8000);
-            return;
-          }
-          paperEntryPdfBytes = original;
-          let res = null;
-          if(!deferPdfParsing){
-            const pdf = await loadLocalPdf(new Uint8Array(await original.arrayBuffer()));
-            try{
-              res = await extractPdfTextEnhanced(pdf, function(d,t){
-                ppProgressUpdate(70*d/t, "解析CAJ · 第 " + d + "/" + t + " 页");
-              }, {lowMemory:lowMemoryImport});
-            }finally{ await pdf.destroy(); }
-          }
-          const scanned = !res || pdfTextNeedsOcr(res.text,res.pages);
-          paperFullTextInput.value = res && !scanned ? res.text : "原 PDF 已完整保留：打开全文后按页显示原文，缺少可用文字时自动识别。";
-          updatePaperEntryStats();
-          paperEntryFromPdf = true;
-          paperEntryOcrOnly = scanned;
-          paperEntryImages = res && !scanned ? res.images : null;
-          paperEntryLayout = res && !scanned ? res.blocks : null;
-          paperEntrySubmit.click();
-        }catch(error){
-          paperEntryPdfBytes = null;
-          toast("CAJ 解析失败，已有资料保持不变。请用 CAJViewer 转成 PDF 后重试。", 7000);
-        }finally{
+        paperPdfBtn.innerHTML = "解析中…";
+        const reader = new FileReader();
+        reader.onerror = function(){
           paperPdfBtn.classList.remove("busy");
           paperPdfBtn.textContent = "导入文档";
-          ppProgressHide(0);
-        }
+          toast("无法读取 CAJ 文件，请重新选择");
+        };
+        reader.onload = function(){
+          const buf = new Uint8Array(this.result);
+          /* 在前512KB内搜索 %PDF 魔数 */
+          let pdfOff = -1;
+          const scanLen = Math.min(buf.length, 512 * 1024);
+          for(let i=0; i<scanLen-4; i++){
+            if(buf[i] === 0x25 && buf[i+1] === 0x50 && buf[i+2] === 0x44 && buf[i+3] === 0x46){ pdfOff = i; break; }
+          }
+          if(pdfOff < 0){
+            paperPdfBtn.classList.remove("busy");
+            paperPdfBtn.innerHTML = "导入文档";
+            toast("该CAJ为知网加密格式(非内嵌PDF),请用CAJViewer打开→另存为PDF后再导入");
+            return;
+          }
+          const pdfBytes = buf.slice(pdfOff);
+          /* 保存原始PDF字节→入册时存IDB,阅读器Canvas渲染时1:1还原(与Adobe阅读器一致) */
+          paperEntryPdfBytes = new Blob([pdfBytes], { type:"application/pdf" });
+          ppProgressShow("检测到内嵌 PDF · 正在本机解析…");
+          loadLocalPdf(pdfBytes).then(function(pdf){
+            return extractPdfTextEnhanced(pdf, function(d, t){
+              ppProgressUpdate(70 * d / t, "解析CAJ · 第 " + d + "/" + t + " 页");
+            }, { lowMemory: lowMemoryImport });
+          }).then(function(res){
+            paperPdfBtn.classList.remove("busy");
+            paperPdfBtn.innerHTML = "导入文档";
+            ppProgressHide(300);
+            const isScannedCaj = !res || pdfTextNeedsOcr(res.text, res.pages);
+            if(paperFullTextInput){
+              paperFullTextInput.value = isScannedCaj ? "扫描版 CAJ/PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。" : res.text;
+              updatePaperEntryStats();
+            }
+            paperEntryFromPdf = true;
+            paperEntryOcrOnly = isScannedCaj;
+            paperEntryImages = (!isScannedCaj && res.images && res.images.length) ? res.images : null;
+            paperEntryLayout = (!isScannedCaj && res.blocks && res.blocks.length) ? res.blocks : null;
+            paperEntrySubmit.click();
+          }).catch(function(e){
+            paperPdfBtn.classList.remove("busy");
+            paperPdfBtn.innerHTML = "导入文档";
+            ppProgressHide(0);
+            toast("CAJ解析失败,建议用CAJViewer另存为PDF后导入");
+          });
+        };
+        reader.readAsArrayBuffer(file);
         return;
       }
       if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
@@ -13489,7 +13167,7 @@ document.addEventListener("DOMContentLoaded", function(){
     actions.insertBefore(button, compare.nextSibling);
   }
 
-  let session, binding, comparison, sessionRefresh, busy = false, signupMode = false;
+  let session, binding, comparison, busy = false, signupMode = false;
 
   async function request(path, method, body, accessToken, prefer){
     const headers = {apikey:publicKey};
@@ -13520,29 +13198,20 @@ document.addEventListener("DOMContentLoaded", function(){
   async function accessToken(){
     if(!session?.user?.id) throw new Error("请先登录云端账号。");
     if(Date.now() + 30000 < session.expires_at * 1000) return session.access_token;
-    const account = STORAGE_KEY, refreshToken = session.refresh_token;
-    if(sessionRefresh?.account === account) return sessionRefresh.promise;
-    const job = {account};
-    job.promise = (async function(){
-      try{
-        const fresh = await request("/auth/v1/token?grant_type=refresh_token", "POST", {refresh_token:refreshToken});
-        if(account !== STORAGE_KEY || session?.refresh_token !== refreshToken) throw new Error("账号已切换，请重新打开云同步。");
-        rememberSession(fresh);
-        return session.access_token;
-      }catch(error){
-        if(account === STORAGE_KEY && session?.refresh_token === refreshToken && (error.status === 400 || error.status === 401)){
-          sessionStorage.removeItem(sessionKey());
-          session = null;
-          updateDialog();
-          throw new Error("云端登录已过期，请重新登录。");
-        }
-        throw error;
-      }finally{
-        if(sessionRefresh === job) sessionRefresh = null;
+    try{
+      rememberSession(await request("/auth/v1/token?grant_type=refresh_token", "POST", {
+        refresh_token:session.refresh_token
+      }));
+      return session.access_token;
+    }catch(error){
+      if(error.status === 400 || error.status === 401){
+        sessionStorage.removeItem(sessionKey());
+        session = null;
+        updateDialog();
+        throw new Error("云端登录已过期，请重新登录。");
       }
-    })();
-    sessionRefresh = job;
-    return job.promise;
+      throw error;
+    }
   }
 
   cloudAI = {
@@ -13708,94 +13377,39 @@ document.addEventListener("DOMContentLoaded", function(){
       : "云端还没有全站备份。可以上传首页志录、回收站、论文批注、阅读位置和本机保留的原 PDF。";
   }
 
-  const CLOUD_PART_BYTES = 8*1024*1024;
-  async function cloudPartHash(blob){
-    const digest = await crypto.subtle.digest("SHA-256", await blob.arrayBuffer());
-    return Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2,"0")).join("");
-  }
-  async function readCloudManifest(token, name){
-    const blob = await siteFile(token, name, "GET");
-    const zip = await JSZip.loadAsync(await blob.arrayBuffer());
-    const entry = zip.file("云备份分卷.json");
-    if(!entry) return {blob};
-    const manifest = JSON.parse(await entry.async("string"));
-    if(!manifest || manifest.format !== "site-backup-parts-v1" || !Array.isArray(manifest.parts) || !manifest.parts.length ||
-       !Number.isSafeInteger(manifest.size) || manifest.size <= 0 || manifest.parts.some(part => !part ||
-         !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(part.name) || part.name === name ||
-         !Number.isInteger(part.size) || part.size <= 0 || part.size > CLOUD_PART_BYTES || !/^[0-9a-f]{64}$/.test(part.hash)) ||
-       new Set(manifest.parts.map(part => part.name)).size !== manifest.parts.length ||
-       manifest.parts.reduce((size,part) => size+part.size,0) !== manifest.size){
-      throw new Error("云端备份清单损坏，已保留本机资料，请重新上传备份。");
-    }
-    return {manifest};
-  }
-  async function readCloudBackup(token, name){
-    const archive = await readCloudManifest(token,name);
-    if(archive.blob) return archive.blob;
-    const parts = [];
-    for(const [index,part] of archive.manifest.parts.entries()){
-      status.textContent = "正在取回全站资料 · " + (index+1) + "/" + archive.manifest.parts.length;
-      const blob = await siteFile(token,part.name,"GET");
-      if(blob.size !== part.size || await cloudPartHash(blob) !== part.hash){
-        throw new Error("云端备份校验失败，已保留本机资料，请重新比较后重试。");
-      }
-      parts.push(blob);
-    }
-    return new Blob(parts,{type:"application/zip"});
-  }
-  async function removeOldCloudBackup(token, name){
-    const archive = await readCloudManifest(token,name);
-    for(const part of archive.manifest?.parts || []) await siteFile(token,part.name,"DELETE");
-    await siteFile(token,name,"DELETE");
-  }
-
   async function uploadSite(selected){
-    status.textContent = "正在打包首页志录、论文和批注…";
     const {blob} = await buildSiteBackup(true);
+    if(blob.size > 50000000) throw new Error("全站备份超过免费版 50 MB 单文件上限，已保留现有云端版本。");
     const token = await accessToken();
     const old = selected.remote?.file_name;
     const fresh = (await sitePointer(token))?.file_name;
     if(old !== fresh) throw new Error("云端备份刚刚更新，请重新比较。");
     const name = crypto.randomUUID();
-    const staged = [], parts = [];
+    await siteFile(token, name, "POST", blob);
     const payload = {file_name:name, updated_at:new Date().toISOString()};
     let rows;
     try{
-      for(let offset=0; offset<blob.size; offset+=CLOUD_PART_BYTES){
-        status.textContent = "正在上传全站资料 · " + (parts.length+1) + "/" + Math.ceil(blob.size/CLOUD_PART_BYTES);
-        const part = blob.slice(offset,offset+CLOUD_PART_BYTES);
-        const partName = crypto.randomUUID();
-        staged.push(partName);
-        await siteFile(token,partName,"POST",part);
-        parts.push({name:partName,size:part.size,hash:await cloudPartHash(part)});
-      }
-      const manifest = new JSZip();
-      manifest.file("云备份分卷.json",JSON.stringify({format:"site-backup-parts-v1",size:blob.size,parts}));
-      staged.push(name);
-      await siteFile(token,name,"POST",await manifest.generateAsync({type:"blob",compression:"DEFLATE"}));
       rows = await request(old ? siteTable + "?file_name=eq." + encodeURIComponent(old) : siteTable,
         old ? "PATCH" : "POST", payload, token, "return=representation");
     }catch(error){
       const live = await sitePointer(token);
       if(live?.file_name !== name){
-        for(const file of staged) await siteFile(token,file,"DELETE").catch(() => {});
+        await siteFile(token, name, "DELETE").catch(() => {});
         throw error;
       }
       rows = [live];
     }
     if(!rows?.length){
-      for(const file of staged) await siteFile(token,file,"DELETE").catch(() => {});
+      await siteFile(token, name, "DELETE").catch(() => {});
       throw new Error("云端备份刚刚更新，请重新比较。");
     }
-    if(old) await removeOldCloudBackup(token,old).catch(() => {});
+    if(old) await siteFile(token, old, "DELETE").catch(() => {});
     status.textContent = "全站备份已上传。";
   }
 
   async function downloadSite(selected){
     if(!selected?.remote) return;
-    const token = await accessToken();
-    if((await sitePointer(token))?.file_name !== selected.remote.file_name) throw new Error("云端备份刚刚更新，请重新比较。");
-    const blob = await readCloudBackup(token, selected.remote.file_name);
+    const blob = await siteFile(await accessToken(), selected.remote.file_name, "GET");
     if(binding !== STORAGE_KEY) throw new Error("网站账号已切换，请重新打开全站云同步。");
     dialog.close();
     await handleImportFile(new File([blob], "全站云备份.zip", {type:"application/zip"}), true);
