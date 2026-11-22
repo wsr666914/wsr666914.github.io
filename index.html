@@ -2154,7 +2154,7 @@
   .pr-ai-btn:hover,.pr-ai-btn[aria-expanded="true"]{ background:linear-gradient(110deg,#7566A840,#5B608640); color:#EAE6FA; border-color:#9E8ECB66; }
   .pr-text-wrap{ min-width:0; min-height:0; background:linear-gradient(120deg,#E5E9F1,#EDEBF4); border-color:#D8DEEB; }
   /* PDF 三层使用自身页面尺寸，横向滚动由阅读区统一承接。 */
-  .pr-text.pr-pdf-native{ zoom:1 !important; width:max-content; min-width:100%; }
+  .pr-text.pr-pdf-native{ width:max-content; min-width:100%; }
   .pr-text.pr-pdf-native .pr-pdf-root{ overflow:visible; }
   .pr-outline-resizer{ background:#272D41; }
   .pr-ai-result .pa-block-h,.pr-ai-result .pa-val{ color:#D7D2ED; font-family:var(--ui-font); }
@@ -2258,8 +2258,8 @@
     *,*::before,*::after{ animation-duration:.01ms !important; transition-duration:.01ms !important; animation-iteration-count:1 !important; scroll-behavior:auto !important; }
   }
 </style>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-<script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js"; }</script>
+<script src="pdf.min.js?v=3.11.174"></script>
+<script>if(window.pdfjsLib){ pdfjsLib.GlobalWorkerOptions.workerSrc = "./pdf.worker.min.js?v=3.11.174"; }</script>
 <!-- OCR 仅在扫描件没有可用文字层时按需加载，不影响普通电子 PDF 的打开速度。 -->
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
@@ -4874,17 +4874,68 @@ function importedPaperTitle(filename, metadataTitle){
   return name || "未命名论文";
 }
 function loadLocalPdf(data){
-  return pdfjsLib.getDocument({
+  const task = pdfjsLib.getDocument({
     data,
     cMapUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/cmaps/",
     cMapPacked:true,
     standardFontDataUrl:"https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/standard_fonts/",
     isEvalSupported:false
-  }).promise;
+  });
+  return new Promise(function(resolve, reject){
+    const timeout = setTimeout(function(){
+      task.destroy().catch(function(){});
+      reject(new Error("PDF 解析等待超时，请重新选择文件后重试"));
+    }, 45000);
+    task.promise.then(function(pdf){
+      clearTimeout(timeout);
+      resolve(pdf);
+    }, function(error){
+      clearTimeout(timeout);
+      reject(error);
+    });
+  });
 }
 async function hasPdfHeader(file){
   try{ return (await file.slice(0, 1024).text()).includes("%PDF-"); }
   catch(_){ return false; }
+}
+async function replacePaperPdf(target, file){
+  const storageKey = STORAGE_KEY;
+  let res = null;
+  const deferred = file.size > 128*1024*1024;
+  if(!deferred){
+    const pdf = await loadLocalPdf(new Uint8Array(await file.arrayBuffer()));
+    try{
+      ppProgressShow("正在解析 PDF(" + pdf.numPages + " 页)…");
+      res = await extractPdfTextEnhanced(pdf, function(d, t){
+        ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
+      }, { lowMemory:file.size > 32*1024*1024 }).catch(function(){ return null; });
+    }finally{
+      await pdf.destroy();
+    }
+  }
+  if(STORAGE_KEY !== storageKey || !state.items.includes(target)) throw new Error("账号或论文已切换，请重新上传");
+  const scanned = !res || pdfTextNeedsOcr(res.text, res.pages);
+  const next = Object.assign({}, target, {
+    pdfCopyId:uid(), html:null, layout:res && !scanned ? res.blocks : null,
+    fullText:deferred ? "超大PDF已完整保留：打开全文后将按页显示原文并按需OCR。" :
+      scanned ? "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。" : res.text,
+    ocrOnly:scanned, images:res && !scanned ? res.images : null
+  });
+  delete next._pdfBytes;
+  next.analysis = analyzePaper(next.fullText);
+  next.outline = generateOutline(next.fullText);
+  const newKey = pdfStorageKey(next);
+  if(!await idbSet(newKey, file)) throw new Error("原 PDF 保存失败，请检查浏览器可用空间后重试");
+  if(STORAGE_KEY !== storageKey || !state.items.includes(target)){
+    await idbDel(newKey);
+    throw new Error("账号或论文已切换，请重新上传");
+  }
+  const saved = await saveState(state.items.map(function(item){ return item === target ? next : item; }));
+  if(!saved){ await idbDel(newKey); return false; }
+  Object.assign(target, next);
+  delete target._pdfBytes;
+  return true;
 }
 function pdfTextNeedsOcr(text, pageCount){
   const compact = String(text || "").replace(/\s/g, "");
@@ -5914,6 +5965,7 @@ function openPaperReader(itemId){
   prState._pdfRenderFallback = false;
   prState.pdfNativeCacheKey = null;
   prState.pdfNativeNumPages = 0;
+  prState.pdfNativeCssPx = false;
   prState.snapshot = snapshotPaper(item);
   updateSaveBtnState();
 
@@ -6216,10 +6268,11 @@ function openPaperReader(itemId){
           const cur = state.items.find(function(i){ return i.id === prState.itemId; });
           if(cur) renderPdfNative(cur, pt);
         }else if(pt.classList.contains("pr-pdf-native")){
-          /* 旧版(pt容器+transform, 已废弃但兼容): 直接改scale */
+          /* 历史页面整体缩放，画布、选字层和标注层保持同一坐标系。 */
+          pt.style.zoom = prState.zoom;
           const pages = pt.querySelectorAll(".pr-pdf-page");
           for(let i=0; i<pages.length; i++){
-            pages[i].style.transform = "scale(" + prState.zoom + ")";
+            pages[i].style.transform = "";
           }
         }else{
           pt.style.zoom = prState.zoom;
@@ -6232,6 +6285,8 @@ function openPaperReader(itemId){
     let savedZoom = 1;
     try{ savedZoom = parseFloat(localStorage.getItem(STORAGE_KEY + "_zoom")); if(!(savedZoom>0)) savedZoom = 1; }catch(e){}
     prState.zoom = Math.max(0.5, Math.min(2.5, Math.round(savedZoom*10)/10));
+    const initialText = document.getElementById("prText");
+    if(initialText && !prState.pdfNativeCssPx) initialText.style.zoom = prState.zoom;
     updateZoomControls();
     /* PDF Canvas原生模式: modal渲染时renderPdfNative已经按窗口fit或savedZoom计算了renderScale,
        不需要再在140ms后按老方式二次设置。layout/fullText仍保留旧逻辑。 */
@@ -6755,8 +6810,10 @@ function _updateOcrOnlyPaperText(item, cache){
   saveState();
 }
 function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, renderScale){
+  const storageKey = STORAGE_KEY;
+  const originalKey = pdfStorageKey(item);
   const run = function(){
-    _setPdfOcrStatus("扫描件无可用文字层，正在识别第 " + pageNum + " 页…", true);
+    if(prState.itemId === item.id) _setPdfOcrStatus("扫描件无可用文字层，正在识别第 " + pageNum + " 页…", true);
     /* 中文期刊常见双栏小字号；约300dpi能保住笔画细节，仍按单页队列控制内存。 */
     const ocrScale = Math.max(3.5, Math.min(4.5, renderScale * 2.4));
     const ocrViewport = page.getViewport({ scale:ocrScale });
@@ -6782,8 +6839,10 @@ function _queuePdfPageOcr(item, cache, page, pageNum, cssPageW, cssPageH, render
         }
         const payload = { words:words, pageWidth:cssPageW, pageHeight:cssPageH, text:words.map(function(w){ return w.text; }).join(" ") };
         cache.ocrPages[pageNum] = payload;
-        _savePdfOcrPages(item, cache);
-        _updateOcrOnlyPaperText(item, cache);
+        if(STORAGE_KEY === storageKey && state.items.includes(item) && pdfStorageKey(item) === originalKey){
+          _savePdfOcrPages(item, cache);
+          _updateOcrOnlyPaperText(item, cache);
+        }
         return payload;
       });
   };
@@ -6807,16 +6866,20 @@ async function _getPdfNativeDoc(item){
   }catch(_){ return null; }
 }
 /* 主入口: 返回true=走了Canvas渲染,false=回退到旧renderLayoutPaper/fullText */
-async function renderPdfNative(item, prText){
+async function renderPdfNative(item, prText, renderId = (prState.pdfRenderId || 0) + 1){
   if(!window.pdfjsLib || !item) return false;
+  prState.pdfRenderId = renderId;
+  const isCurrent = function(){ return prState.itemId === item.id && prState.pdfRenderId === renderId; };
   const cache = await _getPdfNativeDoc(item);
-  if(!cache || !cache.pdf) return false;
+  if(!isCurrent() || !cache || !cache.pdf) return false;
   const pdf = cache.pdf;
   await _loadPdfOcrPages(item, cache);
+  if(!isCurrent()) return false;
   /* 旧版已导入论文的 item.ocrOnly 可能还是 false；根据整篇文字密度再次判断，
      让历史记录也能转入中文 OCR，不必要求用户重新导入。 */
   /* 模式标记 */
   prText.classList.add("pr-pdf-native");
+  prText.style.zoom = "1";
   prText.classList.remove("pr-layout-mode");
   prText.contentEditable = "false";
   prText.classList.remove("pdf-edit-mode");
@@ -6832,6 +6895,7 @@ async function renderPdfNative(item, prText){
   const CSS_PT_TO_PX = 96/72;  /* 1pt = 96/72 px */
   /* 计算第一页 pt 基准 */
   const firstPg = await pdf.getPage(1);
+  if(!isCurrent()) return false;
   const vp0 = firstPg.getViewport({ scale: 1 });
   const pageW_pt = vp0.width;    /* A4=595 */
   const pageH_pt = vp0.height;   /* A4=842 */
@@ -6863,7 +6927,7 @@ async function renderPdfNative(item, prText){
       + '</div>';
   }
   pagesHtml += '</div>';
-  if(prState.itemId !== item.id) return false;
+  if(!isCurrent()) return false;
   prText.innerHTML = pagesHtml;
   restorePaperPosition(item.id, true);
   const pdfRoot = prText.querySelector("#prPdfRoot");
@@ -6873,13 +6937,13 @@ async function renderPdfNative(item, prText){
   /* ===== 每页 canvas+textLayer 都用同一个 renderScale 的 viewport 渲染, span定位与canvas像素级对齐 ===== */
   const renderedPdfPages = {};
   function renderPdfPage(pageNum){
-    if(renderedPdfPages[pageNum]) return;
+    if(!isCurrent() || renderedPdfPages[pageNum]) return;
     const canvas = pdfRoot.querySelector("#prPdfCanvas_" + pageNum);
     const textLayerEl = pdfRoot.querySelector("#prPdfText_" + pageNum);
     if(!canvas?.isConnected || !textLayerEl) return;
     renderedPdfPages[pageNum] = true;
     pdf.getPage(pageNum).then(function(page){
-        if(!canvas.isConnected) return;
+        if(!isCurrent() || !canvas.isConnected) return;
         const viewport = page.getViewport({ scale: renderScale });
         const pageBox = canvas.closest(".pr-pdf-page");
         pageBox.style.width = viewport.width + "px";
@@ -6895,7 +6959,7 @@ async function renderPdfNative(item, prText){
         page.getTextContent({ normalizeWhitespace: true, disableCombineTextItems: false }).catch(function(){
           return {items:[], styles:{}};
         }).then(function(tc){
-          if(!textLayerEl.isConnected) return;
+          if(!isCurrent() || !textLayerEl.isConnected) return;
           textLayerEl.innerHTML = "";
           /* 原生电子PDF优先使用自带文字层；扫描件才走OCR，绝不重排底层页面。 */
           const nativeText = (tc.items || []).map(function(it){ return it.str || ""; }).join("");
@@ -6908,7 +6972,7 @@ async function renderPdfNative(item, prText){
             }
             _queuePdfPageOcr(item, cache, page, pageNum, viewport.width, viewport.height, renderScale).then(function(payload){
               const currentLayer = document.getElementById("prPdfText_" + pageNum);
-              if(currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
+              if(!isCurrent() || currentLayer !== textLayerEl || !currentLayer?.isConnected) return;
               const count = _renderPdfOcrWords(currentLayer, pageNum, payload, viewport.width, viewport.height);
               if(count){
                 _setPdfOcrStatus("扫描文字层已识别：可直接选中、标注、备注与翻译。", true);
@@ -6917,6 +6981,7 @@ async function renderPdfNative(item, prText){
                 _setPdfOcrStatus("这一页未识别到清晰文字；请尝试更清晰、正向的扫描 PDF。", true);
               }
             }).catch(function(){
+              if(!isCurrent()) return;
               _setPdfOcrStatus("OCR 暂时无法完成；请检查网络后重新打开论文。", true);
             });
             return;
@@ -6942,6 +7007,7 @@ async function renderPdfNative(item, prText){
              span本身不再设contenteditable, 而是"双击弹浮层"编辑 + selection内Backspace/Delete直接截字符串.
              原因: absolute span + PDF.js transform + contenteditable 永远有光标错配(锁左上角),所以改为阅读式+浮层编辑(极光/福昕式) */
           const finishTextLayer = function(){
+            if(!isCurrent() || !textLayerEl.isConnected) return;
             const spans = textLayerEl.querySelectorAll("span");
             const layerRect = textLayerEl.getBoundingClientRect();
              for(let s=0; s<spans.length; s++){
@@ -6992,11 +7058,12 @@ async function renderPdfNative(item, prText){
     for(let p=1; p<=pdf.numPages; p++) renderPdfPage(p);
   }
 
-  setTimeout(function(){ renderHighlightsAsSvg(item); }, 500);
+  setTimeout(function(){ if(isCurrent()) renderHighlightsAsSvg(item); }, 500);
 
   /* ===== 参考文献(基于layout坐标提取的右栏条目)仍追加到 PDF页之后, 保持检索功能不变
      (回退: layout blocks中提取,和renderLayoutPaper同款逻辑) */
   setTimeout(function(){
+    if(!isCurrent()) return;
     const refList = extractLayoutRefs(item.layout);
     if(refList && refList.length){
       const root = document.getElementById("prPdfRoot");
@@ -7716,6 +7783,9 @@ function renderLayoutPaper(item, prText){
 function renderPaperText(item){
   const prText = document.getElementById("prText");
   if(!prText) return;
+  const renderId = (prState.pdfRenderId || 0) + 1;
+  prState.pdfRenderId = renderId;
+  prText.style.zoom = "";
   /* 重置版面保真类: 仅layout模式添加,普通/随笔模式移除,恢复单栏740px限宽 */
   prText.classList.remove("pr-layout-mode");
   prText.classList.remove("pr-pdf-native");
@@ -7731,17 +7801,24 @@ function renderPaperText(item){
   if(!item.html){
     /* 异步尝试; 若500ms内未渲染成功 → 回退旧renderLayoutPaper/fullText(老论文兜底) */
     let fallbackTimer = setTimeout(function(){
-      if(prState._pdfRendered || prState.itemId !== item.id) return;
+      if(prState._pdfRendered || prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
       prState._pdfRenderFallback = true;
       renderPaperTextLegacy(item, prText);
     }, 500);
-    renderPdfNative(item, prText).then(function(ok){
+    renderPdfNative(item, prText, renderId).then(function(ok){
+      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId){ clearTimeout(fallbackTimer); return; }
       if(ok){ clearTimeout(fallbackTimer); prState._pdfRendered = true; return; }
       /* 失败 → 立即回退 */
       clearTimeout(fallbackTimer);
-      if(prState.itemId !== item.id) return;
+      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
       if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
       restorePaperPosition(item.id, true);
+    }).catch(function(error){
+      clearTimeout(fallbackTimer);
+      if(prState.itemId !== item.id || prState.pdfRenderId !== renderId) return;
+      console.warn("PDF render failed", error);
+      if(!prState._pdfRenderFallback) renderPaperTextLegacy(item, prText);
+      toast("原 PDF 暂时无法显示，已保留文字内容；请重新打开论文重试", 5000);
     });
     return;
   }
@@ -7749,6 +7826,7 @@ function renderPaperText(item){
 }
 /* 老链路(Word/html、老论文layout/fullText): 从原renderPaperText中剥离 */
 function renderPaperTextLegacy(item, prText){
+  prText.style.zoom = prState.zoom || 1;
   /* Word流式版面保真: 有html(带字号/缩进/对齐/加粗/分栏的富文本)时直接渲染,浏览器自动排版换行 */
   if(item.html){
     prText.innerHTML = item.html;
@@ -8288,6 +8366,7 @@ async function closePaperReader(){
       updateSaveBtnState();
     }
   }
+  prState.pdfRenderId = (prState.pdfRenderId || 0) + 1;
   if(prState.pdfPageObserver){ try{ prState.pdfPageObserver.disconnect(); }catch(_){} prState.pdfPageObserver = null; }
   _closePdfObjectEditor();
   const translations = document.querySelectorAll(".pr-translation");
@@ -11727,81 +11806,23 @@ function renderGallery(){
           const file = this.files[0];
           if(!file) return;
           const lowMemoryUpload = file.size > 32*1024*1024;
-          const deferPdfUpload = file.size > 128*1024*1024;
           if(lowMemoryUpload) toast("检测到大PDF，将逐页低内存导入，请保持页面打开", 5000);
           const fname = file.name.toLowerCase();
           if(fname.endsWith(".pdf")){
-            /* PDF 并行提取(双栏检测+页眉页脚过滤) → 原文直接写入 */
-            if(!window.pdfjsLib){ toast("PDF解析库未加载,请检查网络"); return; }
+            if(!window.pdfjsLib){ toast("PDF解析库未加载,请刷新页面重试"); return; }
             if(!await hasPdfHeader(file)){ toast("无法读取 PDF 文件头，请检查原文件"); return; }
-            toast("正在并行解析PDF……", 2000);
-            let originalStored = false;
-            try{ originalStored = await idbSet(pdfStorageKey(target), file); }catch(_){}
-            if(!originalStored){
-              toast("浏览器可用空间不足，无法保存原PDF；请释放空间或先导出已有数据", 6000);
-              return;
-            }
-            delete _pdfNativeCache[pdfStorageKey(target)];
-            delete target._pdfBytes;
-            if(deferPdfUpload){
-              target.fullText = "超大PDF已完整保留：打开全文后将按页显示原文并按需OCR。";
-              target.ocrOnly = true;
-              target.layout = null;
-              saveState();
-              render();
-              toast("超大PDF已接收 · 为避免内存溢出，将在阅读时按页处理", 6000);
-              return;
-            }
-            const reader = new FileReader();
-            reader.onload = function(){
-              const pdfBytes = new Uint8Array(this.result);
-              /* 原PDF以File/Blob直接存IDB，避免大文件重复复制。 */
-              loadLocalPdf(pdfBytes).then(function(pdf){
-                ppProgressShow("正在并行解析 PDF(" + pdf.numPages + " 页)…");
-                return extractPdfTextEnhanced(pdf, function(d, t){
-                  ppProgressUpdate(88 * d / t, "解析PDF · 第 " + d + "/" + t + " 页");
-                }, { lowMemory: lowMemoryUpload });
-              }).then(function(res){
-                ppProgressHide(300);
-                if(!res || pdfTextNeedsOcr(res.text, res.pages)){
-                  target.fullText = "扫描版 PDF：打开全文后将自动识别文字，可直接选中、标注、备注与翻译。";
-                  target.ocrOnly = true;
-                  target.layout = null;
-                  target.analysis = analyzePaper(target.fullText);
-                  target.outline = generateOutline(target.fullText);
-                  saveState();
-                  render();
-                  toast("扫描版 PDF 已保留原貌 · 打开全文将自动 OCR");
-                  return;
-                }
-                /* 原文逐字保存,不经过AI排版 */
-                target.fullText = res.text;
-                target.ocrOnly = false;
-                target.analysis = analyzePaper(target.fullText);
-                target.outline = generateOutline(target.fullText);
-                if(res.images && res.images.length) target.images = res.images;
-                saveState();
+            btn.disabled = true;
+            try{
+              if(await replacePaperPdf(target, file)){
                 render();
-                toast("「" + target.name + "」PDF已转为可编辑文本" + (res.images && res.images.length ? "·含" + res.images.length + "张图表" : "") + ",可点「查看全文」阅读标注");
-              }).catch(function(e){
-                ppProgressHide(0);
-                target.fullText = "PDF文字层解析失败：原PDF已完整保留，打开全文后将逐页尝试OCR。";
-                target.ocrOnly = true;
-                target.layout = null;
-                saveState();
-                render();
-                toast("原PDF已保存 · 文字层解析失败，打开全文将自动OCR", 5000);
-              });
-            };
-            reader.onerror = function(){
-              target.fullText = "大PDF已完整保留：打开全文后将逐页显示原页面并尝试OCR。";
-              target.ocrOnly = true;
-              target.layout = null;
-              saveState();
-              render();
-              toast("文件过大，已改为保留原PDF并在阅读时逐页OCR", 5000);
-            };
-            reader.readAsArrayBuffer(file);
+                toast("「" + target.name + "」原 PDF 已保存，可点「查看全文」阅读标注");
+              }
+            }catch(e){
+              toast("上传失败，原论文保持不变：" + (e.message || "请检查文件后重试"), 6000);
+            }finally{
+              btn.disabled = false;
+              ppProgressHide(0);
+            }
           }else{
             /* TXT/MD 直接读取 */
             const reader = new FileReader();

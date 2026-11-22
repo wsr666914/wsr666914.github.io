@@ -14,14 +14,17 @@ const end = html.indexOf("function extractPdfTextEnhanced(", start);
 assert.ok(start >= 0 && end > start, "找不到共享 PDF 读取函数");
 let options;
 const ctx = vm.createContext({
+  setTimeout, clearTimeout,
   pdfjsLib: { getDocument(value) { options = value; return { promise: Promise.resolve() }; } }
 });
 vm.runInContext(html.slice(start, end), ctx);
 ctx.loadLocalPdf(new Uint8Array());
 
-const version = html.match(/\/pdf\.js\/([\d.]+)\/pdf\.min\.js/)?.[1];
+const version = html.match(/src="pdf\.min\.js\?v=([\d.]+)"/)?.[1];
 assert.ok(version, "缺少 PDF.js 版本");
-assert.ok(html.includes("/pdf.js/" + version + "/pdf.worker.min.js"), "PDF.js 后台组件版本不一致");
+assert.ok(html.includes("./pdf.worker.min.js?v=" + version), "PDF.js 后台组件版本不一致");
+assert.equal(require("./pdf.min.js").version, version, "本机 PDF.js 版本不一致");
+assert.ok(fs.readFileSync(path.join(__dirname, "pdf.worker.min.js"), "utf8").includes(version), "缺少匹配的本机后台组件");
 assert.ok(options.cMapPacked && options.cMapUrl.endsWith("@" + version + "/cmaps/"), "缺少匹配的 CMap");
 assert.ok(options.standardFontDataUrl.endsWith("@" + version + "/standard_fonts/"), "缺少匹配的标准字体");
 assert.equal((html.match(/pdfjsLib\.getDocument\(/g) || []).length, 1, "导入与重开必须共用 PDF 读取配置");
