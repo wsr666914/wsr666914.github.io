@@ -28,6 +28,8 @@ assert.ok(fs.readFileSync(path.join(__dirname, "pdf.worker.min.js"), "utf8").inc
 assert.ok(options.cMapPacked && options.cMapUrl.endsWith("@" + version + "/cmaps/"), "缺少匹配的 CMap");
 assert.ok(options.standardFontDataUrl.endsWith("@" + version + "/standard_fonts/"), "缺少匹配的标准字体");
 assert.equal((html.match(/pdfjsLib\.getDocument\(/g) || []).length, 1, "导入与重开必须共用 PDF 读取配置");
+assert.ok(html.includes('script.src = "./pdf-lib.min.js?v=1.17.1"'), "导出应使用本站组件");
+assert.equal(typeof require("./pdf-lib.min.js").PDFDocument.load, "function", "缺少可用的 PDF 导出组件");
 
 const ocrVersion = html.match(/tesseract\.js@([\d.]+)\/dist\/tesseract\.min\.js/)?.[1];
 assert.ok(ocrVersion && html.includes("tesseract.js@" + ocrVersion + "/dist/worker.min.js"), "OCR 后台组件版本不一致");

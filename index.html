@@ -6541,6 +6541,7 @@ function markDirty(){
   prState.dirty = true;
   prState.revision++;
   updateSaveBtnState();
+  if(typeof paperPanel !== "undefined" && paperPanel === "marks") renderPaperMarks();
 }
 /* 更新保存按钮状态 */
 function updateSaveBtnState(){
@@ -9836,6 +9837,9 @@ researchEl("prFindForm").onsubmit = async function(e){
 };
 researchEl("prMarksOpen").onclick = function(){
   if(paperPanel === "marks"){ showResearchPanel(""); return; }
+  renderPaperMarks();
+};
+function renderPaperMarks(){
   showResearchPanel("marks");
   const panel = researchEl("prResearchPanel"), marks = researchItem()?.highlights || [];
   if(!marks.length){
@@ -9863,7 +9867,7 @@ researchEl("prMarksOpen").onclick = function(){
     };
     panel.appendChild(btn);
   });
-};
+}
 researchEl("prPagesOpen").onclick = async function(){
   if(paperPanel === "pages"){ showResearchPanel(""); return; }
   showResearchPanel("pages");
@@ -9918,8 +9922,10 @@ researchEl("prPdfExport").onclick = async function(){
     if(!cache){ toast("此文档在本机没有原始 PDF，无法导出带批注的副本"); return; }
     if(!window.PDFLib) await new Promise((resolve,reject) => {
       const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js";
-      script.onload = resolve; script.onerror = reject;
+      script.src = "./pdf-lib.min.js?v=1.17.1";
+      const timeout = setTimeout(() => { script.remove(); reject(new Error("PDF 导出组件加载超时")); }, 30000);
+      script.onload = () => { clearTimeout(timeout); resolve(); };
+      script.onerror = () => { clearTimeout(timeout); reject(new Error("PDF 导出组件加载失败")); };
       document.head.appendChild(script);
     });
     const {PDFDocument, PDFName, PDFHexString, rgb} = window.PDFLib;
