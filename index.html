@@ -7786,6 +7786,7 @@ function renderPaperText(item){
   if(!prText) return;
   const renderId = (prState.pdfRenderId || 0) + 1;
   prState.pdfRenderId = renderId;
+  prText.replaceChildren();
   prText.style.zoom = "";
   /* 重置版面保真类: 仅layout模式添加,普通/随笔模式移除,恢复单栏740px限宽 */
   prText.classList.remove("pr-layout-mode");
